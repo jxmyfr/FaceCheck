@@ -1,0 +1,15 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/.env
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Storage & AI
+storage/database.db
+storage/faces/*
+!storage/faces/.gitkeep
+backend/models_ai/*.onnx
+backend/models_ai/*.pt

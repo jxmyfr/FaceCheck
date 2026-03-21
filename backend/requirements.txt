@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+sqlalchemy
+opencv-python
+insightface
+numpy
+python-multipart
+python-dotenv
