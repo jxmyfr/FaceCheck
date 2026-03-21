@@ -1,7 +1,21 @@
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import String, Integer, LargeBinary, ForeignKey, DateTime, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, Integer, LargeBinary, ForeignKey, DateTime, func, create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///../storage/database.db"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # คลาสฐานสำหรับ Models ทั้งหมด
 class Base(DeclarativeBase):
