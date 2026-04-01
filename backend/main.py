@@ -1,24 +1,15 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from app.models.database import engine, Base, init_db
 from app.api.router import api_router
-from app.models.database import engine, Base
 
-# สร้างตารางในฐานข้อมูล SQLite อัตโนมัติเมื่อรันระบบ 
+# คำสั่งสร้างไฟล์ database.db และตารางทั้งหมดตามที่ออกแบบไว้ [1, 7]
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="FaceCheck API - Professional Edition")
+app = FastAPI(title="FaceCheck System")
 
-# ตั้งค่า CORS เพื่อให้ React (Port 5173) คุยกับ API (Port 8000) ได้ 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# รวม API Routes (Enroll, Scan, Stats)
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
 def root():
-    return {"message": "FaceCheck API is online"}
+    return {"status": "online", "message": "FaceCheck Backend is ready"}

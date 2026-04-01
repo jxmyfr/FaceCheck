@@ -3,20 +3,6 @@ from typing import List, Optional
 from sqlalchemy import String, Integer, LargeBinary, ForeignKey, DateTime, func, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///../storage/database.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 # คลาสฐานสำหรับ Models ทั้งหมด
 class Base(DeclarativeBase):
     pass
@@ -29,16 +15,15 @@ class Student(Base):
     student_id: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
     first_name: Mapped[str] = mapped_column(String(50), nullable=False)
     last_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    grade_level: Mapped[Optional[str]] = mapped_column(String(10))  # เช่น 'ม.5'
-    room_number: Mapped[Optional[str]] = mapped_column(String(10))   # เช่น '1'
+    grade_level: Mapped[Optional[str]] = mapped_column(String(10)) 
+    room_number: Mapped[Optional[str]] = mapped_column(String(10))
     
-    # เก็บ Face Embedding เป็นเวกเตอร์ตัวเลขในรูปแบบ Binary (BLOB)
-    # เพื่อประสิทธิภาพสูงสุดในการประมวลผลระยะห่าง (Distance Calculation)
+    # เก็บ Face Embedding เป็นเวกเตอร์ตัวเลข (Binary)
     face_embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     
-    # กำหนดความสัมพันธ์ไปยังประวัติการเข้าเรียน
+    # ระบุชนิดข้อมูลเป็น List["AttendanceLog"] เพื่อความชัดเจน
     attendance_records: Mapped[List["AttendanceLog"]] = relationship(
-        back_coordinates="student", cascade="all, delete-orphan"
+        back_populates="student", cascade="all, delete-orphan"
     )
 
 class Subject(Base):
@@ -50,16 +35,33 @@ class Subject(Base):
     subject_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
 class AttendanceLog(Base):
-    """ตารางบันทึกประวัติการสแกนใบหน้าเข้าเรียนรายวิชา"""
+    """ตารางบันทึกประวัติการสแกนใบหน้าเข้าเรียน"""
     __tablename__ = "attendance_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
     subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"), nullable=False)
-    
-    # บันทึกเวลาที่สแกนสำเร็จโดยอัตโนมัติ
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    status: Mapped[str] = mapped_column(String(20), default="present") # present, late, absent
+    status: Mapped[str] = mapped_column(String(20), default="present")
     
-    # เชื่อมโยงข้อมูลนักเรียนกลับมาเพื่อใช้ทำ Dashboard
-    student: Mapped = relationship(back_coordinates="attendance_records")
+    # แก้ไขจุดสำคัญ: ต้องระบุ Mapped ให้ครบถ้วน
+    student: Mapped = relationship(back_populates="attendance_records")
+
+# การตั้งค่าการเชื่อมต่อฐานข้อมูล SQLite
+SQLALCHEMY_DATABASE_URL = "sqlite:///../storage/database.db"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():
+    """ฟังก์ชัน Dependency Injection สำหรับ API เพื่อจัดการ lifecycle ของ session"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def init_db():
+    """สร้างตารางในฐานข้อมูล"""
+    Base.metadata.create_all(bind=engine)
