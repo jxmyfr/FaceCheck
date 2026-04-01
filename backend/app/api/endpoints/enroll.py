@@ -4,6 +4,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from app.models.database import get_db
 
 from app.models.database import Student
 from app.services.face_proc import FaceProcessor

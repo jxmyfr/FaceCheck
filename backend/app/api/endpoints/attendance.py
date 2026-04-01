@@ -3,6 +3,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
+from app.models.database import get_db
 
 from app.models.database import Student, AttendanceLog, get_db
 from app.services.face_proc import FaceProcessor
