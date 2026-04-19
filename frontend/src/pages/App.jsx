@@ -1,23 +1,47 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Dashboard from './pages/Dashboard';
-import Scanner from './pages/Scanner';
-import Enrollment from './pages/Enrollment';
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from '../hooks/useAuth'
+import Navbar from '../components/Navbar'
+import Dashboard from './Dashboard'
+import Scanner from './Scanner'
+import Enrollment from './Enrollment'
+import Login from './Login'
+import Admin from './Admin'
+import Students from './Students'
 
-function App() {
-  return (
-    <BrowserRouter>
-      <div className="font-sans antialiased">
-        <Navbar />
-        <main className="max-w-7xl mx-auto">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/scan" element={<Scanner />} />
-            <Route path="/enroll" element={<Enrollment />} />
-          </Routes>
-        </main>
-      </div>
-    </BrowserRouter>
-  );
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen">
+      <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+  return user ? children : <Navigate to="/login" replace />
 }
-export default App;
+
+function Layout() {
+  return (
+    <div className="font-sans antialiased">
+      <Navbar />
+      <main>
+        <Routes>
+          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/scan" element={<ProtectedRoute><Scanner /></ProtectedRoute>} />
+          <Route path="/enroll" element={<ProtectedRoute><Enrollment /></ProtectedRoute>} />
+          <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+        </Routes>
+      </main>
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/*" element={<Layout />} />
+      </Routes>
+    </AuthProvider>
+  )
+}

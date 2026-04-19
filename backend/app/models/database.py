@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date
+from pathlib import Path
 from typing import List, Optional
-from sqlalchemy import String, Integer, LargeBinary, ForeignKey, DateTime, func, create_engine
+from sqlalchemy import String, Integer, LargeBinary, ForeignKey, DateTime, Date, Boolean, func, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
  
 # คลาสฐานสำหรับ Models
@@ -55,8 +56,23 @@ class AttendanceLog(Base):
     student: Mapped["Student"] = relationship(back_populates="attendance_records")
     subject: Mapped["Subject"] = relationship(back_populates="attendance_records")
  
+class SemesterSetting(Base):
+    """ตารางเก็บข้อมูลภาคเรียน (แอดมินกำหนด)"""
+    __tablename__ = "semester_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), default="ภาคเรียนที่ 1")
+    term_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    term_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 # การตั้งค่าการเชื่อมต่อฐานข้อมูล SQLite
-SQLALCHEMY_DATABASE_URL = "sqlite:///../storage/database.db"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+STORAGE_DIR = BASE_DIR / "storage"
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{STORAGE_DIR / 'database.db'}"
+
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, 
     connect_args={"check_same_thread": False} # สำหรับ SQLite เท่านั้น

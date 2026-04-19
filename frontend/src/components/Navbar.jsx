@@ -1,40 +1,80 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 
-const Navbar = () => {
-  const location = useLocation();
-  
-  const navItems = [
-    { name: 'Home', path: '/' },
-    { name: 'Scanner', path: '/scanner' },
-    { name: 'Enrollment', path: '/enrollment' },
-  ];
+export default function Navbar() {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+
+  const links = [
+    { to: '/',         label: 'Dashboard' },
+    { to: '/scan',     label: 'Scanner' },
+    { to: '/enroll',   label: 'Enrollment' },
+    { to: '/students', label: 'Students' },
+    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin' }] : []),
+  ]
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg rotate-12 flex items-center justify-center text-white font-bold shadow-blue-200 shadow-lg">FC</div>
-          <span className="text-xl font-black bg-clip-text text-transparent bg-linear-to-r from-blue-600 to-indigo-600">FaceCheck</span>
-        </div>
-
-        <div className="flex gap-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300 ${
-                location.pathname === item.path 
-                 ? 'bg-blue-600 text-white shadow-md' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {item.name}
-            </Link>
-          ))}
-        </div>
+    <header style={{
+      height: 56, background: '#fff',
+      borderBottom: '1px solid rgba(0,0,0,0.07)',
+      display: 'flex', alignItems: 'center',
+      padding: '0 32px', gap: 32,
+      position: 'sticky', top: 0, zIndex: 50,
+    }}>
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 7,
+          background: '#1A56DB', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontSize: 11, fontWeight: 700,
+        }}>FC</div>
+        <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>FaceCheck</span>
       </div>
-    </nav>
-  );
-};
 
-export default Navbar;
+      {/* Nav */}
+      <nav style={{ display: 'flex', gap: 2, flex: 1 }}>
+        {links.map(({ to, label }) => {
+          const active = pathname === to
+          return (
+            <Link key={to} to={to} style={{
+              padding: '5px 12px', borderRadius: 6, fontSize: 13,
+              fontWeight: active ? 600 : 400,
+              color: active ? '#1A56DB' : '#6B7280',
+              background: active ? 'rgba(26,86,219,0.08)' : 'transparent',
+              textDecoration: 'none',
+              transition: 'all 0.12s',
+            }}>
+              {label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* User */}
+      {user && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: '50%',
+            background: '#EEF2FF', color: '#1A56DB',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700,
+          }}>
+            {user.full_name?.[0] ?? 'U'}
+          </div>
+          <div style={{ lineHeight: 1.3 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{user.full_name}</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'capitalize' }}>{user.role}</div>
+          </div>
+          <button className="btn btn-ghost btn-sm"
+            onClick={() => { logout(); navigate('/login') }}
+            style={{ marginLeft: 4 }}
+          >
+            ออก
+          </button>
+        </div>
+      )}
+    </header>
+  )
+}
