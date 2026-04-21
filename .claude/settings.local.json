@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(claude plugin *)",
+      "WebSearch",
+      "Bash(python -c \"import fastapi; print\\(fastapi.__version__\\)\")",
+      "Bash(python3 -c \"import fastapi; print\\(fastapi.__version__\\)\")",
+      "WebFetch(domain:21st.dev)",
+      "WebFetch(domain:docs.copilotkit.ai)",
+      "WebFetch(domain:copilotkit.ai)",
+      "WebFetch(domain:uxpilot.ai)",
+      "WebFetch(domain:dribbble.com)",
+      "Bash(rtk git *)",
+      "Bash(powershell -Command \"cd 'd:\\\\Study\\\\Project\\\\facecheck'; git status --short\")"
+    ]
+  }
+}

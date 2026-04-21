@@ -2,14 +2,21 @@ import { useRef, useState, useEffect } from 'react'
 import Webcam from 'react-webcam'
 import axios from 'axios'
 
+const IcCamera = () => (
+  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+    <circle cx="12" cy="13" r="4"/>
+  </svg>
+)
+
 const API = 'http://127.0.0.1:8000/api/v1'
 
 const STATUS = {
-  idle:    { label: 'พร้อมสแกน',          color: '#9CA3AF', bg: 'transparent' },
-  loading: { label: 'กำลังประมวลผล...',   color: '#1A56DB', bg: 'rgba(26,86,219,0.06)' },
-  success: { label: '',                    color: '#15803D', bg: 'rgba(22,163,74,0.08)' },
-  warning: { label: '',                    color: '#D97706', bg: 'rgba(217,119,6,0.08)' },
-  error:   { label: '',                    color: '#DC2626', bg: 'rgba(220,38,38,0.08)' },
+  idle:    { label: 'พร้อมสแกน',        color: 'var(--fc-text-4)',   bg: 'transparent' },
+  loading: { label: 'กำลังประมวลผล...', color: 'var(--fc-primary)',  bg: 'var(--fc-primary-light)' },
+  success: { label: '',                  color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
+  warning: { label: '',                  color: 'var(--fc-warning)',  bg: 'var(--fc-warning-light)' },
+  error:   { label: '',                  color: 'var(--fc-danger)',   bg: 'var(--fc-danger-light)' },
 }
 
 export default function Scanner() {
@@ -38,7 +45,7 @@ export default function Scanner() {
       const fd   = new FormData(); fd.append('file', blob, 'scan.jpg')
       const res  = await axios.post(`${API}/attendance/scan?subject_id=${subjectId}`, fd)
       if (res.data.status === 'success') {
-        setState('success'); setMessage(`✓  ${res.data.name}`)
+        setState('success'); setMessage(res.data.name)
       } else {
         setState('warning'); setMessage(res.data.message)
       }
@@ -52,7 +59,7 @@ export default function Scanner() {
   const s = STATUS[state]
 
   return (
-    <div className="page-sm" style={{paddingTop:40}}>
+    <main id="main-content" className="page-sm" style={{paddingTop:40}}>
 
       {/* Header */}
       <div style={{marginBottom:24}}>
@@ -64,8 +71,8 @@ export default function Scanner() {
 
         {/* Subject selector */}
         <div className="form-group" style={{marginBottom:20}}>
-          <label className="form-label">เลือกรายวิชา</label>
-          <select value={subjectId} onChange={e=>setSubjectId(e.target.value)}>
+          <label htmlFor="scanner-subject" className="form-label">เลือกรายวิชา</label>
+          <select id="scanner-subject" value={subjectId} onChange={e=>setSubjectId(e.target.value)}>
             {subjects.length === 0
               ? <option value="">ไม่มีรายวิชา — ติดต่อ Admin</option>
               : subjects.map(s=>(
@@ -78,7 +85,7 @@ export default function Scanner() {
         {/* Camera */}
         <div style={{
           position: 'relative', borderRadius: 12, overflow: 'hidden',
-          background: '#F0F2F5', aspectRatio: '4/3',
+          background: 'var(--fc-muted)', aspectRatio: '4/3',
           marginBottom: 16,
         }}>
           <Webcam
@@ -95,13 +102,13 @@ export default function Scanner() {
           }}>
             <div style={{
               width: 180, height: 220, borderRadius: '50%',
-              border: `2px dashed ${state==='loading' ? '#1A56DB' : 'rgba(255,255,255,0.5)'}`,
+              border: `2px dashed ${state==='loading' ? 'var(--fc-primary)' : 'rgba(255,255,255,0.5)'}`,
               transition: 'border-color 0.3s',
             }}/>
           </div>
           {state === 'loading' && (
             <div style={{
-              position:'absolute', inset:0, background:'rgba(26,86,219,0.08)',
+              position:'absolute', inset:0, background:'var(--fc-primary-light)',
               display:'flex', alignItems:'center', justifyContent:'center',
             }}>
               <div className="spinner" style={{width:32,height:32,borderWidth:3}}/>
@@ -110,16 +117,20 @@ export default function Scanner() {
         </div>
 
         {/* Status feedback */}
-        {(message || state !== 'idle') && (
-          <div style={{
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
             padding:'10px 14px', borderRadius:8, marginBottom:14,
             background: s.bg, color: s.color,
             fontSize: 13, fontWeight: 500, textAlign:'center',
-            transition:'all 0.2s',
-          }}>
-            {message || s.label}
-          </div>
-        )}
+            transition: 'background 0.2s, color 0.2s',
+            minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {(message || state !== 'idle') ? (message || s.label) : ''}
+        </div>
 
         {/* Scan button */}
         <button
@@ -129,14 +140,14 @@ export default function Scanner() {
         >
           {state === 'loading'
             ? <><span className="spinner" style={{width:16,height:16,borderWidth:2,borderColor:'rgba(255,255,255,0.3)',borderTopColor:'#fff'}} /> ประมวลผล...</>
-            : '📷  ถ่ายภาพและเช็คชื่อ'
+            : <><IcCamera /> ถ่ายภาพและเช็คชื่อ</>
           }
         </button>
 
-        <p style={{fontSize:11,color:'#9CA3AF',textAlign:'center',marginTop:12}}>
+        <p style={{fontSize:11,color:'var(--fc-text-4)',textAlign:'center',marginTop:12}}>
           มองตรงเข้าหากล้อง · แสงสว่างเพียงพอ · ถอดหน้ากากและแว่น
         </p>
       </div>
-    </div>
+    </main>
   )
 }
