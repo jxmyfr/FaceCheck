@@ -21,6 +21,8 @@ class Student(Base):
     
     # เก็บ Face Embedding เป็นเวกเตอร์ตัวเลข (Binary) เพื่อความไวสูงสุด
     face_embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # เก็บรูปใบหน้า JPEG สำหรับแสดงผล
+    face_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     
     # เชื่อมไปยังประวัติการเข้าเรียน
     attendance_records: Mapped[List["AttendanceLog"]] = relationship(

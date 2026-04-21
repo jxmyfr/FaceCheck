@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.models.database import get_db, Student
@@ -36,10 +37,14 @@ async def register_student(
     if frame is None:
         raise HTTPException(status_code=400, detail="ไม่สามารถอ่านไฟล์ภาพได้")
 
-    embedding = face_processor.process_capture(frame)
+    try:
+        embedding = face_processor.process_capture(frame)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if embedding is None:
-        raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ หรือตรวจสอบ Liveness ไม่ผ่าน")
+        raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ — กรุณาให้ใบหน้าอยู่กลางภาพและมองตรงเข้าหากล้อง")
 
+    _, jpeg_buf = cv2.imencode('.jpg', frame)
     new_student = Student(
         student_id=student_id,
         first_name=first_name,
@@ -47,6 +52,7 @@ async def register_student(
         grade_level=grade_level or None,
         room_number=room_number or None,
         face_embedding=embedding.tobytes(),
+        face_image=jpeg_buf.tobytes(),
     )
     db.add(new_student)
     db.commit()
@@ -73,11 +79,16 @@ async def update_face(
     if frame is None:
         raise HTTPException(status_code=400, detail="ไม่สามารถอ่านไฟล์ภาพได้")
 
-    embedding = face_processor.process_capture(frame)
+    try:
+        embedding = face_processor.process_capture(frame)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if embedding is None:
-        raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ")
+        raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ — กรุณาให้ใบหน้าอยู่กลางภาพและมองตรงเข้าหากล้อง")
 
+    _, jpeg_buf = cv2.imencode('.jpg', frame)
     student.face_embedding = embedding.tobytes()
+    student.face_image = jpeg_buf.tobytes()
     db.commit()
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), frame)
 
@@ -102,6 +113,46 @@ def list_students(
         }
         for s in students
     ]
+
+
+@router.get("/students/{student_id}/face")
+def get_student_face(
+    student_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_teacher_or_admin),
+):
+    student = db.query(Student).filter(Student.student_id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="ไม่พบรหัสนักเรียน")
+    # ลองดึงจาก DB ก่อน (reliable ที่สุด)
+    if student.face_image:
+        return Response(content=student.face_image, media_type="image/jpeg")
+    # fallback: อ่านจาก filesystem
+    face_file = FACES_DIR / f"{student_id}.jpg"
+    if face_file.is_file():
+        return Response(content=face_file.read_bytes(), media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="ไม่พบรูปใบหน้า — กรุณาอัปเดตใบหน้าใหม่")
+
+
+@router.put("/students/{student_id}")
+def update_student(
+    student_id: str,
+    first_name:  str = Form(...),
+    last_name:   str = Form(...),
+    grade_level: str = Form(default=""),
+    room_number: str = Form(default=""),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_teacher_or_admin),
+):
+    student = db.query(Student).filter(Student.student_id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="ไม่พบรหัสนักเรียน")
+    student.first_name  = first_name
+    student.last_name   = last_name
+    student.grade_level = grade_level or None
+    student.room_number = room_number or None
+    db.commit()
+    return {"status": "success", "message": f"อัปเดตข้อมูล {first_name} สำเร็จ"}
 
 
 @router.delete("/students/{student_id}", status_code=status.HTTP_204_NO_CONTENT)

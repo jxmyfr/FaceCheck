@@ -7,6 +7,7 @@ import Enrollment from './Enrollment'
 import Login from './Login'
 import Admin from './Admin'
 import Students from './Students'
+import StudentDetail from './StudentDetail'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -28,6 +29,7 @@ function Layout() {
           <Route path="/scan" element={<ProtectedRoute><Scanner /></ProtectedRoute>} />
           <Route path="/enroll" element={<ProtectedRoute><Enrollment /></ProtectedRoute>} />
           <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
+          <Route path="/students/:studentId" element={<ProtectedRoute><StudentDetail /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         </Routes>
       </main>

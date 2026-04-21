@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 
@@ -6,10 +7,13 @@ const API = 'http://127.0.0.1:8000/api/v1/enroll'
 
 export default function Students() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [students, setStudents] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [search, setSearch]     = useState('')
+  const [filterGrade, setFilterGrade] = useState('')
+  const [filterRoom, setFilterRoom]   = useState('')
   const [deleting, setDeleting] = useState(null)
   const [confirm, setConfirm]   = useState(null)
 
@@ -41,41 +45,91 @@ export default function Students() {
     }
   }
 
+  const grades = [...new Set(students.map(s => s.grade_level).filter(Boolean))].sort()
+  const rooms  = [...new Set(
+    students
+      .filter(s => !filterGrade || s.grade_level === filterGrade)
+      .map(s => s.room_number)
+      .filter(Boolean)
+  )].sort((a, b) => Number(a) - Number(b))
+
   const filtered = students.filter(s => {
     const q = search.toLowerCase()
-    return (
+    const matchSearch = !q || (
       s.student_id.toLowerCase().includes(q) ||
       s.first_name.toLowerCase().includes(q) ||
       s.last_name.toLowerCase().includes(q)
     )
+    const matchGrade = !filterGrade || s.grade_level === filterGrade
+    const matchRoom  = !filterRoom  || s.room_number  === filterRoom
+    return matchSearch && matchGrade && matchRoom
   })
 
   return (
-    <div className="page">
+    <main id="main-content" className="page">
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div className="page-title">รายชื่อนักเรียน</div>
-          <div className="page-sub">นักเรียนทั้งหมดในระบบ {students.length} คน</div>
+          <h1 className="page-title">รายชื่อนักเรียน</h1>
+          <p className="page-sub">นักเรียนทั้งหมดในระบบ {students.length} คน</p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={load}>
-          รีเฟรช
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={load}>รีเฟรช</button>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/enroll')}>+ ลงทะเบียนนักเรียน</button>
+        </div>
       </div>
 
-      {/* Search */}
-      <div style={{ maxWidth: 320, marginBottom: 20 }}>
-        <input
-          type="text"
-          placeholder="ค้นหารหัส / ชื่อ / นามสกุล…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      {/* Filters */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, alignItems: 'center' }}>
+        <div style={{ flex: '1 1 200px', maxWidth: 320 }}>
+          <label htmlFor="students-search" className="sr-only">ค้นหานักเรียน</label>
+          <input
+            id="students-search"
+            type="search"
+            placeholder="ค้นหารหัส / ชื่อ / นามสกุล…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            aria-label="ค้นหานักเรียน"
+          />
+        </div>
+        <div style={{ flex: '0 0 140px' }}>
+          <label htmlFor="students-grade" className="sr-only">กรองตามชั้น</label>
+          <select
+            id="students-grade"
+            value={filterGrade}
+            onChange={e => { setFilterGrade(e.target.value); setFilterRoom('') }}
+            aria-label="กรองตามชั้น"
+          >
+            <option value="">ทุกชั้น</option>
+            {grades.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: '0 0 120px' }}>
+          <label htmlFor="students-room" className="sr-only">กรองตามห้อง</label>
+          <select
+            id="students-room"
+            value={filterRoom}
+            onChange={e => setFilterRoom(e.target.value)}
+            disabled={!filterGrade}
+            aria-label="กรองตามห้อง"
+          >
+            <option value="">ทุกห้อง</option>
+            {rooms.map(r => <option key={r} value={r}>ห้อง {r}</option>)}
+          </select>
+        </div>
+        {(filterGrade || filterRoom || search) && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => { setFilterGrade(''); setFilterRoom(''); setSearch('') }}
+          >
+            ล้างตัวกรอง
+          </button>
+        )}
       </div>
 
       {/* Content */}
       {error ? (
-        <div className="card" style={{ color: '#DC2626', textAlign: 'center', padding: '40px 0' }}>
+        <div className="card" style={{ color: 'var(--fc-danger)', textAlign: 'center', padding: '40px 0' }}>
           {error}
         </div>
       ) : loading ? (
@@ -83,11 +137,12 @@ export default function Students() {
           <div className="spinner" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', color: '#9CA3AF', padding: '48px 0' }}>
-          {search ? 'ไม่พบผลการค้นหา' : 'ยังไม่มีนักเรียนในระบบ'}
+        <div className="card" style={{ textAlign: 'center', color: 'var(--fc-text-3)', padding: '48px 0' }}>
+          {(search || filterGrade || filterRoom) ? 'ไม่พบนักเรียนที่ตรงกับเงื่อนไข' : 'ยังไม่มีนักเรียนในระบบ'}
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
           <table className="tbl">
             <thead>
               <tr>
@@ -102,8 +157,12 @@ export default function Students() {
             </thead>
             <tbody>
               {filtered.map(s => (
-                <tr key={s.student_id}>
-                  <td style={{ fontWeight: 600, color: '#111827', fontFamily: 'monospace' }}>
+                <tr
+                  key={s.student_id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
+                >
+                  <td style={{ fontWeight: 600, color: 'var(--fc-text)', fontFamily: 'var(--fc-font-mono)' }}>
                     {s.student_id}
                   </td>
                   <td>{s.first_name}</td>
@@ -112,12 +171,12 @@ export default function Students() {
                   <td>{s.room_number ?? '—'}</td>
                   <td>
                     {s.has_face
-                      ? <span className="chip" style={{ background: 'rgba(22,163,74,0.1)', color: '#15803D' }}>มีแล้ว</span>
-                      : <span className="chip" style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626' }}>ยังไม่มี</span>
+                      ? <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)' }}>มีแล้ว</span>
+                      : <span className="chip" style={{ background: 'var(--fc-danger-light)', color: 'var(--fc-danger)' }}>ยังไม่มี</span>
                     }
                   </td>
                   {user?.role === 'admin' && (
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                       <button
                         className="btn btn-danger btn-sm"
                         disabled={deleting === s.student_id}
@@ -131,6 +190,7 @@ export default function Students() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -139,16 +199,16 @@ export default function Students() {
         <div className="modal-overlay" onClick={() => setConfirm(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">ยืนยันการลบ</div>
-            <p style={{ fontSize: 14, color: '#374151', marginBottom: 20 }}>
+            <p style={{ fontSize: 14, color: 'var(--fc-text-2)', marginBottom: 20 }}>
               ลบ <strong>{confirm.first_name} {confirm.last_name}</strong> ({confirm.student_id}) ออกจากระบบ?
               <br />
-              <span style={{ color: '#DC2626', fontSize: 12 }}>ข้อมูลและใบหน้าจะถูกลบถาวร</span>
+              <span style={{ color: 'var(--fc-danger)', fontSize: 12 }}>ข้อมูลและใบหน้าจะถูกลบถาวร</span>
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost" onClick={() => setConfirm(null)}>ยกเลิก</button>
               <button
                 className="btn btn-primary"
-                style={{ background: '#DC2626' }}
+                style={{ background: 'var(--fc-danger)' }}
                 disabled={deleting === confirm.student_id}
                 onClick={() => handleDelete(confirm.student_id)}
               >
@@ -158,6 +218,6 @@ export default function Students() {
           </div>
         </div>
       )}
-    </div>
+    </main>
   )
 }

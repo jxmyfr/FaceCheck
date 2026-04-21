@@ -326,10 +326,13 @@ def get_student_attendance(
 
     return {
         "student": {
-            "student_id": student.student_id,
-            "full_name": f"{student.first_name} {student.last_name}",
+            "student_id":  student.student_id,
+            "full_name":   f"{student.first_name} {student.last_name}",
+            "first_name":  student.first_name,
+            "last_name":   student.last_name,
             "grade_level": student.grade_level,
             "room_number": student.room_number,
+            "has_face":    len(student.face_embedding) > 0,
         },
         "records": records,
         "summary": {
