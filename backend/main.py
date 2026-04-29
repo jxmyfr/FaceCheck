@@ -1,21 +1,51 @@
-import sqlite3
+import os
 import uvicorn
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.models.database import engine, Base, STORAGE_DIR
+from app.models.database import engine, Base
 from app.api.router import api_router
 
-# 1. สั่งสร้างตารางในไฟล์.db อัตโนมัติ (ครั้งแรก)
+# สร้างตารางทั้งหมดอัตโนมัติ (ครั้งแรก)
 Base.metadata.create_all(bind=engine)
 
-# 1b. เพิ่ม column face_image ถ้ายังไม่มี (migration อัตโนมัติ)
-with sqlite3.connect(str(STORAGE_DIR / "database.db")) as _conn:
-    try:
-        _conn.execute("ALTER TABLE students ADD COLUMN face_image BLOB")
-    except sqlite3.OperationalError:
-        pass  # column มีแล้ว
+_MIGRATIONS = [
+    "ALTER TABLE students ADD COLUMN face_image BYTEA",
+    "ALTER TABLE attendance_logs ADD COLUMN scan_image BYTEA",
+    "ALTER TABLE students ADD COLUMN title TEXT",
+    "ALTER TABLE subjects ADD COLUMN teacher_name TEXT",
+    "ALTER TABLE subjects ADD COLUMN description TEXT",
+    "ALTER TABLE subjects ADD COLUMN category TEXT",
+    "ALTER TABLE semester_settings ADD COLUMN face_threshold REAL DEFAULT 1.0",
+    "ALTER TABLE users ADD COLUMN categories TEXT",
+    "ALTER TABLE users ADD COLUMN username VARCHAR(50) UNIQUE",
+    "ALTER TABLE semester_settings ADD COLUMN min_det_score REAL DEFAULT 0.65",
+    "ALTER TABLE semester_settings ADD COLUMN min_face_ratio REAL DEFAULT 0.08",
+    "ALTER TABLE semester_settings ADD COLUMN min_blur_score REAL DEFAULT 40.0",
+]
+
+if os.getenv("DATABASE_URL"):
+    # PostgreSQL migration
+    from sqlalchemy import text as _text
+    with engine.connect() as _conn:
+        for _sql in _MIGRATIONS:
+            try:
+                _conn.execute(_text(_sql))
+                _conn.commit()
+            except Exception:
+                _conn.rollback()
+else:
+    # SQLite migration
+    import sqlite3
+    from app.models.database import STORAGE_DIR
+    _sqlite_migrations = [s.replace("BYTEA", "BLOB") for s in _MIGRATIONS]
+    with sqlite3.connect(str(STORAGE_DIR / "database.db")) as _conn:
+        for _sql in _sqlite_migrations:
+            try:
+                _conn.execute(_sql)
+            except sqlite3.OperationalError:
+                pass
 
 app = FastAPI(title="FaceCheck API")
 

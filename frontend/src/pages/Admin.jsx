@@ -2,13 +2,117 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { useDialog } from '../hooks/useDialog'
 
 const API = 'http://127.0.0.1:8000/api/v1'
 
-function Modal({ title, onClose, children }) {
+const SUBJECT_CATEGORIES = [
+  'ภาษาไทย',
+  'คณิตศาสตร์',
+  'วิทยาศาสตร์และเทคโนโลยี',
+  'สังคมศึกษา ศาสนาและวัฒนธรรม',
+  'สุขศึกษาและพลศึกษา',
+  'ศิลปะ',
+  'การงานอาชีพ',
+  'ภาษาต่างประเทศ',
+  'กิจกรรมพัฒนาผู้เรียน',
+]
+
+const PERIODS = [
+  { label: 'คาบ 1  (08:30–09:20)', start: '08:30', end: '09:20' },
+  { label: 'คาบ 2  (09:20–10:10)', start: '09:20', end: '10:10' },
+  { label: 'คาบ 3  (10:20–11:10)', start: '10:20', end: '11:10' },
+  { label: 'คาบ 4  (11:10–12:00)', start: '11:10', end: '12:00' },
+  { label: 'คาบ 5  (13:00–13:50)', start: '13:00', end: '13:50' },
+  { label: 'คาบ 6  (13:50–14:40)', start: '13:50', end: '14:40' },
+  { label: 'คาบ 7  (14:40–15:30)', start: '14:40', end: '15:30' },
+]
+const DAYS = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา']
+
+const periodLabel = (start, end) => {
+  const p = PERIODS.find(p => p.start === start && p.end === end)
+  return p ? p.label : `${start}–${end}`
+}
+
+const STATUS_MAP = {
+  present: { label: 'มาเรียน', color: 'var(--fc-success)', bg: 'rgba(16,185,129,0.1)' },
+  late:    { label: 'สาย',     color: 'var(--fc-warning)', bg: 'rgba(245,158,11,0.1)' },
+  absent:  { label: 'ขาด',    color: 'var(--fc-danger)',  bg: 'rgba(239,68,68,0.1)' },
+}
+
+function StatusBadge({ status, logId, onUpdate }) {
+  const [open, setOpen] = useState(false)
+  const s = STATUS_MAP[status]
+  return (
+    <div style={{position:'relative',display:'inline-block'}}>
+      <span
+        onClick={e=>{e.stopPropagation();setOpen(o=>!o)}}
+        style={{
+          fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,cursor:'pointer',
+          background: s?.bg || 'var(--fc-muted)',
+          color: s?.color || 'var(--fc-text-3)',
+        }}
+      >{s?.label || '—'}</span>
+      {open && (
+        <div
+          style={{position:'absolute',top:'110%',left:0,zIndex:50,background:'var(--fc-card)',border:'1px solid var(--fc-border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.12)',padding:4,minWidth:100}}
+          onClick={e=>e.stopPropagation()}
+        >
+          {Object.entries(STATUS_MAP).map(([v,{label,color}])=>(
+            <button key={v}
+              onClick={()=>{onUpdate(logId,v);setOpen(false)}}
+              style={{display:'block',width:'100%',textAlign:'left',padding:'6px 10px',fontSize:12,color,fontWeight:600,background:'none',border:'none',cursor:'pointer',borderRadius:6}}
+            >{label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SchedForm({ sched, setSched, onAdd, gradeRooms = {} }) {
+  const grades = Object.keys(gradeRooms).sort()
+  const rooms  = sched.grade_level ? (gradeRooms[sched.grade_level] || []) : []
+
+  const setGrade = (g) => setSched(s => ({ ...s, grade_level: g, room_number: '' }))
+
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'60px 1fr 1fr 1fr auto',gap:8,alignItems:'flex-end'}}>
+      <div>
+        <label className="form-label">วัน</label>
+        <select value={sched.day_of_week} onChange={e=>setSched(s=>({...s,day_of_week:e.target.value}))}>
+          {DAYS.map(d=><option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="form-label">คาบ</label>
+        <select value={sched.period} onChange={e=>setSched(s=>({...s,period:e.target.value}))}>
+          {PERIODS.map((p,i)=><option key={i} value={i}>{p.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="form-label">ชั้น</label>
+        <select value={sched.grade_level} onChange={e=>setGrade(e.target.value)}>
+          <option value="">-- เลือก --</option>
+          {grades.map(g=><option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="form-label">ห้อง</label>
+        <select value={sched.room_number} onChange={e=>setSched(s=>({...s,room_number:e.target.value}))} disabled={!sched.grade_level}>
+          <option value="">-- เลือก --</option>
+          {rooms.map(r=><option key={r} value={r}>ห้อง {r}</option>)}
+        </select>
+      </div>
+      <button className="btn btn-primary btn-sm" onClick={onAdd} style={{marginBottom:1}}>+ เพิ่ม</button>
+    </div>
+  )
+}
+
+function Modal({ title, onClose, children, maxWidth }) {
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal">
+      <div className="modal" style={maxWidth ? { maxWidth } : undefined}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
           <h2 className="modal-title" style={{margin:0}}>{title}</h2>
           <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="ปิด" style={{fontSize:16}}>✕</button>
@@ -22,26 +126,71 @@ function Modal({ title, onClose, children }) {
 export default function Admin() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { dialog, confirm, alert } = useDialog()
   const [users, setUsers]         = useState([])
   const [subjects, setSubjects]   = useState([])
+  const [gradeRooms, setGradeRooms] = useState({}) // { 'ม.5': ['1','2','3'], ... }
   const [tab, setTab]             = useState('users')
   const [loading, setLoading]     = useState(true)
   const [toast, setToast]         = useState(null)
 
-  const [semester, setSemester]     = useState({ name: '', term_start: '', term_end: '' })
+  const [semester, setSemester]     = useState({ name: '', term_start: '', term_end: '', face_threshold: 1.0 })
   const [semSaving, setSemSaving]   = useState(false)
 
+  // Attendance log state
+  const [logs, setLogs]             = useState([])
+  const [logDate, setLogDate]       = useState(() => new Date().toISOString().slice(0, 10))
+  const [logSubject, setLogSubject] = useState('')
+  const [logLoading, setLogLoading] = useState(false)
+  const [logDetail, setLogDetail]   = useState(null)   // selected log for detail modal
+  const [logPhoto, setLogPhoto]     = useState(null)   // blob URL for scan image
+
   const [showUser, setShowUser]     = useState(false)
-  const [newUser, setNewUser]       = useState({email:'',password:'',full_name:'',role:'teacher'})
+  const [newUser, setNewUser]       = useState({email:'',username:'',password:'',full_name:'',role:'teacher',categories:[]})
   const [showSubject, setShowSubject] = useState(false)
-  const [newSub, setNewSub]         = useState({subject_code:'',subject_name:''})
+  const [newSub, setNewSub]         = useState({subject_code:'',subject_name:'',teacher_name:'',description:'',category:'', schedules:[]})
+  const [subDetail, setSubDetail]   = useState(null)
+  const [subEditing, setSubEditing] = useState(false)
+  const [subForm, setSubForm]       = useState({subject_code:'',subject_name:'',teacher_name:'',description:'',category:''})
+  const [newSched, setNewSched]     = useState({day_of_week:'จ', period:'0', grade_level:'', room_number:''})
+  const [subFilter, setSubFilter]     = useState({ q: '', teacher: '', grade: '', category: '' })
   const [assignModal, setAssignModal] = useState(null)
   const [teacherSubs, setTeacherSubs] = useState([])
   const [assignId, setAssignId]     = useState('')
+  const [teacherDetail, setTeacherDetail]       = useState(null)
+  const [teacherSubjectIds, setTeacherSubjectIds] = useState(new Set())
+  const [teacherEdit, setTeacherEdit] = useState(false)
+  const [teacherForm, setTeacherForm] = useState({})
+  const [teacherSaving, setTeacherSaving] = useState(false)
 
   const flash = (text, type='success') => {
     setToast({text,type})
     setTimeout(()=>setToast(null), 3000)
+  }
+
+  const saveTeacher = async () => {
+    setTeacherSaving(true)
+    try {
+      const body = {
+        full_name: teacherForm.full_name,
+        email: teacherForm.email,
+        username: teacherForm.username || null,
+        role: teacherForm.role,
+        categories: teacherForm.categories || [],
+      }
+      if (teacherForm.new_password) body.new_password = teacherForm.new_password
+      const res = await axios.patch(`${API}/auth/users/${teacherDetail.id}`, body, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+      })
+      setTeacherDetail(prev => ({ ...prev, ...res.data }))
+      setUsers(prev => prev.map(u => u.id === teacherDetail.id ? { ...u, ...res.data } : u))
+      setTeacherEdit(false)
+      flash('บันทึกข้อมูลสำเร็จ')
+    } catch (e) {
+      flash(e.response?.data?.detail || 'บันทึกไม่สำเร็จ', 'error')
+    } finally {
+      setTeacherSaving(false)
+    }
   }
 
   const loadAll = async () => {
@@ -49,11 +198,22 @@ export default function Admin() {
     try {
       const [u, s, sem] = await Promise.all([
         axios.get(`${API}/auth/users`).then(r=>r.data),
-        axios.get(`${API}/attendance/subjects`).then(r=>r.data),
+        axios.get(`${API}/attendance/subjects`).then(async r => {
+          return Promise.all(r.data.map(s => axios.get(`${API}/attendance/subjects/${s.id}`).then(d=>d.data)))
+        }),
         axios.get(`${API}/settings/semester`).then(r=>r.data).catch(()=>null),
       ])
       setUsers(u); setSubjects(s)
-      if (sem) setSemester({ name: sem.name||'', term_start: sem.term_start||'', term_end: sem.term_end||'' })
+      if (sem) setSemester({ name: sem.name||'', term_start: sem.term_start||'', term_end: sem.term_end||'', face_threshold: sem.face_threshold ?? 1.0 })
+      // build grade→rooms map from student list
+      const students = await axios.get(`${API}/enroll/students`).then(r=>r.data).catch(()=>[])
+      const gr = {}
+      students.forEach(st => {
+        if (!st.grade_level) return
+        if (!gr[st.grade_level]) gr[st.grade_level] = new Set()
+        if (st.room_number) gr[st.grade_level].add(st.room_number)
+      })
+      setGradeRooms(Object.fromEntries(Object.entries(gr).map(([g,rs])=>[g,[...rs].sort((a,b)=>Number(a)-Number(b))])))
     } finally { setLoading(false) }
   }
 
@@ -61,13 +221,23 @@ export default function Admin() {
     setSemSaving(true)
     try {
       await axios.put(`${API}/settings/semester`, {
-        name:       semester.name       || undefined,
-        term_start: semester.term_start || undefined,
-        term_end:   semester.term_end   || undefined,
+        name:            semester.name       || undefined,
+        term_start:      semester.term_start || undefined,
+        term_end:        semester.term_end   || undefined,
+        face_threshold:  semester.face_threshold,
       })
       flash('บันทึกข้อมูลภาคเรียนสำเร็จ')
     } catch (e) { flash(e.response?.data?.detail||'เกิดข้อผิดพลาด','error') }
     finally { setSemSaving(false) }
+  }
+
+  const deleteUser = async (id) => {
+    if (!await confirm('ลบบัญชีนี้ถาวร? ไม่สามารถกู้คืนได้', { title: 'ลบบัญชี', danger: true })) return
+    try {
+      await axios.delete(`${API}/auth/users/${id}`)
+      flash('ลบบัญชีสำเร็จ')
+      loadAll()
+    } catch (e) { flash(e.response?.data?.detail||'เกิดข้อผิดพลาด','error') }
   }
 
   useEffect(() => {
@@ -116,18 +286,124 @@ export default function Admin() {
 
   const createSub = async () => {
     try {
-      await axios.post(`${API}/attendance/subjects?subject_code=${newSub.subject_code}&subject_name=${encodeURIComponent(newSub.subject_name)}`)
+      const p = new URLSearchParams({ subject_code: newSub.subject_code, subject_name: newSub.subject_name })
+      const res = await axios.post(`${API}/attendance/subjects?${p}`)
+      const id = res.data.id
+      if (newSub.teacher_name || newSub.description || newSub.category) {
+        const p2 = new URLSearchParams({ subject_code: newSub.subject_code, subject_name: newSub.subject_name, teacher_name: newSub.teacher_name, description: newSub.description, category: newSub.category })
+        await axios.put(`${API}/attendance/subjects/${id}?${p2}`)
+      }
+      for (const sc of newSub.schedules) {
+        const period = PERIODS[Number(sc.period)]
+        const p3 = new URLSearchParams({ day_of_week: sc.day_of_week, time_start: period.start, time_end: period.end, grade_level: sc.grade_level, room_number: sc.room_number })
+        await axios.post(`${API}/attendance/subjects/${id}/schedules?${p3}`)
+      }
+      // auto-assign to teacher if selected
+      if (newSub.teacher_name) {
+        const teacher = teachers.find(t => t.full_name === newSub.teacher_name)
+        if (teacher) {
+          try { await axios.post(`${API}/auth/users/${teacher.id}/assign-subject/${id}`) } catch {}
+        }
+      }
       flash('เพิ่มวิชาสำเร็จ')
       setShowSubject(false)
-      setNewSub({subject_code:'',subject_name:''})
+      setNewSub({subject_code:'',subject_name:'',teacher_name:'',description:'',category:'',schedules:[]})
       loadAll()
     } catch (e) { flash(e.response?.data?.detail||'เกิดข้อผิดพลาด','error') }
   }
 
+  const loadLogs = async (date = logDate, subject = logSubject) => {
+    setLogLoading(true)
+    try {
+      const params = new URLSearchParams({ log_date: date })
+      if (subject) params.append('subject_id', subject)
+      const res = await axios.get(`${API}/attendance/logs?${params}`)
+      setLogs(res.data)
+    } catch { flash('โหลด log ไม่สำเร็จ', 'error') }
+    finally { setLogLoading(false) }
+  }
+
+  const openLogDetail = async (log) => {
+    setLogDetail(log)
+    setLogPhoto(null)
+    try {
+      const res = await axios.get(`${API}/attendance/logs/${log.log_id}/image`, { responseType: 'blob' })
+      setLogPhoto(URL.createObjectURL(res.data))
+    } catch { /* ไม่มีรูป */ }
+  }
+
+  const closeLogDetail = () => {
+    if (logPhoto) URL.revokeObjectURL(logPhoto)
+    setLogDetail(null)
+    setLogPhoto(null)
+  }
+
+  const deleteLog = async (logId) => {
+    if (!await confirm('ยืนยันการยกเลิกการเช็คชื่อนี้?', { title: 'ยกเลิกการเช็คชื่อ', danger: true })) return
+    try {
+      await axios.delete(`${API}/attendance/logs/${logId}`)
+      setLogs(prev => prev.filter(l => l.log_id !== logId))
+      flash('ยกเลิกการเช็คชื่อสำเร็จ')
+    } catch (e) { flash(e.response?.data?.detail || 'เกิดข้อผิดพลาด', 'error') }
+  }
+
+  const updateLogStatus = async (logId, status) => {
+    try {
+      await axios.patch(`${API}/attendance/logs/${logId}?status=${status}`)
+      setLogs(prev => prev.map(l => l.log_id === logId ? { ...l, status } : l))
+      if (logDetail?.log_id === logId) setLogDetail(d => ({ ...d, status }))
+      flash('อัปเดตสถานะสำเร็จ')
+    } catch (e) { flash(e.response?.data?.detail || 'อัปเดตไม่สำเร็จ', 'error') }
+  }
+
   const deleteSub = async (id) => {
-    if (!confirm('ลบวิชาจะลบประวัติเช็คชื่อที่เกี่ยวข้องด้วย ยืนยัน?')) return
+    if (!await confirm('ลบวิชาจะลบประวัติเช็คชื่อที่เกี่ยวข้องด้วย ยืนยัน?', { title: 'ลบรายวิชา', danger: true })) return
     await axios.delete(`${API}/attendance/subjects/${id}`)
     flash('ลบวิชาสำเร็จ'); loadAll()
+  }
+
+  const openSubDetail = async (s) => {
+    try {
+      const res = await axios.get(`${API}/attendance/subjects/${s.id}`)
+      setSubDetail(res.data)
+      setSubForm({ subject_code: res.data.subject_code, subject_name: res.data.subject_name, teacher_name: res.data.teacher_name || '', description: res.data.description || '', category: res.data.category || '' })
+      setSubEditing(false)
+    } catch { flash('โหลดข้อมูลวิชาไม่สำเร็จ', 'error') }
+  }
+
+  const saveSubDetail = async () => {
+    try {
+      const p = new URLSearchParams(subForm)
+      const res = await axios.put(`${API}/attendance/subjects/${subDetail.id}?${p}`)
+      setSubDetail(res.data)
+      setSubEditing(false)
+      flash('บันทึกสำเร็จ')
+      loadAll()
+    } catch (e) { flash(e.response?.data?.detail || 'บันทึกไม่สำเร็จ', 'error') }
+  }
+
+  const addSchedule = async () => {
+    try {
+      const period = PERIODS[Number(newSched.period)]
+      const p = new URLSearchParams({ day_of_week: newSched.day_of_week, time_start: period.start, time_end: period.end, grade_level: newSched.grade_level, room_number: newSched.room_number })
+      const res = await axios.post(`${API}/attendance/subjects/${subDetail.id}/schedules?${p}`)
+      setSubDetail(prev => ({ ...prev, schedules: [...prev.schedules, res.data] }))
+      setNewSched(s => ({ ...s, grade_level: '', room_number: '' }))
+    } catch (e) { flash(e.response?.data?.detail || 'เพิ่มไม่สำเร็จ', 'error') }
+  }
+
+  const removeSchedule = async (schedId) => {
+    try {
+      await axios.delete(`${API}/attendance/subjects/schedules/${schedId}`)
+      setSubDetail(prev => ({ ...prev, schedules: prev.schedules.filter(s => s.id !== schedId) }))
+    } catch { flash('ลบไม่สำเร็จ', 'error') }
+  }
+
+  const teachers = users.filter(u => u.role === 'teacher')
+
+  const teachersForCategory = (category) => {
+    if (!category) return []
+    return teachers.filter(t => (t.categories||[]).includes(category))
   }
 
   if (loading) return (
@@ -141,6 +417,7 @@ export default function Admin() {
 
   return (
     <main id="main-content" className="page">
+      {dialog}
 
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
@@ -154,12 +431,15 @@ export default function Admin() {
       </div>
 
       {/* Tabs */}
-      <div className="tab-bar" style={{maxWidth:440,marginBottom:20}}>
+      <div className="tab-bar" style={{marginBottom:20}}>
         <button className={`tab-item ${tab==='users'?'active':''}`} onClick={()=>setTab('users')}>
           ครูและผู้ดูแล ({users.length})
         </button>
         <button className={`tab-item ${tab==='subjects'?'active':''}`} onClick={()=>setTab('subjects')}>
           รายวิชา ({subjects.length})
+        </button>
+        <button className={`tab-item ${tab==='logs'?'active':''}`} onClick={()=>{ setTab('logs'); loadLogs() }}>
+          บันทึกการเช็คชื่อ
         </button>
         <button className={`tab-item ${tab==='semester'?'active':''}`} onClick={()=>setTab('semester')}>
           ภาคเรียน
@@ -176,20 +456,24 @@ export default function Admin() {
           <div style={{overflowX:'auto'}}>
           <table className="tbl">
             <thead><tr>
-              <th>ชื่อ</th><th>Email</th><th>Role</th><th>สถานะ</th><th>การจัดการ</th>
+              <th style={{width:'22%'}}>ชื่อ</th>
+              <th style={{width:'26%'}}>Email</th>
+              <th style={{width:'10%'}}>Role</th>
+              <th style={{width:'10%'}}>สถานะ</th>
+              <th style={{width:'32%',textAlign:'right',paddingRight:20}}>การจัดการ</th>
             </tr></thead>
             <tbody>
               {users.map(u=>(
                 <tr key={u.id}>
                   <td>
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <div style={{width:30,height:30,borderRadius:'50%',background:'var(--fc-primary-light)',color:'var(--fc-primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,flexShrink:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <div style={{width:32,height:32,borderRadius:'50%',background:'var(--fc-primary-light)',color:'var(--fc-primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flexShrink:0}}>
                         {u.full_name?.[0]}
                       </div>
-                      <span style={{fontWeight:500,color:'var(--fc-text)'}}>{u.full_name}</span>
+                      <span style={{fontWeight:600,color:'var(--fc-text)',fontSize:13}}>{u.full_name}</span>
                     </div>
                   </td>
-                  <td style={{color:'var(--fc-text-3)'}}>{u.email}</td>
+                  <td style={{color:'var(--fc-text-3)',fontSize:13}}>{u.email}</td>
                   <td>
                     <span className="chip" style={u.role==='admin'
                       ? {background:'rgba(124,58,237,0.1)',color:'var(--fc-secondary)'}
@@ -197,22 +481,31 @@ export default function Admin() {
                     }>{u.role}</span>
                   </td>
                   <td>
-                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <div style={{display:'flex',alignItems:'center',gap:5}}>
                       <span className={u.is_active?'dot-on':'dot-off'}/>
                       <span style={{fontSize:12,color:'var(--fc-text-3)'}}>{u.is_active?'ใช้งาน':'ระงับ'}</span>
                     </div>
                   </td>
                   <td>
-                    <div style={{display:'flex',gap:6}}>
-                      {u.role==='teacher' && (
+                    <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+                      {u.role==='teacher' && <>
+                        <button className="btn btn-ghost btn-sm" onClick={async ()=>{
+                          setTeacherDetail(u)
+                          setTeacherEdit(false)
+                          setTeacherForm({full_name:u.full_name,email:u.email,username:u.username||'',role:u.role,new_password:'',categories:u.categories||[]})
+                          try {
+                            const res = await axios.get(`${API}/auth/users/${u.id}/subjects`)
+                            setTeacherSubjectIds(new Set(res.data.map(s => s.id)))
+                          } catch { setTeacherSubjectIds(new Set()) }
+                        }}>ดูข้อมูล</button>
                         <button className="btn btn-ghost btn-sm" onClick={()=>openAssign(u)}>มอบหมายวิชา</button>
-                      )}
+                      </>}
                       <button
-                        className={`btn btn-sm ${u.is_active?'btn-danger':'btn-ghost'}`}
+                        className={`btn btn-sm ${u.is_active?'btn-ghost':'btn-ghost'}`}
+                        style={{color: u.is_active ? 'var(--fc-warning)' : 'var(--fc-success-dark)'}}
                         onClick={()=>toggleUser(u.id)}
-                      >
-                        {u.is_active?'ระงับ':'เปิดใช้'}
-                      </button>
+                      >{u.is_active?'ระงับ':'เปิดใช้'}</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u.id)}>ลบ</button>
                     </div>
                   </td>
                 </tr>
@@ -226,24 +519,196 @@ export default function Admin() {
       {/* Subjects tab */}
       {tab === 'subjects' && (
         <div className="card" style={{padding:0,overflow:'hidden'}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px'}}>
-            <span style={{fontSize:14,fontWeight:600,color:'var(--fc-text)'}}>รายวิชาทั้งหมด</span>
-            <button className="btn btn-primary btn-sm" onClick={()=>setShowSubject(true)}>+ เพิ่มวิชา</button>
+          {/* Header + filter bar */}
+          <div style={{padding:'14px 20px',borderBottom:'1px solid var(--fc-border)'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+              <span style={{fontSize:14,fontWeight:600,color:'var(--fc-text)'}}>
+                รายวิชาทั้งหมด
+                {(() => {
+                  const q = subFilter.q.toLowerCase()
+                  const count = subjects.filter(s =>
+                    (!q || s.subject_code.toLowerCase().includes(q) || s.subject_name.toLowerCase().includes(q)) &&
+                    (!subFilter.teacher || s.teacher_name === subFilter.teacher) &&
+                    (!subFilter.grade || s.schedules?.some(sc => sc.grade_level === subFilter.grade)) &&
+                    (!subFilter.category || s.category === subFilter.category)
+                  ).length
+                  return subjects.length !== count
+                    ? <span style={{fontWeight:400,color:'var(--fc-text-4)',marginLeft:6}}>({count}/{subjects.length})</span>
+                    : <span style={{fontWeight:400,color:'var(--fc-text-4)',marginLeft:6}}>({subjects.length})</span>
+                })()}
+              </span>
+              <button className="btn btn-primary btn-sm" onClick={()=>setShowSubject(true)}>+ เพิ่มวิชา</button>
+            </div>
+            {/* Filters */}
+            <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+              <input
+                placeholder="ค้นหารหัสหรือชื่อวิชา..."
+                value={subFilter.q}
+                onChange={e=>setSubFilter(f=>({...f,q:e.target.value}))}
+                style={{flex:'1 1 180px',minWidth:0}}
+              />
+              <select
+                value={subFilter.category}
+                onChange={e=>setSubFilter(f=>({...f,category:e.target.value}))}
+                style={{flex:'0 1 200px'}}
+              >
+                <option value="">ทุกหมวดวิชา</option>
+                {SUBJECT_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                value={subFilter.teacher}
+                onChange={e=>setSubFilter(f=>({...f,teacher:e.target.value}))}
+                style={{flex:'0 1 170px'}}
+              >
+                <option value="">ครูทั้งหมด</option>
+                {[...new Set(subjects.map(s=>s.teacher_name).filter(Boolean))].sort().map(t=>(
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <select
+                value={subFilter.grade}
+                onChange={e=>setSubFilter(f=>({...f,grade:e.target.value}))}
+                style={{flex:'0 1 130px'}}
+              >
+                <option value="">ทุกชั้น</option>
+                {[...new Set(subjects.flatMap(s=>s.schedules?.map(sc=>sc.grade_level)||[]).filter(Boolean))].sort().map(g=>(
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+              {(subFilter.q || subFilter.teacher || subFilter.grade || subFilter.category) && (
+                <button className="btn btn-ghost btn-sm" onClick={()=>setSubFilter({q:'',teacher:'',grade:'',category:''})}>ล้างตัวกรอง</button>
+              )}
+            </div>
           </div>
+
           <div style={{overflowX:'auto'}}>
-          <table className="tbl">
-            <thead><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th></th></tr></thead>
-            <tbody>
-              {subjects.map(s=>(
-                <tr key={s.id}>
-                  <td><span style={{fontFamily:'var(--fc-font-mono)',fontSize:12,background:'var(--fc-muted)',padding:'2px 8px',borderRadius:4}}>{s.subject_code}</span></td>
-                  <td style={{fontWeight:500,color:'var(--fc-text)'}}>{s.subject_name}</td>
-                  <td><button className="btn btn-danger btn-sm" onClick={()=>deleteSub(s.id)}>ลบ</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {(() => {
+            const q = subFilter.q.toLowerCase()
+            const filtered = subjects.filter(s =>
+              (!q || s.subject_code.toLowerCase().includes(q) || s.subject_name.toLowerCase().includes(q)) &&
+              (!subFilter.teacher || s.teacher_name === subFilter.teacher) &&
+              (!subFilter.grade || s.schedules?.some(sc => sc.grade_level === subFilter.grade)) &&
+              (!subFilter.category || s.category === subFilter.category)
+            )
+            return (
+              <table className="tbl">
+                <thead><tr>
+                  <th style={{width:120}}>รหัสวิชา</th>
+                  <th>ชื่อวิชา</th>
+                  <th style={{width:180}}>หมวด</th>
+                  <th style={{width:160}}>ครูผู้สอน</th>
+                  <th style={{width:100}}>ตารางสอน</th>
+                  <th style={{width:120}}></th>
+                </tr></thead>
+                <tbody>
+                  {filtered.map(s=>(
+                    <tr key={s.id} style={{cursor:'pointer'}} onClick={()=>openSubDetail(s)}>
+                      <td><span style={{fontFamily:'var(--fc-font-mono)',fontSize:12,background:'var(--fc-muted)',padding:'2px 8px',borderRadius:4}}>{s.subject_code}</span></td>
+                      <td style={{fontWeight:500,color:'var(--fc-text)'}}>{s.subject_name}</td>
+                      <td style={{fontSize:12,color:'var(--fc-text-3)'}}>{s.category || '—'}</td>
+                      <td style={{fontSize:13,color:'var(--fc-text-3)'}}>{s.teacher_name || '—'}</td>
+                      <td style={{fontSize:13,color:'var(--fc-text-3)'}}>{s.schedules?.length ? `${s.schedules.length} คาบ` : '—'}</td>
+                      <td onClick={e=>e.stopPropagation()}>
+                        <div style={{display:'flex',gap:6}}>
+                          <button className="btn btn-ghost btn-sm" onClick={()=>openSubDetail(s)}>แก้ไข</button>
+                          <button className="btn btn-danger btn-sm" onClick={()=>deleteSub(s.id)}>ลบ</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={6} style={{textAlign:'center',color:'var(--fc-text-4)',padding:'32px 0',fontSize:13}}>ไม่พบรายวิชาที่ตรงกับตัวกรอง</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )
+          })()}
+
           </div>
+        </div>
+      )}
+
+      {/* Attendance Log tab */}
+      {tab === 'logs' && (
+        <div className="card" style={{padding:0,overflow:'hidden'}}>
+          {/* Filter bar */}
+          <div style={{display:'flex',flexWrap:'wrap',gap:10,padding:'14px 20px',borderBottom:'1px solid var(--fc-border)',alignItems:'flex-end'}}>
+            <div>
+              <label className="form-label" htmlFor="log-date">วันที่</label>
+              <input id="log-date" type="date" value={logDate}
+                onChange={e=>setLogDate(e.target.value)}
+                style={{width:160}}
+              />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="log-subject">วิชา</label>
+              <select id="log-subject" value={logSubject} onChange={e=>setLogSubject(e.target.value)} style={{width:200}}>
+                <option value="">ทุกวิชา</option>
+                {subjects.map(s=><option key={s.id} value={s.id}>{s.subject_code} — {s.subject_name}</option>)}
+              </select>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => loadLogs(logDate, logSubject)} disabled={logLoading}>
+              {logLoading ? 'กำลังโหลด...' : 'แสดงข้อมูล'}
+            </button>
+            <div style={{marginLeft:'auto',fontSize:12,color:'var(--fc-text-4)',alignSelf:'center'}}>
+              {logs.length} รายการ
+            </div>
+          </div>
+
+          {/* Table */}
+          {logLoading ? (
+            <div style={{display:'flex',justifyContent:'center',padding:40}}>
+              <div className="spinner"/>
+            </div>
+          ) : logs.length === 0 ? (
+            <div style={{textAlign:'center',padding:40,color:'var(--fc-text-4)',fontSize:13}}>
+              ไม่พบบันทึกการเช็คชื่อในวันนี้
+            </div>
+          ) : (
+            <div style={{overflowX:'auto'}}>
+              <table className="tbl">
+                <thead><tr>
+                  <th>เวลา</th>
+                  <th>รหัสนักเรียน</th>
+                  <th>ชื่อ-นามสกุล</th>
+                  <th>ชั้น/ห้อง</th>
+                  <th>วิชา</th>
+                  <th>สถานะ</th>
+                  <th></th>
+                </tr></thead>
+                <tbody>
+                  {logs.map(log=>(
+                    <tr key={log.log_id}
+                      onClick={()=>openLogDetail(log)}
+                      style={{cursor:'pointer'}}
+                    >
+                      <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>
+                        {log.timestamp}
+                      </td>
+                      <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12}}>{log.student_id}</td>
+                      <td style={{fontWeight:500,color:'var(--fc-text)'}}>{log.name}</td>
+                      <td style={{fontSize:12,color:'var(--fc-text-3)'}}>
+                        {log.grade_level ? `ชั้น ${log.grade_level}` : '—'}
+                        {log.room_number ? ` ห้อง ${log.room_number}` : ''}
+                      </td>
+                      <td>
+                        <span style={{fontSize:11,fontFamily:'var(--fc-font-mono)',background:'var(--fc-muted)',padding:'2px 6px',borderRadius:4}}>
+                          {log.subject_code}
+                        </span>
+                        <span style={{fontSize:12,color:'var(--fc-text-3)',marginLeft:6}}>{log.subject_name}</span>
+                      </td>
+                      <td onClick={e=>e.stopPropagation()}>
+                        <StatusBadge status={log.status} logId={log.log_id} onUpdate={updateLogStatus}/>
+                      </td>
+                      <td onClick={e=>e.stopPropagation()}>
+                        <button className="btn btn-danger btn-sm" onClick={()=>deleteLog(log.log_id)}>ยกเลิก</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -279,6 +744,28 @@ export default function Admin() {
                 value={semester.term_end}
                 onChange={e => setSemester(p => ({ ...p, term_end: e.target.value }))}
               />
+            </div>
+            <div className="form-group">
+              <label htmlFor="face-threshold" className="form-label">
+                ความเข้มงวดการจดจำใบหน้า
+                <span style={{ fontWeight: 400, color: 'var(--fc-text-4)', marginLeft: 8 }}>
+                  {semester.face_threshold.toFixed(2)}
+                  {semester.face_threshold < 0.6 ? ' · เข้มงวดมาก' : semester.face_threshold < 1.0 ? ' · เข้มงวด' : semester.face_threshold < 1.4 ? ' · ปกติ' : ' · ผ่อนปรน'}
+                </span>
+              </label>
+              <input
+                id="face-threshold"
+                type="range"
+                min="0.1" max="2.0" step="0.05"
+                value={semester.face_threshold}
+                onChange={e => setSemester(p => ({ ...p, face_threshold: Number(e.target.value) }))}
+                style={{ width: '100%', accentColor: 'var(--fc-primary)' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>
+                <span>0.1 เข้มงวดมาก</span>
+                <span>1.0 ปกติ</span>
+                <span>2.0 ผ่อนปรน</span>
+              </div>
             </div>
             <button
               className="btn btn-primary"
@@ -323,6 +810,7 @@ export default function Admin() {
         <Modal title="เพิ่มบัญชีใหม่" onClose={()=>setShowUser(false)}>
           {[
             {key:'full_name',label:'ชื่อ-นามสกุล',type:'text',ph:'สมชาย ใจดี'},
+            {key:'username',label:'ชื่อผู้ใช้',type:'text',ph:'somchai (ใช้ login แทน email ได้)'},
             {key:'email',label:'Email',type:'email',ph:'teacher@school.ac.th'},
             {key:'password',label:'Password',type:'password',ph:'••••••••'},
           ].map(f=>(
@@ -335,12 +823,31 @@ export default function Admin() {
             </div>
           ))}
           <div className="form-group">
-            <label htmlFor="new-user-role" className="form-label">Role</label>
-            <select id="new-user-role" value={newUser.role} onChange={e=>setNewUser(u=>({...u,role:e.target.value}))}>
-              <option value="teacher">Teacher</option>
-              <option value="admin">Admin</option>
+            <label htmlFor="new-user-role" className="form-label">สิทธิ์</label>
+            <select id="new-user-role" value={newUser.role} onChange={e=>setNewUser(u=>({...u,role:e.target.value,categories:[]}))}>
+              <option value="teacher">ครู</option>
+              <option value="admin">ผู้ดูแลระบบ</option>
             </select>
           </div>
+          {newUser.role === 'teacher' && (
+            <div className="form-group">
+              <label className="form-label">หมวดวิชาที่สอน</label>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'8px 16px',padding:'10px 12px',background:'var(--fc-muted)',borderRadius:8}}>
+                {SUBJECT_CATEGORIES.map(cat=>{
+                  const checked = newUser.categories.includes(cat)
+                  return (
+                    <label key={cat} style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'var(--fc-text-2)',cursor:'pointer',userSelect:'none'}}>
+                      <input type="checkbox" checked={checked}
+                        onChange={()=>setNewUser(u=>({...u,categories:checked?u.categories.filter(c=>c!==cat):[...u.categories,cat]}))}
+                        style={{accentColor:'var(--fc-primary)',flexShrink:0,width:14,height:14}}
+                      />
+                      <span>{cat}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div style={{display:'flex',gap:8,marginTop:4}}>
             <button className="btn btn-ghost btn-full" onClick={()=>setShowUser(false)}>ยกเลิก</button>
             <button className="btn btn-primary btn-full" onClick={createUser}>สร้างบัญชี</button>
@@ -384,22 +891,550 @@ export default function Admin() {
         </Modal>
       )}
 
+      {/* Modal: Teacher detail */}
+      {teacherDetail && (() => {
+        const mySubs = subjects.filter(s => teacherSubjectIds.has(s.id))
+        const categories = teacherDetail.categories || []
+        const totalPeriods = mySubs.reduce((n, s) => n + (s.schedules?.length || 0), 0)
+        const totalRooms   = new Set(mySubs.flatMap(s => (s.schedules||[]).map(sc => `${sc.grade_level}-${sc.room_number}`))).size
+
+        // color palette per subject (index-based)
+        const CELL_COLORS = [
+          {bg:'rgba(99,102,241,0.08)',  border:'rgba(99,102,241,0.25)',  text:'var(--fc-secondary)'},
+          {bg:'rgba(16,185,129,0.08)',  border:'rgba(16,185,129,0.25)',  text:'var(--fc-success-dark)'},
+          {bg:'rgba(245,158,11,0.08)',  border:'rgba(245,158,11,0.25)',  text:'var(--fc-warning)'},
+          {bg:'rgba(59,130,246,0.08)',  border:'rgba(59,130,246,0.25)',  text:'#3b82f6'},
+          {bg:'rgba(239,68,68,0.08)',   border:'rgba(239,68,68,0.25)',   text:'var(--fc-danger)'},
+          {bg:'rgba(168,85,247,0.08)',  border:'rgba(168,85,247,0.25)',  text:'#a855f7'},
+          {bg:'rgba(20,184,166,0.08)',  border:'rgba(20,184,166,0.25)',  text:'#14b8a6'},
+        ]
+        const subColor = Object.fromEntries(mySubs.map((s,i) => [s.id, CELL_COLORS[i % CELL_COLORS.length]]))
+
+        const DAY_ORDER = ['จ','อ','พ','พฤ','ศ']
+        const activeDays = DAY_ORDER   // แสดงทุกวัน จันทร์–ศุกร์เสมอ
+        const activePeriods = PERIODS  // แสดงทุกคาบ 1–7 เสมอ
+
+        // build lookup: day+periodStart → [{sub, schedule}]
+        const cellMap = {}
+        mySubs.forEach(s => (s.schedules||[]).forEach(sc => {
+          const key = `${sc.day_of_week}__${sc.time_start}`
+          if (!cellMap[key]) cellMap[key] = []
+          cellMap[key].push({ sub: s, sc })
+        }))
+
+        return (
+          <Modal title="ข้อมูลครู" onClose={()=>{setTeacherDetail(null);setTeacherSubjectIds(new Set())}} maxWidth={760}>
+            {/* Account details */}
+            <div style={{marginBottom:20}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--fc-text-3)',textTransform:'uppercase',letterSpacing:'0.06em'}}>ข้อมูลบัญชี</div>
+                {!teacherEdit
+                  ? <button
+                      className="btn btn-sm"
+                      style={{background:'var(--fc-primary-light)',color:'var(--fc-primary)',border:'none',display:'flex',alignItems:'center',gap:5,fontWeight:600}}
+                      onClick={()=>setTeacherEdit(true)}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      แก้ไขข้อมูล
+                    </button>
+                  : <div style={{display:'flex',gap:6}}>
+                      <button className="btn btn-ghost btn-sm" onClick={()=>setTeacherEdit(false)} disabled={teacherSaving}>ยกเลิก</button>
+                      <button className="btn btn-primary btn-sm" onClick={saveTeacher} disabled={teacherSaving}>{teacherSaving ? 'กำลังบันทึก…' : 'บันทึก'}</button>
+                    </div>
+                }
+              </div>
+
+              {teacherEdit ? (
+                <div style={{display:'flex',flexDirection:'column',gap:12,padding:'16px',background:'var(--fc-muted)',borderRadius:10}}>
+                  {/* Row 1: ชื่อ + username */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                    <div>
+                      <label style={{fontSize:11,color:'var(--fc-text-4)',display:'block',marginBottom:4}}>ชื่อ-นามสกุล</label>
+                      <input value={teacherForm.full_name||''} onChange={e=>setTeacherForm(f=>({...f,full_name:e.target.value}))} style={{width:'100%'}} />
+                    </div>
+                    <div>
+                      <label style={{fontSize:11,color:'var(--fc-text-4)',display:'block',marginBottom:4}}>ชื่อผู้ใช้ <span style={{fontSize:10}}>(ใช้ login แทน email ได้)</span></label>
+                      <input value={teacherForm.username||''} onChange={e=>setTeacherForm(f=>({...f,username:e.target.value}))} placeholder="เว้นว่างถ้าไม่ต้องการ" style={{width:'100%'}} />
+                    </div>
+                  </div>
+                  {/* Row 2: email + role */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 160px',gap:12}}>
+                    <div>
+                      <label style={{fontSize:11,color:'var(--fc-text-4)',display:'block',marginBottom:4}}>อีเมล</label>
+                      <input value={teacherForm.email||''} onChange={e=>setTeacherForm(f=>({...f,email:e.target.value}))} style={{width:'100%'}} />
+                    </div>
+                    <div>
+                      <label style={{fontSize:11,color:'var(--fc-text-4)',display:'block',marginBottom:4}}>บทบาท</label>
+                      <select value={teacherForm.role||'teacher'} onChange={e=>setTeacherForm(f=>({...f,role:e.target.value}))} style={{width:'100%'}}>
+                        <option value="teacher">ครู</option>
+                        <option value="admin">ผู้ดูแลระบบ</option>
+                      </select>
+                    </div>
+                  </div>
+                  {/* Row 3: password */}
+                  <div>
+                    <label style={{fontSize:11,color:'var(--fc-text-4)',display:'block',marginBottom:4}}>รหัสผ่านใหม่ <span style={{fontSize:10}}>(เว้นว่างถ้าไม่เปลี่ยน)</span></label>
+                    <input type="password" placeholder="อย่างน้อย 6 ตัวอักษร" value={teacherForm.new_password||''} onChange={e=>setTeacherForm(f=>({...f,new_password:e.target.value}))} style={{width:'100%',maxWidth:320}} />
+                  </div>
+                  {/* Row 4: categories */}
+                  {teacherForm.role === 'teacher' && (
+                    <div>
+                      <label style={{fontSize:11,color:'var(--fc-text-4)',display:'block',marginBottom:6}}>หมวดวิชาที่สอน</label>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'8px 16px',padding:'10px 12px',background:'var(--fc-card)',border:'1px solid var(--fc-border)',borderRadius:8}}>
+                        {SUBJECT_CATEGORIES.map(cat=>{
+                          const checked = (teacherForm.categories||[]).includes(cat)
+                          return (
+                            <label key={cat} style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'var(--fc-text-2)',cursor:'pointer',userSelect:'none'}}>
+                              <input type="checkbox" checked={checked}
+                                onChange={()=>setTeacherForm(f=>({...f,categories:checked?f.categories.filter(c=>c!==cat):[...(f.categories||[]),cat]}))}
+                                style={{accentColor:'var(--fc-primary)',flexShrink:0,width:14,height:14}}
+                              />
+                              <span>{cat}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{display:'flex',alignItems:'center',gap:16,padding:'14px 16px',background:'var(--fc-muted)',borderRadius:10}}>
+                  <div style={{width:52,height:52,borderRadius:'50%',background:'var(--fc-primary-light)',color:'var(--fc-primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:700,flexShrink:0}}>
+                    {teacherDetail.full_name?.[0]}
+                  </div>
+                  <div style={{flex:1,minWidth:0,display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px 24px'}}>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--fc-text-4)',marginBottom:1}}>ชื่อ-นามสกุล</div>
+                      <div style={{fontSize:13,fontWeight:700,color:'var(--fc-text)'}}>{teacherDetail.full_name || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--fc-text-4)',marginBottom:1}}>ชื่อผู้ใช้</div>
+                      <div style={{fontSize:13,color:'var(--fc-text-2)',fontFamily:'var(--fc-font-mono)'}}>{teacherDetail.username || <span style={{color:'var(--fc-text-4)',fontFamily:'inherit',fontSize:12}}>ไม่มี</span>}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--fc-text-4)',marginBottom:1}}>อีเมล</div>
+                      <div style={{fontSize:13,color:'var(--fc-text-2)'}}>{teacherDetail.email || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--fc-text-4)',marginBottom:1}}>บทบาท</div>
+                      <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,background:'rgba(99,102,241,0.1)',color:'var(--fc-secondary)'}}>
+                        {teacherDetail.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ครู'}
+                      </span>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--fc-text-4)',marginBottom:1}}>สถานะ</div>
+                      <span style={{fontSize:11,fontWeight:600,color: teacherDetail.is_active !== false ? 'var(--fc-success)' : 'var(--fc-danger)'}}>
+                        ● {teacherDetail.is_active !== false ? 'ใช้งาน' : 'ปิดใช้งาน'}
+                      </span>
+                    </div>
+                    {categories.length > 0 && (
+                      <div style={{gridColumn:'1/-1'}}>
+                        <div style={{fontSize:10,color:'var(--fc-text-4)',marginBottom:4}}>หมวดวิชาที่สอน</div>
+                        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                          {categories.map(c=>(
+                            <span key={c} style={{fontSize:11,padding:'2px 8px',borderRadius:12,background:'rgba(99,102,241,0.08)',color:'var(--fc-secondary)',fontWeight:500}}>{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{display:'flex',gap:16,flexShrink:0,paddingLeft:12,borderLeft:'1px solid var(--fc-border)'}}>
+                    {[{n:totalPeriods,l:'คาบ/สัปดาห์'},{n:mySubs.length,l:'วิชา'},{n:totalRooms,l:'ห้อง'}].map(({n,l})=>(
+                      <div key={l} style={{textAlign:'center'}}>
+                        <div style={{fontSize:22,fontWeight:700,color:'var(--fc-primary)',lineHeight:1}}>{n}</div>
+                        <div style={{fontSize:10,color:'var(--fc-text-4)',marginTop:3}}>{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Subject list */}
+            {mySubs.length > 0 && (
+              <div style={{marginBottom:20}}>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--fc-text-3)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>รายวิชาที่สอน</div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {mySubs.map((s,i)=>{
+                    const clr = subColor[s.id]
+                    const periods = s.schedules?.length || 0
+                    return (
+                      <div key={s.id} style={{display:'flex',alignItems:'center',gap:12,padding:'8px 12px',background:clr.bg,border:`1px solid ${clr.border}`,borderRadius:8}}>
+                        <div style={{width:28,height:28,borderRadius:6,background:clr.border,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:clr.text,flexShrink:0}}>{i+1}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                            <span style={{fontSize:12,fontWeight:700,color:clr.text,fontFamily:'var(--fc-font-mono)'}}>{s.subject_code}</span>
+                            <span style={{fontSize:13,fontWeight:600,color:'var(--fc-text)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.subject_name}</span>
+                          </div>
+                          {s.category && <div style={{fontSize:11,color:'var(--fc-text-4)',marginTop:1}}>{s.category}</div>}
+                        </div>
+                        <div style={{fontSize:11,color:'var(--fc-text-4)',flexShrink:0}}>{periods} คาบ/สัปดาห์</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Schedule grid */}
+            <div style={{fontSize:12,fontWeight:600,color:'var(--fc-text-3)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>ตารางสอน</div>
+            <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
+                  <colgroup>
+                    <col style={{width:36}}/>
+                    {activePeriods.map((_,i)=><col key={i} style={{width:'13%'}}/>)}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style={{padding:'8px 4px',fontSize:11,color:'var(--fc-text-4)',fontWeight:600,textAlign:'center',borderBottom:'2px solid var(--fc-border)'}}>วัน</th>
+                      {activePeriods.map((p,i)=>(
+                        <th key={i} style={{padding:'6px 8px',fontSize:11,color:'var(--fc-text-3)',fontWeight:600,textAlign:'center',borderBottom:'2px solid var(--fc-border)',borderLeft:'1px solid var(--fc-border)'}}>
+                          <div style={{fontWeight:700,color:'var(--fc-text)',marginBottom:1}}>คาบ {PERIODS.indexOf(p)+1}</div>
+                          <div style={{fontFamily:'var(--fc-font-mono)',fontSize:10,color:'var(--fc-text-4)'}}>{p.start}</div>
+                          <div style={{fontFamily:'var(--fc-font-mono)',fontSize:10,color:'var(--fc-text-4)'}}>{p.end}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeDays.map(day=>{
+                      // Build merged cells: consecutive same-subject periods collapse into one colspan
+                      const cells = []
+                      let pi = 0
+                      while (pi < activePeriods.length) {
+                        const p = activePeriods[pi]
+                        const entries = cellMap[`${day}__${p.start}`] || []
+                        let span = 1
+                        if (entries.length === 1) {
+                          while (pi + span < activePeriods.length) {
+                            const np = activePeriods[pi + span]
+                            const ne = cellMap[`${day}__${np.start}`] || []
+                            if (
+                              ne.length === 1 &&
+                              ne[0].sub.id === entries[0].sub.id &&
+                              ne[0].sc.grade_level === entries[0].sc.grade_level &&
+                              ne[0].sc.room_number === entries[0].sc.room_number
+                            ) { span++ } else break
+                          }
+                        }
+                        cells.push({ entries, span, pi })
+                        pi += span
+                      }
+                      return (
+                        <tr key={day}>
+                          <td style={{padding:'6px 4px',textAlign:'center',fontWeight:700,fontSize:13,color:'var(--fc-primary)',borderBottom:'1px solid var(--fc-border)',verticalAlign:'middle',height:80}}>{day}</td>
+                          {cells.map(({ entries, span, pi: startPi })=>{
+                            const endPeriod = activePeriods[startPi + span - 1]
+                            return (
+                              <td key={startPi} colSpan={span} style={{padding:4,borderBottom:'1px solid var(--fc-border)',borderLeft:'1px solid var(--fc-border)',verticalAlign:'top',height:80}}>
+                                {entries.map(({sub,sc},ei)=>{
+                                  const clr = subColor[sub.id]
+                                  const timeLabel = span > 1
+                                    ? `คาบ ${startPi+1}–${startPi+span} · ${activePeriods[startPi].start}–${endPeriod.end}`
+                                    : null
+                                  return (
+                                    <div key={ei} style={{
+                                      background:clr.bg, border:`1px solid ${clr.border}`,
+                                      borderRadius:7, padding:'6px 8px',
+                                      marginBottom: ei < entries.length-1 ? 3 : 0,
+                                      height: span > 1 ? '100%' : undefined,
+                                    }}>
+                                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:4}}>
+                                        <div>
+                                          <div style={{fontSize:11,fontWeight:700,color:clr.text,marginBottom:1}}>{sub.subject_code}</div>
+                                          <div style={{fontSize:11,color:'var(--fc-text-2)',fontWeight:500}}>{sub.subject_name}</div>
+                                        </div>
+                                        {span > 1 && (
+                                          <span style={{
+                                            fontSize:10,fontWeight:600,color:clr.text,
+                                            background:clr.border,borderRadius:4,
+                                            padding:'1px 5px',whiteSpace:'nowrap',flexShrink:0,
+                                          }}>{span} คาบ</span>
+                                        )}
+                                      </div>
+                                      <div style={{fontSize:10,color:'var(--fc-text-4)',marginTop:3}}>
+                                        {sc.grade_level ? `ชั้น ${sc.grade_level}` : ''}
+                                        {sc.grade_level && sc.room_number ? ' · ' : ''}
+                                        {sc.room_number ? `ห้อง ${sc.room_number}` : ''}
+                                        {!sc.grade_level && !sc.room_number ? '—' : ''}
+                                      </div>
+                                      {timeLabel && (
+                                        <div style={{fontSize:10,color:clr.text,opacity:0.7,marginTop:2,fontFamily:'var(--fc-font-mono)'}}>{timeLabel}</div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+            <div style={{display:'flex',gap:8,marginTop:18}}>
+              <button className="btn btn-ghost btn-full" onClick={()=>setTeacherDetail(null)}>ปิด</button>
+              <button className="btn btn-primary btn-full" onClick={()=>{setTeacherDetail(null);openAssign(teacherDetail)}}>มอบหมายวิชา</button>
+            </div>
+          </Modal>
+        )
+      })()}
+
+      {/* Modal: Log detail */}
+      {logDetail && (
+        <Modal title="รายละเอียดการเช็คชื่อ" onClose={closeLogDetail} maxWidth={680}>
+          <div style={{display:'grid', gridTemplateColumns: logPhoto ? '1fr 1fr' : '1fr', gap: 20, alignItems:'start'}}>
+            {/* Scan photo */}
+            {logPhoto && (
+              <div style={{ borderRadius: 12, overflow: 'hidden', aspectRatio: '4/3', background: 'var(--fc-muted)' }}>
+                <img src={logPhoto} alt="scan" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+              </div>
+            )}
+            {/* Info */}
+            <div>
+              <div style={{fontSize:18,fontWeight:700,color:'var(--fc-text)',marginBottom:4}}>
+                {logDetail.name}
+              </div>
+              <div style={{fontSize:13,color:'var(--fc-text-4)',fontFamily:'var(--fc-font-mono)',marginBottom:16}}>
+                {logDetail.student_id}
+                {logDetail.grade_level && ` · ชั้น ${logDetail.grade_level}`}
+                {logDetail.room_number && ` ห้อง ${logDetail.room_number}`}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:13,color:'var(--fc-text-4)'}}>วิชา</span>
+                  <span style={{fontSize:13,color:'var(--fc-text-2)',fontWeight:600}}>{logDetail.subject_name}
+                    <span style={{fontFamily:'var(--fc-font-mono)',marginLeft:6,fontWeight:400,color:'var(--fc-text-4)'}}>{logDetail.subject_code}</span>
+                  </span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:13,color:'var(--fc-text-4)'}}>วันที่</span>
+                  <span style={{fontSize:13,color:'var(--fc-text-2)',fontWeight:600}}>{logDetail.date}</span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:13,color:'var(--fc-text-4)'}}>เวลา</span>
+                  <span style={{fontSize:13,color:'var(--fc-text-2)',fontWeight:600,fontVariantNumeric:'tabular-nums'}}>{logDetail.timestamp}</span>
+                </div>
+              </div>
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--fc-text-4)',marginBottom:8}}>เปลี่ยนสถานะ</div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {[{v:'present',l:'มาเรียน',c:'var(--fc-success)'},{v:'late',l:'สาย',c:'var(--fc-warning)'},{v:'absent',l:'ขาด',c:'var(--fc-danger)'}].map(({v,l,c})=>(
+                    <button key={v}
+                      className="btn btn-sm"
+                      onClick={()=>updateLogStatus(logDetail.log_id, v)}
+                      style={{
+                        background: logDetail.status === v ? c : 'var(--fc-muted)',
+                        color: logDetail.status === v ? '#fff' : 'var(--fc-text-3)',
+                        border: `1px solid ${logDetail.status === v ? c : 'var(--fc-border)'}`,
+                        fontWeight: logDetail.status === v ? 600 : 400,
+                      }}
+                    >{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:16}}>
+                <button className="btn btn-danger btn-full" onClick={()=>{deleteLog(logDetail.log_id);closeLogDetail()}}>
+                  ยกเลิกการเช็คชื่อ
+                </button>
+                <button className="btn btn-ghost btn-full" onClick={closeLogDetail}>ปิด</button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Subject detail */}
+      {subDetail && (
+        <Modal title={`${subDetail.subject_code} — ${subDetail.subject_name}`} onClose={()=>setSubDetail(null)} maxWidth={680}>
+          {/* Subject info section */}
+          <div style={{marginBottom:20}}>
+            {/* Section header row */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+              <span style={{fontSize:12,fontWeight:600,color:'var(--fc-text-3)',textTransform:'uppercase',letterSpacing:'0.05em'}}>ข้อมูลรายวิชา</span>
+              {subEditing ? (
+                <div style={{display:'flex',gap:6}}>
+                  <button className="btn btn-ghost btn-sm" onClick={()=>setSubEditing(false)}>ยกเลิก</button>
+                  <button className="btn btn-primary btn-sm" onClick={saveSubDetail}>บันทึก</button>
+                </div>
+              ) : (
+                <button className="btn btn-ghost btn-sm" style={{display:'flex',alignItems:'center',gap:5,color:'var(--fc-primary)'}}
+                  onClick={()=>setSubEditing(true)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  แก้ไข
+                </button>
+              )}
+            </div>
+
+            {subEditing ? (
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:12}}>
+                  {[{k:'subject_code',l:'รหัสวิชา'},{k:'subject_name',l:'ชื่อวิชา'}].map(({k,l})=>(
+                    <div className="form-group" key={k} style={{marginBottom:0}}>
+                      <label className="form-label">{l}</label>
+                      <input value={subForm[k]} onChange={e=>setSubForm(f=>({...f,[k]:e.target.value}))} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:12}}>
+                  <div className="form-group" style={{marginBottom:0}}>
+                    <label className="form-label">หมวดวิชา</label>
+                    <select value={subForm.category} onChange={e=>setSubForm(f=>({...f,category:e.target.value,teacher_name:''}))}>
+                      <option value="">-- ไม่ระบุ --</option>
+                      {SUBJECT_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{marginBottom:0}}>
+                    <label className="form-label">ครูผู้สอน</label>
+                    <select
+                      value={subForm.teacher_name}
+                      onChange={e=>setSubForm(f=>({...f,teacher_name:e.target.value}))}
+                      disabled={!subForm.category}
+                    >
+                      <option value="">{subForm.category ? '— เลือกครู —' : '— เลือกหมวดวิชาก่อน —'}</option>
+                      {teachersForCategory(subForm.category).map(t=>(
+                        <option key={t.id} value={t.full_name}>{t.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group" style={{marginBottom:0}}>
+                  <label className="form-label">รายละเอียด</label>
+                  <input value={subForm.description} onChange={e=>setSubForm(f=>({...f,description:e.target.value}))} />
+                </div>
+              </div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {subDetail.category && (
+                  <div style={{display:'flex',justifyContent:'space-between'}}>
+                    <span style={{fontSize:13,color:'var(--fc-text-4)'}}>หมวดวิชา</span>
+                    <span className="chip" style={{background:'var(--fc-primary-light)',color:'var(--fc-primary)',fontSize:12}}>{subDetail.category}</span>
+                  </div>
+                )}
+                <div style={{display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:13,color:'var(--fc-text-4)'}}>ครูผู้สอน</span>
+                  <span style={{fontSize:13,fontWeight:600,color:'var(--fc-text)'}}>{subDetail.teacher_name||'—'}</span>
+                </div>
+                {subDetail.description && (
+                  <div style={{fontSize:13,color:'var(--fc-text-3)',background:'var(--fc-muted)',borderRadius:8,padding:'8px 12px'}}>
+                    {subDetail.description}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Schedule list */}
+          <div style={{borderTop:'1px solid var(--fc-border)',paddingTop:16,marginTop:4}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--fc-text)',marginBottom:12}}>ตารางสอน</div>
+            {subDetail.schedules.length === 0
+              ? <div style={{fontSize:13,color:'var(--fc-text-4)',marginBottom:12}}>ยังไม่มีตารางสอน</div>
+              : <table className="tbl" style={{marginBottom:12}}>
+                  <thead><tr><th>วัน</th><th>เวลา</th><th>ชั้น</th><th>ห้อง</th><th/></tr></thead>
+                  <tbody>
+                    {subDetail.schedules.map(sc=>(
+                      <tr key={sc.id}>
+                        <td style={{fontWeight:600}}>{sc.day_of_week}</td>
+                        <td style={{fontSize:12,color:'var(--fc-text-3)'}}>{periodLabel(sc.time_start, sc.time_end)}</td>
+                        <td>{sc.grade_level||'—'}</td>
+                        <td>{sc.room_number||'—'}</td>
+                        <td><button className="btn btn-danger btn-sm" onClick={()=>removeSchedule(sc.id)}>ลบ</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+            }
+
+            {/* Add schedule form */}
+            <SchedForm sched={newSched} setSched={setNewSched} onAdd={addSchedule} gradeRooms={gradeRooms} />
+          </div>
+        </Modal>
+      )}
+
       {/* Modal: Create subject */}
       {showSubject && (
-        <Modal title="เพิ่มรายวิชา" onClose={()=>setShowSubject(false)}>
-          {[
-            {key:'subject_code',label:'รหัสวิชา',ph:'CS101'},
-            {key:'subject_name',label:'ชื่อวิชา',ph:'Introduction to Computer Science'},
-          ].map(f=>(
-            <div className="form-group" key={f.key}>
-              <label htmlFor={`new-sub-${f.key}`} className="form-label">{f.label}</label>
-              <input id={`new-sub-${f.key}`} placeholder={f.ph}
-                value={newSub[f.key]}
-                onChange={e=>setNewSub(s=>({...s,[f.key]:e.target.value}))}
+        <Modal title="เพิ่มรายวิชา" onClose={()=>setShowSubject(false)} maxWidth={700}>
+          {/* Row 1: รหัสวิชา + ชื่อวิชา */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:12,marginBottom:12}}>
+            <div className="form-group" style={{marginBottom:0}}>
+              <label htmlFor="new-sub-subject_code" className="form-label">รหัสวิชา *</label>
+              <input id="new-sub-subject_code" placeholder="ว30181"
+                value={newSub.subject_code}
+                onChange={e=>setNewSub(s=>({...s,subject_code:e.target.value}))}
               />
             </div>
-          ))}
-          <div style={{display:'flex',gap:8,marginTop:4}}>
+            <div className="form-group" style={{marginBottom:0}}>
+              <label htmlFor="new-sub-subject_name" className="form-label">ชื่อวิชา *</label>
+              <input id="new-sub-subject_name" placeholder="เช่น วิทยาการคำนวณ"
+                value={newSub.subject_name}
+                onChange={e=>setNewSub(s=>({...s,subject_name:e.target.value}))}
+              />
+            </div>
+          </div>
+          {/* Row 2: หมวดวิชา + ครูผู้สอน */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:12,marginBottom:12}}>
+            <div className="form-group" style={{marginBottom:0}}>
+              <label htmlFor="new-sub-category" className="form-label">หมวดวิชา</label>
+              <select id="new-sub-category" value={newSub.category} onChange={e=>setNewSub(s=>({...s,category:e.target.value,teacher_name:''}))}>
+                <option value="">-- ไม่ระบุ --</option>
+                {SUBJECT_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-group" style={{marginBottom:0}}>
+              <label htmlFor="new-sub-teacher_name" className="form-label">ครูผู้สอน</label>
+              <select id="new-sub-teacher_name"
+                value={newSub.teacher_name}
+                onChange={e=>setNewSub(s=>({...s,teacher_name:e.target.value}))}
+                disabled={!newSub.category}
+              >
+                <option value="">{newSub.category ? '— เลือกครู —' : '— เลือกหมวดวิชาก่อน —'}</option>
+                {teachersForCategory(newSub.category).map(t=>(
+                  <option key={t.id} value={t.full_name}>{t.full_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {/* Row 3: รายละเอียด full width */}
+          <div className="form-group">
+            <label htmlFor="new-sub-description" className="form-label">รายละเอียด</label>
+            <input id="new-sub-description" placeholder="คำอธิบายรายวิชา (ไม่บังคับ)"
+              value={newSub.description}
+              onChange={e=>setNewSub(s=>({...s,description:e.target.value}))}
+            />
+          </div>
+
+          {/* Schedules */}
+          <div style={{borderTop:'1px solid var(--fc-border)',paddingTop:14,marginTop:4}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--fc-text)',marginBottom:10}}>ตารางสอน</div>
+            {newSub.schedules.length > 0 && (
+              <table className="tbl" style={{marginBottom:10}}>
+                <thead><tr><th>วัน</th><th>คาบ</th><th>ชั้น</th><th>ห้อง</th><th/></tr></thead>
+                <tbody>
+                  {newSub.schedules.map((sc,i)=>(
+                    <tr key={i}>
+                      <td style={{fontWeight:600}}>{sc.day_of_week}</td>
+                      <td style={{fontSize:12,color:'var(--fc-text-3)'}}>{PERIODS[Number(sc.period)]?.label}</td>
+                      <td>{sc.grade_level||'—'}</td>
+                      <td>{sc.room_number||'—'}</td>
+                      <td><button className="btn btn-danger btn-sm" onClick={()=>setNewSub(s=>({...s,schedules:s.schedules.filter((_,j)=>j!==i)}))}>ลบ</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <SchedForm
+              sched={newSched} setSched={setNewSched}
+              onAdd={()=>setNewSub(s=>({...s,schedules:[...s.schedules,{...newSched}]}))}
+              gradeRooms={gradeRooms}
+            />
+          </div>
+
+          <div style={{display:'flex',gap:8,marginTop:16}}>
             <button className="btn btn-ghost btn-full" onClick={()=>setShowSubject(false)}>ยกเลิก</button>
             <button className="btn btn-primary btn-full" onClick={createSub}>เพิ่มวิชา</button>
           </div>

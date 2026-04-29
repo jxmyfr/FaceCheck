@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd d:\\\\Study\\\\Project\\\\facecheck\\\\backend; $env:PYTHONIOENCODING=\"utf-8\"; python seed_admin.py)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

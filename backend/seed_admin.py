@@ -18,16 +18,16 @@ if db.query(User).filter(User.role == "admin").first():
     print("✅ มี Admin อยู่แล้ว ไม่ต้องสร้างใหม่")
 else:
     admin = User(
-        email="admin@facecheck.kmutt",
-        hashed_password=hash_password("admin1234"),
+        email="admin@test.com",
+        hashed_password=hash_password("admin"),
         full_name="ผู้ดูแลระบบ",
         role="admin",
     )
     db.add(admin)
     db.commit()
     print("✅ สร้าง Admin สำเร็จ")
-    print("   Email   : admin@facecheck.kmutt")
-    print("   Password: admin1234")
+    print("   Email   : admin@test.com")
+    print("   Password: admin")
     print("   ⚠️  กรุณาเปลี่ยนรหัสผ่านหลัง login ครั้งแรก")
 
 db.close()

@@ -2,20 +2,23 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
+import { useDialog } from '../hooks/useDialog'
 
 const API = 'http://127.0.0.1:8000/api/v1/enroll'
 
 export default function Students() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { dialog, alert } = useDialog()
   const [students, setStudents] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [search, setSearch]     = useState('')
   const [filterGrade, setFilterGrade] = useState('')
   const [filterRoom, setFilterRoom]   = useState('')
-  const [deleting, setDeleting] = useState(null)
-  const [confirm, setConfirm]   = useState(null)
+  const [deleting, setDeleting]   = useState(null)
+  const [confirm, setConfirm]     = useState(null)
+  const [filterFace, setFilterFace] = useState('all') // 'all' | 'no_face'
 
   const load = useCallback(async () => {
     try {
@@ -38,11 +41,18 @@ export default function Students() {
       await axios.delete(`${API}/students/${studentId}`)
       setStudents(prev => prev.filter(s => s.student_id !== studentId))
     } catch {
-      alert('ลบไม่สำเร็จ')
+      await alert('ลบไม่สำเร็จ กรุณาลองใหม่')
     } finally {
       setDeleting(null)
       setConfirm(null)
     }
+  }
+
+  const exportExcel = () => {
+    const params = new URLSearchParams()
+    if (filterGrade) params.append('grade_level', filterGrade)
+    if (filterRoom)  params.append('room_number', filterRoom)
+    window.open(`${API}/students/export?${params}`, '_blank')
   }
 
   const grades = [...new Set(students.map(s => s.grade_level).filter(Boolean))].sort()
@@ -53,6 +63,8 @@ export default function Students() {
       .filter(Boolean)
   )].sort((a, b) => Number(a) - Number(b))
 
+  const noFaceCount = students.filter(s => !s.has_face).length
+
   const filtered = students.filter(s => {
     const q = search.toLowerCase()
     const matchSearch = !q || (
@@ -62,11 +74,13 @@ export default function Students() {
     )
     const matchGrade = !filterGrade || s.grade_level === filterGrade
     const matchRoom  = !filterRoom  || s.room_number  === filterRoom
-    return matchSearch && matchGrade && matchRoom
+    const matchFace  = filterFace === 'all' || !s.has_face
+    return matchSearch && matchGrade && matchRoom && matchFace
   })
 
   return (
     <main id="main-content" className="page">
+      {dialog}
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
@@ -75,9 +89,37 @@ export default function Students() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-ghost btn-sm" onClick={load}>รีเฟรช</button>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate('/enroll')}>+ ลงทะเบียนนักเรียน</button>
+          <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:4,verticalAlign:'middle'}}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            ส่งออก Excel
+          </button>
+          {user?.role === 'admin' && (
+            <button className="btn btn-primary btn-sm" onClick={() => navigate('/enroll')}>+ ลงทะเบียนนักเรียน</button>
+          )}
         </div>
       </div>
+
+      {/* No-face banner — admin only */}
+      {user?.role === 'admin' && noFaceCount > 0 && filterFace === 'all' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--fc-warning-light)', border: '1px solid var(--fc-warning)',
+          borderRadius: 10, padding: '10px 16px', marginBottom: 16, gap: 12,
+        }}>
+          <div style={{ fontSize: 13, color: 'var(--fc-warning)', fontWeight: 500 }}>
+            มีนักเรียน <strong>{noFaceCount}</strong> คนที่ยังไม่มีใบหน้าในระบบ — กดที่ชื่อเพื่อเพิ่มใบหน้า
+          </div>
+          <button
+            className="btn btn-sm"
+            onClick={() => setFilterFace('no_face')}
+            style={{ background: 'var(--fc-warning)', color: '#fff', border: 'none', flexShrink: 0 }}
+          >
+            ดูรายการ
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, alignItems: 'center' }}>
@@ -117,10 +159,21 @@ export default function Students() {
             {rooms.map(r => <option key={r} value={r}>ห้อง {r}</option>)}
           </select>
         </div>
-        {(filterGrade || filterRoom || search) && (
+        <button
+          className="btn btn-sm"
+          onClick={() => setFilterFace(v => v === 'no_face' ? 'all' : 'no_face')}
+          style={{
+            background: filterFace === 'no_face' ? 'var(--fc-warning)' : 'var(--fc-muted)',
+            color: filterFace === 'no_face' ? '#fff' : 'var(--fc-text-3)',
+            border: 'none',
+          }}
+        >
+          {filterFace === 'no_face' ? `ยังไม่มีใบหน้า (${noFaceCount})` : `ไม่มีใบหน้า (${noFaceCount})`}
+        </button>
+        {(filterGrade || filterRoom || search || filterFace !== 'all') && (
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => { setFilterGrade(''); setFilterRoom(''); setSearch('') }}
+            onClick={() => { setFilterGrade(''); setFilterRoom(''); setSearch(''); setFilterFace('all') }}
           >
             ล้างตัวกรอง
           </button>
@@ -159,7 +212,10 @@ export default function Students() {
               {filtered.map(s => (
                 <tr
                   key={s.student_id}
-                  style={{ cursor: 'pointer' }}
+                  style={{
+                    cursor: 'pointer',
+                    background: !s.has_face ? 'rgba(251,191,36,0.06)' : undefined,
+                  }}
                   onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
                 >
                   <td style={{ fontWeight: 600, color: 'var(--fc-text)', fontFamily: 'var(--fc-font-mono)' }}>

@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../hooks/useAuth'
-import Navbar from '../components/Navbar'
+import Sidebar from '../components/Sidebar'
 import Dashboard from './Dashboard'
 import Scanner from './Scanner'
 import Enrollment from './Enrollment'
@@ -8,6 +8,7 @@ import Login from './Login'
 import Admin from './Admin'
 import Students from './Students'
 import StudentDetail from './StudentDetail'
+import Reports from './Reports'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -21,18 +22,19 @@ function ProtectedRoute({ children }) {
 
 function Layout() {
   return (
-    <div className="font-sans antialiased">
-      <Navbar />
-      <main>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--fc-bg)' }}>
+      <Sidebar />
+      <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
         <Routes>
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/scan" element={<ProtectedRoute><Scanner /></ProtectedRoute>} />
           <Route path="/enroll" element={<ProtectedRoute><Enrollment /></ProtectedRoute>} />
           <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
           <Route path="/students/:studentId" element={<ProtectedRoute><StudentDetail /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         </Routes>
-      </main>
+      </div>
     </div>
   )
 }

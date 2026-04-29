@@ -6,3 +6,5 @@ insightface
 numpy
 python-multipart
 python-dotenv
+openpyxl
+psycopg2-binary

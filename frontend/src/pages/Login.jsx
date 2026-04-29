@@ -57,13 +57,13 @@ export default function Login() {
           <p style={{ fontSize: 13, color: 'var(--fc-text-3)', marginBottom: 22 }}>สำหรับครูและผู้ดูแลระบบ</p>
 
           <div className="form-group">
-            <label htmlFor="login-email" className="form-label">อีเมล</label>
+            <label htmlFor="login-email" className="form-label">อีเมลหรือชื่อผู้ใช้</label>
             <input
               id="login-email"
-              type="email" value={email}
+              type="text" value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && submit()}
-              placeholder="teacher@school.ac.th"
+              placeholder="teacher@school.ac.th หรือ username"
               autoFocus
             />
           </div>

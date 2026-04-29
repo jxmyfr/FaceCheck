@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import axios from 'axios'
+import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 
 const API = 'http://127.0.0.1:8000/api/v1/stats'
 const pct = (v, t) => (t > 0 ? Math.round((v / t) * 100) : 0)
@@ -69,20 +71,21 @@ function Chip({ status }) {
 function StatCard({ label, value, color, sub, icon }) {
   return (
     <div className="card" style={{ padding: '20px 22px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 9, flexShrink: 0,
-          background: `color-mix(in srgb, ${color} 9%, transparent)`, color,
+          width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+          background: `${color}14`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color,
         }}>
           {icon}
         </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-3)' }}>{label}</div>
       </div>
-      <div style={{ fontSize: 34, fontWeight: 700, color: 'var(--fc-text)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+      <div style={{ fontSize: 34, fontWeight: 700, color, letterSpacing: '-0.03em', lineHeight: 1 }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 7 }}>{sub}</div>}
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-3)', marginTop: 7 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 3 }}>{sub}</div>}
     </div>
   )
 }
@@ -126,7 +129,7 @@ function DrillCard({ title, sub, studentCount, attendance, rate, color = '#1A56D
 }
 
 // ── AreaChart ───────────────────────────────────────────────────
-function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110 }) {
+function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, title }) {
   if (!data || data.length < 2) return (
     <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>ยังไม่มีข้อมูลกราฟ</span>
@@ -152,7 +155,11 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110 })
   return (
     <div>
       <svg viewBox={`0 0 100 ${chartH}`} width="100%" height={chartH}
-        preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
+        preserveAspectRatio="none"
+        role="img"
+        aria-labelledby={`${gradId}-chart-title`}
+        style={{ display: 'block', overflow: 'visible' }}>
+        <title id={`${gradId}-chart-title`}>{title || 'กราฟแนวโน้ม'}</title>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor={color} stopOpacity="0.18"/>
@@ -185,10 +192,316 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110 })
   )
 }
 
+// ── Rate bar ────────────────────────────────────────────────────
+function RateBar({ rate, color = 'var(--fc-primary)' }) {
+  return (
+    <div style={{ height: 5, background: 'var(--fc-muted)', borderRadius: 99, overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: `${rate ?? 0}%`, background: color, borderRadius: 99, transition: 'width 0.5s ease' }} />
+    </div>
+  )
+}
+
+// ── TeacherDashboard ────────────────────────────────────────────
+function TeacherDashboard() {
+  const navigate = useNavigate()
+  const [ov, setOv]           = useState(null)
+  const [dl30, setDl30]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [refreshed, setRefreshed] = useState(new Date())
+
+  // drill-down state: null = subjects, {subject} = rooms, {subject,room} = students
+  const [selSubject, setSelSubject] = useState(null)
+  const [selRoom, setSelRoom]       = useState(null)
+  const [rooms, setRooms]           = useState([])
+  const [students, setStudents]     = useState([])
+  const [drillLoading, setDrillLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [a, b] = await Promise.all([
+        axios.get(`${API}/teacher-overview`).then(r => r.data),
+        axios.get(`${API}/daily?days=30`).then(r => r.data).catch(() => []),
+      ])
+      setOv(a)
+      setDl30(Array.isArray(b) ? b : [])
+    } catch { setOv(null) }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [load, refreshed])
+
+  const drillSubject = async (sub) => {
+    setSelSubject(sub)
+    setSelRoom(null)
+    setDrillLoading(true)
+    try {
+      const data = await axios.get(`${API}/subject-rooms?subject_id=${sub.id}`).then(r => r.data)
+      setRooms(data.rooms || [])
+    } catch { setRooms([]) }
+    finally { setDrillLoading(false) }
+  }
+
+  const drillRoom = async (room) => {
+    setSelRoom(room)
+    setDrillLoading(true)
+    try {
+      const q = new URLSearchParams({ subject_id: selSubject.id, grade_level: room.grade_level, room_number: room.room_number })
+      const data = await axios.get(`${API}/room-students?${q}`).then(r => r.data)
+      setStudents(Array.isArray(data) ? data : [])
+    } catch { setStudents([]) }
+    finally { setDrillLoading(false) }
+  }
+
+  const back = () => {
+    if (selRoom) { setSelRoom(null); setStudents([]) }
+    else { setSelSubject(null); setRooms([]) }
+  }
+
+  const rateColor = (r) => r == null ? 'var(--fc-text-4)' : r >= 80 ? 'var(--fc-success-dark)' : r >= 60 ? 'var(--fc-warning)' : 'var(--fc-danger)'
+  const barColor  = (r) => r == null ? 'var(--fc-neutral)'  : r >= 80 ? 'var(--fc-success)'      : r >= 60 ? 'var(--fc-warning)' : 'var(--fc-danger)'
+
+  const today = new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  return (
+    <main id="main-content" className="page">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-sub">{today}</p>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => setRefreshed(new Date())} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <IcRefresh /> รีเฟรช
+        </button>
+      </div>
+
+      {/* KPI row */}
+      {ov && (
+        <div className="grid-kpi" style={{ marginBottom: 24 }}>
+          {[
+            { label: 'นักเรียนที่สอน', value: fmt(ov.total_students), sub: 'คนทั้งหมด', color: '#1A56DB', icon: <IcUsers /> },
+            { label: 'รายวิชา',        value: fmt(ov.total_subjects), sub: 'วิชาที่รับผิดชอบ', color: '#7C3AED', icon: <IcBook /> },
+            { label: 'เช็คชื่อวันนี้',  value: fmt(ov.today_logs),    sub: 'บันทึกในวันนี้', color: '#16A34A', icon: <IcCheck /> },
+            { label: 'บันทึกทั้งหมด',  value: fmt(ov.total_logs),    sub: 'ตลอดภาคเรียน',  color: '#D97706', icon: <IcLog /> },
+          ].map(k => <StatCard key={k.label} {...k} />)}
+        </div>
+      )}
+
+      {/* Overview chart — only at root level */}
+      {!selSubject && !loading && dl30.length >= 2 && (
+        <div className="card" style={{ marginBottom: 20, padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)' }}>แนวโน้มการบันทึกการเข้าเรียน</div>
+              <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>30 วันล่าสุด · รวมทุกรายวิชาที่สอน</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--fc-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                {dl30[dl30.length - 1]?.count ?? 0}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>บันทึกวันนี้</div>
+            </div>
+          </div>
+          <AreaChart data={dl30} valueKey="count" color="var(--fc-primary)" height={120} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+            <span style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>{dl30[0]?.date}</span>
+            <span style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>{dl30[dl30.length - 1]?.date}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Breadcrumb */}
+      {selSubject && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={back} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            กลับ
+          </button>
+          <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>รายวิชา</span>
+          <IcChevronRight color="var(--fc-text-4)" size={14} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: selRoom ? 'var(--fc-text-3)' : 'var(--fc-text)', cursor: selRoom ? 'pointer' : 'default' }}
+            onClick={() => selRoom && (setSelRoom(null), setStudents([]))}>
+            {selSubject.subject_code} {selSubject.subject_name}
+          </span>
+          {selRoom && (<>
+            <IcChevronRight color="var(--fc-text-4)" size={14} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)' }}>
+              ชั้น {selRoom.grade_level} ห้อง {selRoom.room_number}
+            </span>
+          </>)}
+        </div>
+      )}
+
+      {drillLoading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+          <div className="spinner" />
+        </div>
+      )}
+
+      {!drillLoading && !selSubject && !loading && ov && (
+        /* ── Level 0: Subject cards ── */
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+            รายวิชาของฉัน
+          </div>
+          {ov.subjects.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '48px 0' }}>
+              ยังไม่มีวิชาที่ได้รับมอบหมาย
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+              {ov.subjects.map(sub => {
+                const rate = sub.present_rate
+                return (
+                  <div key={sub.id} onClick={() => drillSubject(sub)} style={{
+                    background: 'var(--fc-surface)', borderRadius: 12,
+                    border: '1px solid var(--fc-border)', boxShadow: 'var(--fc-shadow-sm)',
+                    padding: '18px 20px', cursor: 'pointer',
+                    transition: 'box-shadow 0.15s, transform 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--fc-shadow-lg)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--fc-shadow-sm)'; e.currentTarget.style.transform = 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontFamily: 'var(--fc-font-mono)', color: 'var(--fc-primary)', fontWeight: 600, marginBottom: 3 }}>{sub.subject_code}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-text)', lineHeight: 1.3 }}>{sub.subject_name}</div>
+                        {sub.category && <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 3 }}>{sub.category}</div>}
+                      </div>
+                      <IcChevronRight />
+                    </div>
+                    <RateBar rate={rate} color={barColor(rate)} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                      <div style={{ fontSize: 11, color: 'var(--fc-text-3)' }}>
+                        มา <strong style={{ color: 'var(--fc-success-dark)' }}>{sub.present}</strong>
+                        {' · '}สาย <strong style={{ color: 'var(--fc-warning)' }}>{sub.late}</strong>
+                        {' · '}ขาด <strong style={{ color: 'var(--fc-danger)' }}>{sub.absent}</strong>
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: rateColor(rate) }}>
+                        {rate != null ? `${rate}%` : '—'}
+                      </span>
+                    </div>
+                    {sub.today_logs > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: 'var(--fc-primary)', fontWeight: 500 }}>
+                        วันนี้: {sub.today_logs} บันทึก
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!drillLoading && selSubject && !selRoom && (
+        /* ── Level 1: Room cards ── */
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+            ห้องเรียนในวิชานี้
+          </div>
+          {rooms.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '48px 0' }}>
+              ยังไม่มีข้อมูลการเข้าเรียนในวิชานี้
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+              {rooms.map(room => {
+                const rate = room.present_rate
+                return (
+                  <div key={`${room.grade_level}-${room.room_number}`} onClick={() => drillRoom(room)} style={{
+                    background: 'var(--fc-surface)', borderRadius: 12,
+                    border: '1px solid var(--fc-border)', boxShadow: 'var(--fc-shadow-sm)',
+                    padding: '18px 20px', cursor: 'pointer',
+                    transition: 'box-shadow 0.15s, transform 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--fc-shadow-lg)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--fc-shadow-sm)'; e.currentTarget.style.transform = 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--fc-text)' }}>ชั้น {room.grade_level}</div>
+                        <div style={{ fontSize: 13, color: 'var(--fc-text-3)' }}>ห้อง {room.room_number}</div>
+                      </div>
+                      <IcChevronRight />
+                    </div>
+                    <RateBar rate={rate} color={barColor(rate)} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                      <span style={{ fontSize: 11, color: 'var(--fc-text-3)' }}>
+                        {room.total_students} นักเรียน · {room.sessions_total} บันทึก
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: rateColor(rate) }}>
+                        {rate != null ? `${rate}%` : '—'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!drillLoading && selSubject && selRoom && (
+        /* ── Level 2: Student table ── */
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--fc-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)' }}>
+              รายชื่อนักเรียน — {students.length} คน
+            </div>
+          </div>
+          {students.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '40px 0', fontSize: 13 }}>
+              ยังไม่มีบันทึกการเข้าเรียน
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>ชื่อ-นามสกุล</th>
+                    <th style={{ textAlign: 'center' }}>มาเรียน</th>
+                    <th style={{ textAlign: 'center' }}>มาสาย</th>
+                    <th style={{ textAlign: 'center' }}>ขาด</th>
+                    <th style={{ textAlign: 'center' }}>รวม</th>
+                    <th style={{ textAlign: 'right' }}>อัตราเข้าเรียน</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map(s => (
+                    <tr key={s.student_id} style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}>
+                      <td>
+                        <div style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{s.full_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--fc-text-4)', fontFamily: 'var(--fc-font-mono)' }}>{s.student_id}</div>
+                      </td>
+                      <td style={{ textAlign: 'center', color: 'var(--fc-success-dark)', fontWeight: 600 }}>{s.present}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--fc-warning)',      fontWeight: 600 }}>{s.late}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--fc-danger)',       fontWeight: 600 }}>{s.absent}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--fc-text-3)' }}>{s.total}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: rateColor(s.present_rate) }}>
+                          {s.present_rate != null ? `${s.present_rate}%` : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </main>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────
 export default function Dashboard() {
+  const { user } = useAuth()
+  if (user?.role === 'teacher') return <TeacherDashboard />
   const [ov, setOv]         = useState(null)
   const [dl, setDl]         = useState([])
+  const [dl30, setDl30]     = useState([])
   const [sb, setSb]         = useState([])
   const [lg, setLg]         = useState([])
   const [byGrade, setByGrade]     = useState([])
@@ -209,9 +522,10 @@ export default function Dashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [a, b, c, d, e, f] = await Promise.all([
+      const [a, b, b30, c, d, e, f] = await Promise.all([
         axios.get(`${API}/overview`).then(r => r.data),
         axios.get(`${API}/daily?days=7`).then(r => r.data),
+        axios.get(`${API}/daily?days=30`).then(r => r.data),
         axios.get(`${API}/by-subject`).then(r => r.data),
         axios.get(`${API}/logs?limit=8`).then(r => r.data),
         axios.get(`${API}/by-grade`).then(r => r.data),
@@ -219,6 +533,7 @@ export default function Dashboard() {
       ])
       setOv(a)
       setDl(Array.isArray(b) ? b : [])
+      setDl30(Array.isArray(b30) ? b30 : [])
       setSb(Array.isArray(c) ? c : [])
       setLg(Array.isArray(d) ? d : [])
       setByGrade(Array.isArray(e) ? e : [])
@@ -290,18 +605,16 @@ export default function Dashboard() {
     count: dl[i]?.count ?? 0,
     today: i === 6,
   }))
-  const maxSb = Math.max(...sb.map(s => s.attendance_count), 1)
-
   const juniorGrades = byGrade.filter(g => JUNIOR.includes(gradeNum(g.grade_level)))
   const seniorGrades = byGrade.filter(g => SENIOR.includes(gradeNum(g.grade_level)))
   const levelGroups  = [
     {
-      name: 'ม.ต้น', desc: 'มัธยมศึกษาปีที่ 1–3', grades: juniorGrades, color: '#1A56DB',
+      name: 'ม.ต้น', desc: 'มัธยมศึกษาปีที่ 1–3', grades: juniorGrades, color: '#1A56DB', colorVar: 'var(--fc-primary)',
       studentCount: juniorGrades.reduce((s, g) => s + g.student_count, 0),
       attendance:   juniorGrades.reduce((s, g) => s + g.today_attendance, 0),
     },
     {
-      name: 'ม.ปลาย', desc: 'มัธยมศึกษาปีที่ 4–6', grades: seniorGrades, color: '#7C3AED',
+      name: 'ม.ปลาย', desc: 'มัธยมศึกษาปีที่ 4–6', grades: seniorGrades, color: '#7C3AED', colorVar: 'var(--fc-secondary)',
       studentCount: seniorGrades.reduce((s, g) => s + g.student_count, 0),
       attendance:   seniorGrades.reduce((s, g) => s + g.today_attendance, 0),
     },
@@ -321,11 +634,12 @@ export default function Dashboard() {
 
   // Donut params — multi-segment
   const R = 52, SW = 14, CIRC = 2 * Math.PI * R
-  const attendanceRate = ov ? pct(ov.attendance_today, ov.total_students) : 0
-  const lateCount    = 0 // backend doesn't split present/late in overview; use 0 for now
-  const presentCount = ov ? ov.attendance_today : 0
-  const absentCount  = ov ? Math.max(0, ov.total_students - ov.attendance_today) : 0
+  const presentCount = ov ? (ov.present_today ?? ov.attendance_today) : 0
+  const lateCount    = ov ? (ov.late_today ?? 0) : 0
+  const checkedIn    = presentCount + lateCount
+  const absentCount  = ov ? Math.max(0, ov.total_students - checkedIn) : 0
   const total        = ov ? ov.total_students : 1
+  const attendanceRate = pct(checkedIn, total)
 
   const donutSegments = [
     { value: presentCount, color: '#16A34A' },
@@ -367,131 +681,204 @@ export default function Dashboard() {
         <button className="btn btn-ghost btn-sm" onClick={load}><IcRefresh /> รีเฟรช</button>
       </div>
 
-      {/* ── ภาพรวมทั้งโรงเรียน ── */}
-      <div style={{ marginBottom: 8 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--fc-text-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-          ภาพรวมทั้งโรงเรียน
-        </p>
+      {/* ── KPI strip ── */}
+      <div className="grid-kpi">
+        <StatCard label="นักเรียนทั้งหมด"   value={fmt(ov.total_students)}          color="#1A56DB" icon={<IcUsers />} sub="คนที่ลงทะเบียน" />
+        <StatCard label="รายวิชา"            value={fmt(ov.total_subjects)}          color="#0891B2" icon={<IcBook />}  sub="วิชาที่เปิดสอน" />
+        <StatCard label="เช็คชื่อวันนี้"     value={fmt(ov.attendance_today)}        color="#16A34A" icon={<IcCheck />} sub={`${attendanceRate}% ของทั้งหมด`} />
+        <StatCard label="บันทึกสะสม"         value={fmt(ov.total_attendance_logs)}   color="#7C3AED" icon={<IcLog />}   sub="รายการทั้งหมด" />
+      </div>
 
-        {/* KPI cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 14 }}>
-          <StatCard label="นักเรียนทั้งหมด" value={fmt(ov.total_students)} color="#1A56DB" icon={<IcUsers />} sub="คนที่ลงทะเบียนในระบบ" />
-          <StatCard label="รายวิชา"          value={fmt(ov.total_subjects)} color="#0891B2" icon={<IcBook />}  sub="วิชาที่เปิดสอน" />
-          <StatCard label="เช็คชื่อวันนี้"   value={fmt(ov.attendance_today)} color="#16A34A" icon={<IcCheck />}
-            sub={`${attendanceRate}% ของนักเรียนทั้งหมด`} />
-          <StatCard label="บันทึกสะสม"       value={fmt(ov.total_attendance_logs)} color="#7C3AED" icon={<IcLog />}  sub="รายการเช็คชื่อทั้งหมด" />
+      {/* ── Bento grid ── */}
+      <div className="grid-bento">
+
+        {/* Col 1: Today donut — spans 2 rows on wide layouts */}
+        <div className="card grid-bento-span" style={{ padding: '22px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+          <div style={{ alignSelf: 'flex-start' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fc-text)' }}>วันนี้</div>
+            <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>
+              {new Date().toLocaleDateString('th-TH', { weekday: 'long' })}
+            </div>
+          </div>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <svg width="130" height="130" viewBox="0 0 128 128"
+              role="img"
+              aria-label={`อัตราการเข้าเรียนวันนี้: ${attendanceRate}% — มา ${fmt(presentCount)} คน ขาด ${fmt(absentCount)} คน จากทั้งหมด ${fmt(total)} คน`}
+              style={{ transform: 'rotate(-90deg)' }}>
+              {donutArcs.map((seg, i) => (
+                <circle key={i} cx="64" cy="64" r={R} fill="none"
+                  stroke={seg.color} strokeWidth={SW}
+                  strokeDasharray={`${seg.dash} ${seg.gap}`}
+                  strokeDashoffset={seg.offset}
+                  style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                />
+              ))}
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+              <span style={{ fontSize: 30, fontWeight: 700, color: 'var(--fc-text)', letterSpacing: '-0.03em', lineHeight: 1 }}>{attendanceRate}%</span>
+              <span style={{ fontSize: 11, color: 'var(--fc-text-4)', fontWeight: 500 }}>เข้าเรียน</span>
+            </div>
+          </div>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { dot: '#16A34A', label: 'มาเรียน',  val: fmt(presentCount), bold: true  },
+              { dot: '#D97706', label: 'มาสาย',    val: fmt(lateCount),    bold: true  },
+              { dot: '#DC2626', label: 'ขาดเรียน', val: fmt(absentCount),  bold: true  },
+              { dot: '#D1D5DB', label: 'ทั้งหมด',  val: fmt(total),        bold: false },
+            ].map(s => (
+              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'var(--fc-text-3)', flex: 1 }}>{s.label}</span>
+                <span style={{ fontSize: 15, fontWeight: s.bold ? 700 : 500, color: s.bold ? 'var(--fc-text)' : 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>{s.val}</span>
+              </div>
+            ))}
+          </div>
+          {/* Divider */}
+          <div style={{ width: '100%', height: 1, background: 'var(--fc-border)' }} />
+          <div style={{ width: '100%' }}>
+            <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 8 }}>ม.ต้น vs ม.ปลาย</div>
+            {levelGroups.map(g => (
+              <div key={g.name} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: 'var(--fc-text-3)' }}>{g.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: g.colorVar }}>{pct(g.attendance, g.studentCount)}%</span>
+                </div>
+                <div style={{ height: 5, background: 'var(--fc-muted)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 99, background: g.colorVar, width: `${pct(g.attendance, g.studentCount)}%`, transition: 'width 0.6s ease' }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Overview row: big donut + bar chart */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
-
-          {/* Attendance rate card */}
-          <div className="card" style={{ padding: '28px 32px', display: 'flex', alignItems: 'center', gap: 32 }}>
-            {/* Multi-segment Donut */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <svg width="128" height="128" viewBox="0 0 128 128" style={{ transform: 'rotate(-90deg)' }}>
-                {donutArcs.map((seg, i) => (
-                  <circle key={i} cx="64" cy="64" r={R} fill="none"
-                    stroke={seg.color} strokeWidth={SW}
-                    strokeDasharray={`${seg.dash} ${seg.gap}`}
-                    strokeDashoffset={seg.offset}
-                    style={{ transition: 'stroke-dasharray 0.8s ease' }}
-                  />
-                ))}
-              </svg>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--fc-text)', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {attendanceRate}%
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--fc-text-4)', fontWeight: 500 }}>เข้าเรียน</span>
-              </div>
+        {/* Col 2 Row 1: 30-day trend chart */}
+        <div className="card" style={{ padding: '22px 26px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)' }}>แนวโน้มการเช็คชื่อ 30 วัน</div>
+              <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 3 }}>ครั้ง/วัน รวมทุกรายวิชา</div>
             </div>
-
-            {/* Stats beside donut */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fc-text)', marginBottom: 16 }}>อัตราการเข้าเรียนวันนี้</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--fc-success)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: 'var(--fc-text-3)', flex: 1 }}>มาเรียน</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fc-text)' }}>{fmt(ov.attendance_today)}</span>
-                  <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>คน</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--fc-danger)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: 'var(--fc-text-3)', flex: 1 }}>ขาดเรียน</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fc-text)' }}>{fmt(ov.total_students - ov.attendance_today)}</span>
-                  <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>คน</span>
-                </div>
-                <div className="divider" style={{ margin: '4px 0' }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--fc-neutral)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: 'var(--fc-text-3)', flex: 1 }}>นักเรียนทั้งหมด</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fc-text)' }}>{fmt(ov.total_students)}</span>
-                  <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>คน</span>
-                </div>
+            {dl30.length > 0 && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--fc-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>{dl30[dl30.length - 1]?.count ?? 0}</div>
+                <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 3 }}>วันนี้</div>
               </div>
-            </div>
+            )}
           </div>
+          <AreaChart data={dl30} valueKey="count" color="#1A56DB" height={160} title="กราฟแนวโน้มการเช็คชื่อ 30 วันล่าสุด" />
+        </div>
 
-          {/* Bar chart */}
-          <div className="card" style={{ padding: '28px 28px 24px' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 20 }}>การเช็คชื่อรายวัน</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 100 }}>
-              {bars.map((b, i) => (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 10, color: 'var(--fc-text-4)', visibility: b.count ? 'visible' : 'hidden' }}>{b.count}</span>
-                  <div style={{ width: '100%', display: 'flex', alignItems: 'flex-end', flex: 1 }}>
-                    <div style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '4px 4px 0 0',
-                      background: b.today ? 'var(--fc-primary)' : 'var(--fc-primary-light)',
-                      transformOrigin: 'bottom',
-                      transform: `scaleY(${b.count ? Math.max(b.count / maxDl, 0.08) : 0.04})`,
-                      transition: 'transform 0.5s ease',
-                    }} />
+        {/* Col 3 Row 1: Subject ranking */}
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 14 }}>เช็คชื่อรายวิชา</div>
+          {sb.length === 0
+            ? <p style={{ fontSize: 12, color: 'var(--fc-text-4)', textAlign: 'center', paddingTop: 24 }}>ยังไม่มีข้อมูล</p>
+            : (() => {
+                const top = sb.slice(0, 5)
+                const maxVal = Math.max(...top.map(s => s.attendance_count), 1)
+                const colors = ['var(--fc-primary)', 'var(--fc-info)', 'var(--fc-success)', 'var(--fc-secondary)', 'var(--fc-warning)']
+                return top.map((s, i) => (
+                  <div key={s.subject_code} style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, color: 'var(--fc-text-3)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.subject_name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: colors[i], flexShrink: 0, marginLeft: 6 }}>{s.attendance_count}</span>
+                    </div>
+                    <div style={{ height: 5, background: 'var(--fc-muted)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 99, background: colors[i], width: `${(s.attendance_count / maxVal) * 100}%`, transition: 'width 0.6s ease' }} />
+                    </div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: b.today ? 700 : 400, color: b.today ? 'var(--fc-primary)' : 'var(--fc-text-4)' }}>{b.label}</span>
+                ))
+              })()
+          }
+        </div>
+
+        {/* Col 2 Row 2: Grade bars */}
+        <div className="card" style={{ padding: '22px 26px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 14 }}>อัตราเข้าเรียนวันนี้รายชั้น</div>
+          {byGrade.length === 0
+            ? <p style={{ fontSize: 12, color: 'var(--fc-text-4)', textAlign: 'center', paddingTop: 24 }}>ยังไม่มีข้อมูลระดับชั้น</p>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[...byGrade].sort((a, b) => (gradeNum(a.grade_level) ?? 99) - (gradeNum(b.grade_level) ?? 99)).map(g => {
+                  const rate = pct(g.today_attendance, g.student_count)
+                  const tier = rate >= 80
+                    ? { color: 'var(--fc-success)', label: 'สูง' }
+                    : rate >= 60
+                    ? { color: 'var(--fc-warning)', label: 'ปานกลาง' }
+                    : { color: 'var(--fc-danger)',  label: 'ต่ำ' }
+                  return (
+                    <div key={g.grade_level}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-2)' }}>ม.{gradeNum(g.grade_level)}</span>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>{fmt(g.today_attendance)}/{fmt(g.student_count)}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: `color-mix(in srgb, ${tier.color} 15%, transparent)`, color: tier.color, flexShrink: 0 }}>{tier.label}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: tier.color, fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'right' }}>{rate}%</span>
+                        </div>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuenow={rate}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`ชั้นมัธยมศึกษาปีที่ ${gradeNum(g.grade_level)}: ${rate}% (${tier.label})`}
+                        style={{ height: 6, background: 'var(--fc-muted)', borderRadius: 99, overflow: 'hidden' }}
+                      >
+                        <div style={{ height: '100%', borderRadius: 99, background: tier.color, width: `${rate}%`, transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          }
+        </div>
+
+        {/* Col 3 Row 2: Recent logs mini */}
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 14 }}>บันทึกล่าสุด</div>
+          {lg.length === 0
+            ? <p style={{ fontSize: 12, color: 'var(--fc-text-4)', textAlign: 'center', paddingTop: 24 }}>ยังไม่มีบันทึก</p>
+            : lg.slice(0, 5).map((r, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--fc-primary-light)', color: 'var(--fc-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                  {r.full_name?.[0]}
                 </div>
-              ))}
-            </div>
-          </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.full_name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--fc-text-4)' }}>{r.subject_code} · {new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </div>
+            ))
+          }
         </div>
       </div>
 
-      {/* ── Semester overview chart ── */}
+      {/* ── Semester chart (full width, conditional) ── */}
       {smStats && (
-        <div style={{ marginBottom: 20 }}>
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)' }}>อัตราการเข้าเรียนตลอดภาคเรียน</div>
-                {smStats.semester && (
-                  <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 3 }}>
-                    {smStats.semester.name}
-                    {smStats.semester.term_start && ` · ${new Date(smStats.semester.term_start + 'T00:00:00').toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}`}
-                    {smStats.semester.term_end && ` – ${new Date(smStats.semester.term_end + 'T00:00:00').toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}`}
-                  </div>
-                )}
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 30, fontWeight: 700, color: 'var(--fc-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                  {smStats.trend[smStats.trend.length - 1]?.rate ?? 0}%
+        <div className="card" style={{ padding: '22px 26px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)' }}>อัตราการเข้าเรียนตลอดภาคเรียน</div>
+              {smStats.semester && (
+                <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 3 }}>
+                  {smStats.semester.name}
+                  {smStats.semester.term_start && ` · ${new Date(smStats.semester.term_start + 'T00:00:00').toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}`}
+                  {smStats.semester.term_end && ` – ${new Date(smStats.semester.term_end + 'T00:00:00').toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}`}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>วันล่าสุด</div>
-              </div>
+              )}
             </div>
-            <AreaChart data={smStats.trend} valueKey="rate" color="#1A56DB" height={130} />
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 30, fontWeight: 700, color: 'var(--fc-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>{smStats.trend[smStats.trend.length - 1]?.rate ?? 0}%</div>
+              <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>วันล่าสุด</div>
+            </div>
           </div>
+          <AreaChart data={smStats.trend} valueKey="rate" color="#1A56DB" height={130} title={`กราฟอัตราการเข้าเรียนตลอดภาคเรียน ${smStats.semester?.name ?? ''}`} />
         </div>
       )}
 
       {/* ── Drill-down section ── */}
       <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--fc-text-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-          เจาะลึกตามระดับชั้น
-        </p>
 
         <div className="card" style={{ padding: '20px 24px' }}>
           {/* Breadcrumb */}
@@ -596,7 +983,12 @@ export default function Dashboard() {
                         tabIndex={0}
                         style={{ cursor: 'pointer' }}
                         onClick={() => drillStudent(s)}
-                        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && drillStudent(s)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            drillStudent(s)
+                          }
+                        }}
                       >
                         <td style={{ fontFamily: 'var(--fc-font-mono)', fontWeight: 600, color: 'var(--fc-text-2)' }}>{s.student_id}</td>
                         <td style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{s.full_name}</td>
@@ -673,7 +1065,7 @@ export default function Dashboard() {
                           <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>วันนี้</div>
                         </div>
                       </div>
-                      <AreaChart data={studentDetail.trend} valueKey="rate" color={trendColor} height={120} />
+                      <AreaChart data={studentDetail.trend} valueKey="rate" color={trendColor} height={120} title={`แนวโน้มการเข้าเรียนของ ${studentDetail.student.full_name}`} />
                     </div>
                   )
                 })()}
@@ -717,71 +1109,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Bottom row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
-
-        {/* Recent logs */}
-        <div className="card" style={{ padding: '20px 24px' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 16 }}>บันทึกล่าสุด</div>
-          {lg.length === 0
-            ? <p style={{ fontSize: 13, color: 'var(--fc-text-4)', textAlign: 'center', padding: '24px 0' }}>ยังไม่มีบันทึก</p>
-            : (
-              <div style={{ overflowX: 'auto' }}>
-              <table className="tbl">
-                <thead><tr>
-                  <th>นักเรียน</th><th>วิชา</th><th>เวลา</th><th>สถานะ</th>
-                </tr></thead>
-                <tbody>
-                  {lg.map((r, i) => (
-                    <tr key={i}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{
-                            width: 28, height: 28, borderRadius: '50%',
-                            background: 'var(--fc-primary-light)', color: 'var(--fc-primary)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 11, fontWeight: 700, flexShrink: 0,
-                          }}>
-                            {r.full_name?.[0]}
-                          </div>
-                          <span style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{r.full_name}</span>
-                        </div>
-                      </td>
-                      <td style={{ color: 'var(--fc-text-3)', fontFamily: 'var(--fc-font-mono)', fontSize: 12 }}>{r.subject_code}</td>
-                      <td style={{ color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>
-                        {new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td><Chip status={r.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
-            )
-          }
-        </div>
-
-        {/* Subject bars */}
-        <div className="card" style={{ padding: '20px 24px' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 16 }}>รายวิชา</div>
-          {sb.length === 0
-            ? <p style={{ fontSize: 13, color: 'var(--fc-text-4)', textAlign: 'center', padding: '20px 0' }}>ยังไม่มีข้อมูล</p>
-            : sb.slice(0, 8).map(s => (
-              <div key={s.subject_code} style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--fc-text-2)', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {s.subject_name}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--fc-text-4)', flexShrink: 0, marginLeft: 8 }}>{s.attendance_count}</span>
-                </div>
-                <div style={{ height: 5, background: 'var(--fc-muted)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', borderRadius: 99, background: 'var(--fc-primary)', width: '100%', transformOrigin: 'left', transform: `scaleX(${s.attendance_count / maxSb})`, transition: 'transform 0.5s ease' }} />
-                </div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
     </main>
   )
 }

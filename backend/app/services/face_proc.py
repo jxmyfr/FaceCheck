@@ -16,7 +16,13 @@ class FaceProcessor:
             cls._instance.app.prepare(ctx_id=0, det_size=(640, 640))
         return cls._instance
 
-    def process_capture(self, frame: np.ndarray) -> Optional[np.ndarray]:
+    def process_capture(
+        self,
+        frame: np.ndarray,
+        min_det_score: float = 0.65,
+        min_face_ratio: float = 0.08,
+        min_blur_score: float = 40.0,
+    ) -> Optional[np.ndarray]:
         """Detection → Quality → Liveness → Embedding"""
         faces = self.app.get(frame)
         if not faces:
@@ -24,24 +30,35 @@ class FaceProcessor:
 
         face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
 
-        ok, reason = self._check_quality(face, frame)
+        ok, reason = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
+        if not ok:
+            raise ValueError(reason)
+
+        ok, reason = self._check_liveness(face, frame)
         if not ok:
             raise ValueError(reason)
 
         return face.normed_embedding
 
-    def _check_quality(self, face, frame: np.ndarray) -> Tuple[bool, str]:
+    def _check_quality(
+        self,
+        face,
+        frame: np.ndarray,
+        min_det_score: float = 0.65,
+        min_face_ratio: float = 0.08,
+        min_blur_score: float = 40.0,
+    ) -> Tuple[bool, str]:
         h, w = frame.shape[:2]
         x1, y1, x2, y2 = face.bbox.astype(int)
 
         # 1. Detection confidence
-        if face.det_score < 0.65:
+        if face.det_score < min_det_score:
             return False, "ตรวจจับใบหน้าไม่ชัดเจน — กรุณาจัดแสงให้สว่างขึ้นและมองตรงเข้าหากล้อง"
 
-        # 2. Face size (must cover at least 8% of image area)
+        # 2. Face size (must cover at least min_face_ratio of image area)
         face_area  = (x2 - x1) * (y2 - y1)
         image_area = h * w
-        if face_area < image_area * 0.08:
+        if face_area < image_area * min_face_ratio:
             return False, "ใบหน้าอยู่ไกลจากกล้องเกินไป — กรุณาเข้าใกล้กล้องให้มากขึ้น"
 
         # 3. Face must not be cropped at edges (margin >= 3% each side)
@@ -83,8 +100,50 @@ class FaceProcessor:
         if crop.size > 0:
             gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
             blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
-            if blur_score < 40:
+            if blur_score < min_blur_score:
                 return False, "ภาพใบหน้าเบลอเกินไป — กรุณาถือกล้องให้นิ่งและให้แสงสว่างเพียงพอ"
+
+        return True, ""
+
+    def _check_liveness(self, face, frame: np.ndarray) -> Tuple[bool, str]:
+        """Anti-spoofing: detect screen/printed-photo attacks via texture and spectral analysis.
+
+        Uses conservative thresholds — primary protection is the face-match threshold (0.65).
+        Only blocks the most unambiguous spoofing cases to avoid false positives on real faces.
+        """
+        x1, y1, x2, y2 = face.bbox.astype(int)
+        fh, fw = frame.shape[:2]
+        pad = 10
+        crop = frame[max(0, y1 - pad):min(fh, y2 + pad), max(0, x1 - pad):min(fw, x2 + pad)]
+        if crop.shape[0] < 32 or crop.shape[1] < 32:
+            return True, ""
+
+        gray = cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (96, 96)).astype(np.int32)
+
+        # Signal 1: LBP variance — real skin has complex micro-texture
+        c = gray[1:-1, 1:-1]
+        neighbors = [
+            gray[0:-2, 0:-2], gray[0:-2, 1:-1], gray[0:-2, 2:],
+            gray[1:-1, 2:],
+            gray[2:,   2:],   gray[2:,   1:-1], gray[2:,   0:-2],
+            gray[1:-1, 0:-2],
+        ]
+        codes = sum((nb >= c).astype(np.uint8) << i for i, nb in enumerate(neighbors))
+        lbp_var = float(np.var(codes))
+
+        # Signal 2: FFT spectral peaks — screen pixel grid creates periodic frequencies
+        fft_mag = np.abs(np.fft.fftshift(np.fft.fft2(gray.astype(np.float32))))
+        cy, cx = 48, 48
+        Y, X = np.ogrid[:96, :96]
+        d2 = (Y - cy) ** 2 + (X - cx) ** 2
+        ring = fft_mag[(d2 > 64) & (d2 < 2025)]
+        peak_ratio = float(np.percentile(ring, 99.5) / (np.median(ring) + 1.0)) if ring.size else 0.0
+
+        # Only reject when BOTH signals are extremely suspicious simultaneously.
+        # LBP var < 40 = near-uniform image (real faces in normal conditions: 300–4000+)
+        # FFT peak_ratio > 20 = very strong isolated spectral spikes
+        if lbp_var < 40 and peak_ratio > 20:
+            return False, "ตรวจพบว่าใบหน้าอาจเป็นภาพถ่ายหรือหน้าจอ — กรุณาใช้ใบหน้าจริงต่อหน้ากล้อง"
 
         return True, ""
 

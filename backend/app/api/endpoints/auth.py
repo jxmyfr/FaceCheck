@@ -17,17 +17,32 @@ bearer_scheme = HTTPBearer()
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class LoginRequest(BaseModel):
-    email: str
+    email: str      # รับได้ทั้ง email และ username
     password: str
 
 class RegisterRequest(BaseModel):
     email: str
+    username: str | None = None
     password: str
     full_name: str
     role: str = "teacher"  # "admin" | "teacher"
+    categories: list[str] = []
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class UpdateUserRequest(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    username: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+    new_password: str | None = None
+    categories: list[str] | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -35,7 +50,9 @@ class RefreshRequest(BaseModel):
 @router.post("/login")
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     """Login → คืน access_token + refresh_token"""
-    user = db.query(User).filter(User.email == body.email).first()
+    user = db.query(User).filter(
+        (User.email == body.email) | (User.username == body.email)
+    ).first()
 
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Email หรือ Password ไม่ถูกต้อง")
@@ -83,14 +100,18 @@ def register(
     """Admin สร้างบัญชีครูหรือ Admin ใหม่"""
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=409, detail="Email นี้มีในระบบแล้ว")
+    if body.username and db.query(User).filter(User.username == body.username).first():
+        raise HTTPException(status_code=409, detail="ชื่อผู้ใช้นี้มีในระบบแล้ว")
     if body.role not in ("admin", "teacher"):
         raise HTTPException(status_code=400, detail="role ต้องเป็น admin หรือ teacher เท่านั้น")
 
     new_user = User(
         email=body.email,
+        username=body.username or None,
         hashed_password=hash_password(body.password),
         full_name=body.full_name,
         role=body.role,
+        categories=",".join(body.categories) if body.categories else None,
     )
     db.add(new_user)
     db.commit()
@@ -125,16 +146,33 @@ def list_users(
     users = db.query(User).order_by(User.id).all()
     return [
         {
-            "id":        u.id,
-            "email":     u.email,
-            "full_name": u.full_name,
-            "role":      u.role,
-            "is_active": u.is_active,
+            "id":         u.id,
+            "email":      u.email,
+            "username":   u.username,
+            "full_name":  u.full_name,
+            "role":       u.role,
+            "is_active":  u.is_active,
+            "categories": u.categories.split(",") if u.categories else [],
         }
         for u in users
     ]
     
     
+@router.get("/me/subjects")
+def get_my_subjects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """ครูดูวิชาที่ตัวเองสอน"""
+    records = db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()
+    result = []
+    for r in records:
+        s = db.query(Subject).filter(Subject.id == r.subject_id).first()
+        if s:
+            result.append({"id": s.id, "subject_code": s.subject_code, "subject_name": s.subject_name})
+    return result
+
+
 @router.get("/users/{user_id}/subjects")
 def get_teacher_subjects(
     user_id: int,
@@ -148,6 +186,42 @@ def get_teacher_subjects(
         if s:
             result.append({"id": s.id, "subject_code": s.subject_code, "subject_name": s.subject_name})
     return result
+
+
+@router.patch("/users/{user_id}")
+def update_user(
+    user_id: int,
+    body: UpdateUserRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Admin แก้ไขข้อมูลบัญชีผู้ใช้"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
+    if body.email and body.email != user.email:
+        if db.query(User).filter(User.email == body.email).first():
+            raise HTTPException(status_code=409, detail="Email นี้มีในระบบแล้ว")
+        user.email = body.email
+    if body.username is not None:
+        if body.username and body.username != user.username:
+            if db.query(User).filter(User.username == body.username).first():
+                raise HTTPException(status_code=409, detail="ชื่อผู้ใช้นี้มีในระบบแล้ว")
+        user.username = body.username or None
+    if body.full_name is not None:
+        user.full_name = body.full_name
+    if body.role in ("admin", "teacher"):
+        user.role = body.role
+    if body.is_active is not None:
+        user.is_active = body.is_active
+    if body.categories is not None:
+        user.categories = ",".join(body.categories) if body.categories else None
+    if body.new_password:
+        if len(body.new_password) < 6:
+            raise HTTPException(status_code=400, detail="รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร")
+        user.hashed_password = hash_password(body.new_password)
+    db.commit()
+    return {"id": user.id, "email": user.email, "username": user.username, "full_name": user.full_name, "role": user.role, "is_active": user.is_active, "categories": user.categories.split(",") if user.categories else []}
 
 
 @router.patch("/users/{user_id}/toggle")
@@ -183,6 +257,38 @@ def assign_subject(
     db.add(TeacherSubject(teacher_id=user_id, subject_id=subject_id))
     db.commit()
     return {"message": "มอบหมายวิชาสำเร็จ"}
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Admin ลบบัญชีผู้ใช้ (ไม่สามารถลบตัวเองได้)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="ไม่สามารถลบบัญชีของตัวเองได้")
+    db.delete(user)
+    db.commit()
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """ผู้ใช้เปลี่ยนรหัสผ่านตัวเอง"""
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="รหัสผ่านปัจจุบันไม่ถูกต้อง")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร")
+    current_user.hashed_password = hash_password(body.new_password)
+    db.commit()
+    return {"message": "เปลี่ยนรหัสผ่านสำเร็จ"}
 
 
 @router.delete("/users/{user_id}/assign-subject/{subject_id}", status_code=204)

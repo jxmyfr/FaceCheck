@@ -19,16 +19,22 @@ def get_overview(
     total_students = db.query(func.count(Student.id)).scalar()
     total_subjects = db.query(func.count(Subject.id)).scalar()
     total_logs     = db.query(func.count(AttendanceLog.id)).scalar()
-    today_logs = (
-        db.query(func.count(AttendanceLog.id))
-        .filter(func.date(AttendanceLog.timestamp) == str(date.today()))
-        .scalar()
+    today_str = str(date.today())
+    today_by_status = dict(
+        db.query(AttendanceLog.status, func.count(AttendanceLog.id))
+        .filter(func.date(AttendanceLog.timestamp) == today_str)
+        .group_by(AttendanceLog.status)
+        .all()
     )
+    present_today = today_by_status.get("present", 0)
+    late_today    = today_by_status.get("late", 0)
     return {
-        "total_students": total_students,
-        "total_subjects": total_subjects,
+        "total_students":        total_students,
+        "total_subjects":        total_subjects,
         "total_attendance_logs": total_logs,
-        "attendance_today": today_logs,
+        "attendance_today":      present_today + late_today,
+        "present_today":         present_today,
+        "late_today":            late_today,
     }
 
 
@@ -68,17 +74,19 @@ def get_stats_by_subject(
 def get_daily_stats(
     days: int = Query(default=7, ge=1, le=90),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
     log_date_col = func.date(AttendanceLog.timestamp).label("log_date")
-    rows = (
-        db.query(log_date_col, func.count(AttendanceLog.id).label("count"))
-        .group_by(log_date_col)
-        .order_by(log_date_col)
-        .limit(days)
-        .all()
-    )
-    return [{"date": r.log_date, "count": r.count} for r in rows]
+    q = db.query(log_date_col, func.count(AttendanceLog.id).label("count"))
+    if current_user.role == "teacher":
+        ts_rows = db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()
+        subject_ids = [r.subject_id for r in ts_rows]
+        if subject_ids:
+            q = q.filter(AttendanceLog.subject_id.in_(subject_ids))
+        else:
+            return []
+    rows = q.group_by(log_date_col).order_by(log_date_col.desc()).limit(days).all()
+    return [{"date": r.log_date, "count": r.count} for r in reversed(rows)]
 
 
 @router.get("/top-students")
@@ -269,8 +277,10 @@ def get_student_attendance(
 
     query = (
         db.query(
+            AttendanceLog.id,
             AttendanceLog.timestamp,
             AttendanceLog.status,
+            func.coalesce(func.length(AttendanceLog.scan_image), 0).label("scan_len"),
             Subject.subject_code,
             Subject.subject_name,
         )
@@ -286,11 +296,13 @@ def get_student_attendance(
     rows = query.order_by(AttendanceLog.timestamp.desc()).all()
     records = [
         {
-            "date": str(r.timestamp.date()),
-            "time": r.timestamp.strftime("%H:%M"),
-            "status": r.status,
-            "subject_code": r.subject_code,
-            "subject_name": r.subject_name,
+            "log_id":         r.id,
+            "has_scan_image": r.scan_len > 0,
+            "date":           str(r.timestamp.date()),
+            "time":           r.timestamp.strftime("%H:%M"),
+            "status":         r.status,
+            "subject_code":   r.subject_code,
+            "subject_name":   r.subject_name,
         }
         for r in rows
     ]
@@ -399,6 +411,164 @@ def get_semester_stats(
     }
 
 
+@router.get("/teacher-overview")
+def get_teacher_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """KPI + subject summaries สำหรับครู (กรองเฉพาะวิชาที่ตัวเองสอน)"""
+    today = str(date.today())
+    if current_user.role == "teacher":
+        ts_rows = db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()
+        subject_ids = [r.subject_id for r in ts_rows]
+    else:
+        subject_ids = [r.id for r in db.query(Subject.id).all()]
+
+    if not subject_ids:
+        return {"total_subjects": 0, "total_students": 0, "today_logs": 0, "total_logs": 0, "subjects": []}
+
+    total_students = db.query(func.count(distinct(AttendanceLog.student_id))).filter(
+        AttendanceLog.subject_id.in_(subject_ids)
+    ).scalar() or 0
+    today_logs = db.query(func.count(AttendanceLog.id)).filter(
+        AttendanceLog.subject_id.in_(subject_ids),
+        func.date(AttendanceLog.timestamp) == today,
+    ).scalar() or 0
+    total_logs = db.query(func.count(AttendanceLog.id)).filter(
+        AttendanceLog.subject_id.in_(subject_ids)
+    ).scalar() or 0
+
+    subj_rows = (
+        db.query(Subject.id, Subject.subject_code, Subject.subject_name, Subject.category,
+                 AttendanceLog.status, func.count(AttendanceLog.id).label("cnt"))
+        .outerjoin(AttendanceLog, AttendanceLog.subject_id == Subject.id)
+        .filter(Subject.id.in_(subject_ids))
+        .group_by(Subject.id, Subject.subject_code, Subject.subject_name, Subject.category, AttendanceLog.status)
+        .all()
+    )
+    today_subj = {
+        r.subject_id: r.cnt
+        for r in db.query(AttendanceLog.subject_id, func.count(AttendanceLog.id).label("cnt"))
+        .filter(AttendanceLog.subject_id.in_(subject_ids), func.date(AttendanceLog.timestamp) == today)
+        .group_by(AttendanceLog.subject_id).all()
+    }
+
+    subj_map = {}
+    for r in subj_rows:
+        if r.id not in subj_map:
+            subj_map[r.id] = {"id": r.id, "subject_code": r.subject_code,
+                               "subject_name": r.subject_name, "category": r.category,
+                               "present": 0, "late": 0, "absent": 0}
+        if r.status:
+            subj_map[r.id][r.status] = subj_map[r.id].get(r.status, 0) + (r.cnt or 0)
+
+    subjects = []
+    for s in subj_map.values():
+        total = s["present"] + s["late"] + s["absent"]
+        subjects.append({**s, "total": total,
+                         "present_rate": round(s["present"] / total * 100) if total else None,
+                         "today_logs": today_subj.get(s["id"], 0)})
+
+    return {"total_subjects": len(subject_ids), "total_students": total_students,
+            "today_logs": today_logs, "total_logs": total_logs,
+            "subjects": sorted(subjects, key=lambda x: x["subject_code"])}
+
+
+@router.get("/subject-rooms")
+def get_subject_rooms(
+    subject_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """ห้องเรียนในวิชานี้พร้อมสถิติการเข้าเรียน"""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+    if current_user.role == "teacher":
+        if not db.query(TeacherSubject).filter_by(teacher_id=current_user.id, subject_id=subject_id).first():
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เข้าถึงวิชานี้")
+
+    att_rows = (
+        db.query(Student.grade_level, Student.room_number, AttendanceLog.status,
+                 func.count(AttendanceLog.id).label("cnt"))
+        .join(Student, Student.id == AttendanceLog.student_id)
+        .filter(AttendanceLog.subject_id == subject_id,
+                Student.grade_level.isnot(None), Student.room_number.isnot(None))
+        .group_by(Student.grade_level, Student.room_number, AttendanceLog.status)
+        .all()
+    )
+    student_counts = {
+        (r.grade_level, r.room_number): r.cnt
+        for r in db.query(Student.grade_level, Student.room_number, func.count(Student.id).label("cnt"))
+        .filter(Student.grade_level.isnot(None), Student.room_number.isnot(None))
+        .group_by(Student.grade_level, Student.room_number).all()
+    }
+
+    room_map = {}
+    for r in att_rows:
+        key = (r.grade_level, r.room_number)
+        if key not in room_map:
+            room_map[key] = {"grade_level": r.grade_level, "room_number": r.room_number,
+                              "present": 0, "late": 0, "absent": 0}
+        room_map[key][r.status] = room_map[key].get(r.status, 0) + r.cnt
+
+    rooms = []
+    for (grade, room), d in sorted(room_map.items()):
+        total = d["present"] + d["late"] + d["absent"]
+        rooms.append({**d, "total_students": student_counts.get((grade, room), 0),
+                      "sessions_total": total,
+                      "present_rate": round(d["present"] / total * 100) if total else None})
+
+    return {"subject": {"id": subject.id, "subject_code": subject.subject_code,
+                         "subject_name": subject.subject_name, "category": subject.category},
+            "rooms": rooms}
+
+
+@router.get("/room-students")
+def get_room_students(
+    subject_id: int = Query(...),
+    grade_level: str = Query(...),
+    room_number: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """รายชื่อนักเรียนในห้องพร้อมสถิติวิชานี้"""
+    if current_user.role == "teacher":
+        if not db.query(TeacherSubject).filter_by(teacher_id=current_user.id, subject_id=subject_id).first():
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เข้าถึงวิชานี้")
+
+    students = (
+        db.query(Student)
+        .filter(Student.grade_level == grade_level, Student.room_number == room_number)
+        .order_by(Student.student_id).all()
+    )
+    att_rows = (
+        db.query(AttendanceLog.student_id, AttendanceLog.status, func.count(AttendanceLog.id).label("cnt"))
+        .join(Student, Student.id == AttendanceLog.student_id)
+        .filter(AttendanceLog.subject_id == subject_id,
+                Student.grade_level == grade_level, Student.room_number == room_number)
+        .group_by(AttendanceLog.student_id, AttendanceLog.status).all()
+    )
+    att_map = {}
+    for r in att_rows:
+        if r.student_id not in att_map:
+            att_map[r.student_id] = {"present": 0, "late": 0, "absent": 0}
+        att_map[r.student_id][r.status] = r.cnt
+
+    result = []
+    for s in students:
+        a = att_map.get(s.id, {"present": 0, "late": 0, "absent": 0})
+        total = a["present"] + a["late"] + a["absent"]
+        result.append({
+            "student_id": s.student_id,
+            "full_name": " ".join(filter(None, [s.title, s.first_name, s.last_name])),
+            "present": a["present"], "late": a["late"], "absent": a["absent"],
+            "total": total,
+            "present_rate": round(a["present"] / total * 100) if total else None,
+        })
+    return result
+
+
 @router.get("/summary")
 def get_summary(
     db: Session = Depends(get_db),
@@ -420,4 +590,83 @@ def get_summary(
             {"name": log.student.first_name, "time": log.timestamp.strftime("%H:%M")}
             for log in recent
         ],
+    }
+
+
+@router.get("/subject-attendance")
+def get_subject_attendance(
+    subject_id: int = Query(...),
+    date_from:  Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    date_to:    Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """สรุปการเข้าเรียนรายนักเรียนในวิชาที่กำหนด (gradebook view)"""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+
+    if current_user.role == "teacher":
+        from app.models.user import TeacherSubject
+        assigned = db.query(TeacherSubject).filter_by(
+            teacher_id=current_user.id, subject_id=subject_id
+        ).first()
+        if not assigned:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ดูวิชานี้")
+
+    q = (
+        db.query(AttendanceLog, Student)
+        .join(Student, Student.id == AttendanceLog.student_id)
+        .filter(AttendanceLog.subject_id == subject_id)
+    )
+    if date_from:
+        q = q.filter(func.date(AttendanceLog.timestamp) >= date_from)
+    if date_to:
+        q = q.filter(func.date(AttendanceLog.timestamp) <= date_to)
+
+    rows = q.order_by(AttendanceLog.timestamp).all()
+
+    # Collect unique session dates
+    session_dates = sorted({str(log.timestamp.date()) for log, _ in rows})
+
+    # Aggregate per student
+    from collections import defaultdict
+    student_map: dict[int, dict] = {}
+    date_status: dict[int, dict[str, str]] = defaultdict(dict)
+
+    for log, student in rows:
+        sid = student.id
+        if sid not in student_map:
+            student_map[sid] = {
+                "student_id":  student.student_id,
+                "name":        f"{student.title + ' ' if student.title else ''}{student.first_name} {student.last_name}",
+                "grade_level": student.grade_level,
+                "room_number": student.room_number,
+                "present": 0, "late": 0, "absent": 0,
+            }
+        student_map[sid][log.status] = student_map[sid].get(log.status, 0) + 1
+        date_status[sid][str(log.timestamp.date())] = log.status
+
+    result = []
+    for sid, info in student_map.items():
+        total = info["present"] + info["late"] + info["absent"]
+        rate  = round((info["present"] + info["late"]) / total * 100) if total else 0
+        result.append({
+            **info,
+            "total":       total,
+            "rate":        rate,
+            "date_status": date_status[sid],
+        })
+
+    result.sort(key=lambda x: (x["grade_level"] or "", x["room_number"] or "", x["student_id"]))
+
+    return {
+        "subject": {
+            "id":           subject.id,
+            "subject_code": subject.subject_code,
+            "subject_name": subject.subject_name,
+            "teacher_name": subject.teacher_name,
+        },
+        "session_dates": session_dates,
+        "students":      result,
     }

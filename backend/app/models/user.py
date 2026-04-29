@@ -16,10 +16,12 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    username: Mapped[Optional[str]] = mapped_column(String(50), unique=True, index=True, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(200), nullable=False)
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[str] = mapped_column(String(20), default="teacher")  # "admin" | "teacher"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    categories: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # comma-separated
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # ความสัมพันธ์กับรายวิชา (teacher สอนหลายวิชา)
