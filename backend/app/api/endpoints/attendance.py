@@ -179,9 +179,10 @@ async def scan_attendance(
 
     return {
         **student_info,
-        "log_id":  new_log.id,
-        "status":  "success",
-        "message": "เช็คชื่อสำเร็จ",
+        "log_id":      new_log.id,
+        "status":      "success",
+        "scan_status": scan_status,
+        "message":     "มาสาย" if scan_status == "late" else "เช็คชื่อสำเร็จ",
     }
 
 
@@ -536,5 +537,6 @@ def delete_subject(
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+    db.query(TeacherSubject).filter(TeacherSubject.subject_id == subject_id).delete()
     db.delete(subject)
     db.commit()

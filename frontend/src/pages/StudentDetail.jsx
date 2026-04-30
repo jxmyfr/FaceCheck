@@ -4,9 +4,9 @@ import Webcam from 'react-webcam'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 
-const API_ENROLL = 'http://127.0.0.1:8000/api/v1/enroll'
-const API_STATS  = 'http://127.0.0.1:8000/api/v1/stats'
-const API_ATTEND = 'http://127.0.0.1:8000/api/v1/attendance'
+const API_ENROLL = `${import.meta.env.VITE_API_URL}/enroll`
+const API_STATS  = `${import.meta.env.VITE_API_URL}/stats`
+const API_ATTEND = `${import.meta.env.VITE_API_URL}/attendance`
 
 // ── Icons ──────────────────────────────────────────────────────
 const IcArrowLeft = () => (

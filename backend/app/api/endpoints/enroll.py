@@ -218,9 +218,8 @@ async def register_student_multi(
     if db.query(Student).filter(Student.student_id == student_id).first():
         raise HTTPException(status_code=409, detail=f"รหัสนักเรียน {student_id} มีในระบบแล้ว")
 
-    valid_embeddings = []
-    best_frame       = None
-    results          = []
+    valid_pairs = []  # [(embedding, frame, jpeg_bytes)]
+    results     = []
 
     for f in files:
         contents = await f.read()
@@ -231,20 +230,21 @@ async def register_student_multi(
             continue
         try:
             embedding = face_processor.process_capture(frame)
-            valid_embeddings.append(embedding)
-            if best_frame is None:
-                best_frame = frame
+            _, jpeg_buf = cv2.imencode('.jpg', frame)
+            valid_pairs.append((embedding, frame, jpeg_buf.tobytes()))
             results.append({"filename": f.filename, "valid": True})
         except ValueError as e:
             results.append({"filename": f.filename, "valid": False, "reason": str(e)})
 
-    if not valid_embeddings:
+    if not valid_pairs:
         raise HTTPException(status_code=400, detail="ไม่มีรูปที่ผ่านการตรวจสอบ กรุณาส่งรูปใบหน้าที่ชัดเจนอย่างน้อย 1 รูป")
 
+    valid_embeddings = [p[0] for p in valid_pairs]
     avg_emb = np.mean(valid_embeddings, axis=0)
     avg_emb = avg_emb / np.linalg.norm(avg_emb)
 
-    _, jpeg_buf = cv2.imencode('.jpg', best_frame)
+    best_frame, best_jpeg = valid_pairs[0][1], valid_pairs[0][2]
+
     new_student = Student(
         student_id=student_id,
         title=title or None,
@@ -253,16 +253,26 @@ async def register_student_multi(
         grade_level=grade_level or None,
         room_number=room_number or None,
         face_embedding=avg_emb.tobytes(),
-        face_image=jpeg_buf.tobytes(),
+        face_image=best_jpeg,
     )
     db.add(new_student)
+    db.flush()  # get new_student.id before adding embeddings
+
+    for i, (emb, _, jpeg_bytes) in enumerate(valid_pairs):
+        db.add(StudentFaceEmbedding(
+            student_id=new_student.id,
+            embedding=emb.tobytes(),
+            face_image=jpeg_bytes,
+            label=f"รูปที่ {i + 1}",
+        ))
+
     db.commit()
     db.refresh(new_student)
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), best_frame)
 
     return {
         "status":  "success",
-        "message": f"ลงทะเบียน {first_name} {last_name} สำเร็จ (ใช้ {len(valid_embeddings)}/{len(files)} รูป)",
+        "message": f"ลงทะเบียน {first_name} {last_name} สำเร็จ (ใช้ {len(valid_pairs)}/{len(files)} รูป)",
         "id":      new_student.id,
         "results": results,
     }

@@ -568,12 +568,7 @@ export default function Sidebar() {
             </button>
           ) : (
             <>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                background: 'var(--fc-primary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-              }}>FC</div>
+              <img src="/logo.png" alt="FaceCheck" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>FaceCheck</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>ระบบเช็คชื่อ</div>

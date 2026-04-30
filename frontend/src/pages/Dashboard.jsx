@@ -3,7 +3,7 @@ import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 
-const API = 'http://127.0.0.1:8000/api/v1/stats'
+const API = `${import.meta.env.VITE_API_URL}/stats`
 const pct = (v, t) => (t > 0 ? Math.round((v / t) * 100) : 0)
 const fmt = (n) => Number(n).toLocaleString('th-TH')
 const DAY = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
@@ -685,7 +685,7 @@ export default function Dashboard() {
       <div className="grid-kpi">
         <StatCard label="นักเรียนทั้งหมด"   value={fmt(ov.total_students)}          color="#1A56DB" icon={<IcUsers />} sub="คนที่ลงทะเบียน" />
         <StatCard label="รายวิชา"            value={fmt(ov.total_subjects)}          color="#0891B2" icon={<IcBook />}  sub="วิชาที่เปิดสอน" />
-        <StatCard label="เช็คชื่อวันนี้"     value={fmt(ov.attendance_today)}        color="#16A34A" icon={<IcCheck />} sub={`${attendanceRate}% ของทั้งหมด`} />
+        <StatCard label="เช็คชื่อวันนี้"     value={fmt(checkedIn)}                  color="#16A34A" icon={<IcCheck />} sub={lateCount > 0 ? `มาตรงเวลา ${fmt(presentCount)} · สาย ${fmt(lateCount)}` : `${attendanceRate}% ของทั้งหมด`} />
         <StatCard label="บันทึกสะสม"         value={fmt(ov.total_attendance_logs)}   color="#7C3AED" icon={<IcLog />}   sub="รายการทั้งหมด" />
       </div>
 

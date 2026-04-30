@@ -4,7 +4,7 @@ import axios from 'axios'
 import { useDialog } from '../hooks/useDialog'
 import { useAuth } from '../hooks/useAuth'
 
-const API = 'http://127.0.0.1:8000/api/v1'
+const API = import.meta.env.VITE_API_URL
 
 // ── Icons ────────────────────────────────────────────────────────
 const IcCamera = () => (
@@ -34,9 +34,15 @@ const IcSearch = () => (
 
 // ── Status config ────────────────────────────────────────────────
 const STATUS_CFG = {
-  success:       { label: 'เช็คชื่อสำเร็จ',   color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
-  already_checked:{ label: 'เช็คชื่อแล้ว',     color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
-  error:         { label: 'ระบุตัวตนไม่ได้',   color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
+  success:        { label: 'เช็คชื่อสำเร็จ', color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
+  success_late:   { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
+  already_checked:{ label: 'เช็คชื่อแล้ว',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
+  error:          { label: 'ระบุตัวตนไม่ได้', color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
+}
+
+const getDisplayStatus = (result) => {
+  if (result.status === 'success' && result.scan_status === 'late') return 'success_late'
+  return result.status
 }
 
 // ── Result card ──────────────────────────────────────────────────
@@ -44,7 +50,7 @@ function ResultCard({ result, onDismiss, onCancel }) {
   const [cancelling, setCancelling] = useState(false)
   const { dialog, alert } = useDialog()
   if (!result) return null
-  const cfg = STATUS_CFG[result.status] ?? STATUS_CFG.error
+  const cfg = STATUS_CFG[getDisplayStatus(result)] ?? STATUS_CFG.error
 
   const handleCancel = async () => {
     if (!result.log_id || cancelling) return

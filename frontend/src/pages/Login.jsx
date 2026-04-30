@@ -41,12 +41,7 @@ export default function Login() {
 
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 10,
-            background: 'var(--fc-primary)', color: '#fff',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 15, fontWeight: 700, marginBottom: 12,
-          }}>FC</div>
+          <img src="/logo.png" alt="FaceCheck" style={{ width: 80, height: 80, objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--fc-text)' }}>FaceCheck</div>
           <div style={{ fontSize: 13, color: 'var(--fc-text-4)', marginTop: 4 }}>ระบบตรวจสอบการเข้าเรียน</div>
         </div>

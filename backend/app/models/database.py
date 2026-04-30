@@ -60,7 +60,7 @@ class Subject(Base):
     description: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    attendance_records: Mapped[List["AttendanceLog"]] = relationship(back_populates="subject")
+    attendance_records: Mapped[List["AttendanceLog"]] = relationship(back_populates="subject", cascade="all, delete-orphan")
     schedules: Mapped[List["SubjectSchedule"]] = relationship(back_populates="subject", cascade="all, delete-orphan")
 
 

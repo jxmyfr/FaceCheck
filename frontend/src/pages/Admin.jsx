@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { useDialog } from '../hooks/useDialog'
 
-const API = 'http://127.0.0.1:8000/api/v1'
+const API = import.meta.env.VITE_API_URL
 
 const SUBJECT_CATEGORIES = [
   'ภาษาไทย',
@@ -70,11 +70,17 @@ function StatusBadge({ status, logId, onUpdate }) {
   )
 }
 
-function SchedForm({ sched, setSched, onAdd, gradeRooms = {} }) {
+function SchedForm({ sched, setSched, onAdd, gradeRooms = {}, requireTeacher = false }) {
   const grades = Object.keys(gradeRooms).sort()
   const rooms  = sched.grade_level ? (gradeRooms[sched.grade_level] || []) : []
 
   const setGrade = (g) => setSched(s => ({ ...s, grade_level: g, room_number: '' }))
+
+  if (requireTeacher) return (
+    <div style={{padding:'10px 14px',borderRadius:8,background:'var(--fc-muted)',fontSize:12,color:'var(--fc-text-4)'}}>
+      เลือกครูผู้สอนก่อนเพื่อเพิ่มตารางสอน
+    </div>
+  )
 
   return (
     <div style={{display:'grid',gridTemplateColumns:'60px 1fr 1fr 1fr auto',gap:8,alignItems:'flex-end'}}>
@@ -285,6 +291,9 @@ export default function Admin() {
   }
 
   const createSub = async () => {
+    if (!newSub.subject_code.trim()) { flash('กรุณากรอกรหัสวิชา', 'error'); return }
+    if (!newSub.subject_name.trim()) { flash('กรุณากรอกชื่อวิชา', 'error'); return }
+    if (newSub.schedules.length === 0) { flash('กรุณาเพิ่มตารางสอนอย่างน้อย 1 คาบ', 'error'); return }
     try {
       const p = new URLSearchParams({ subject_code: newSub.subject_code, subject_name: newSub.subject_name })
       const res = await axios.post(`${API}/attendance/subjects?${p}`)
@@ -358,8 +367,10 @@ export default function Admin() {
 
   const deleteSub = async (id) => {
     if (!await confirm('ลบวิชาจะลบประวัติเช็คชื่อที่เกี่ยวข้องด้วย ยืนยัน?', { title: 'ลบรายวิชา', danger: true })) return
-    await axios.delete(`${API}/attendance/subjects/${id}`)
-    flash('ลบวิชาสำเร็จ'); loadAll()
+    try {
+      await axios.delete(`${API}/attendance/subjects/${id}`)
+      flash('ลบวิชาสำเร็จ'); loadAll()
+    } catch (e) { flash(e.response?.data?.detail || 'ลบวิชาไม่สำเร็จ', 'error') }
   }
 
   const openSubDetail = async (s) => {
@@ -383,8 +394,23 @@ export default function Admin() {
   }
 
   const addSchedule = async () => {
+    const period = PERIODS[Number(newSched.period)]
+    if (subDetail.teacher_name) {
+      const conflict = subjects.find(s =>
+        s.id !== subDetail.id &&
+        s.teacher_name === subDetail.teacher_name &&
+        s.schedules?.some(sc =>
+          sc.day_of_week === newSched.day_of_week &&
+          sc.time_start === period.start &&
+          sc.time_end === period.end
+        )
+      )
+      if (conflict) {
+        flash(`ครู${subDetail.teacher_name} มีคาบนี้แล้ว (${conflict.subject_name})`, 'error')
+        return
+      }
+    }
     try {
-      const period = PERIODS[Number(newSched.period)]
       const p = new URLSearchParams({ day_of_week: newSched.day_of_week, time_start: period.start, time_end: period.end, grade_level: newSched.grade_level, room_number: newSched.room_number })
       const res = await axios.post(`${API}/attendance/subjects/${subDetail.id}/schedules?${p}`)
       setSubDetail(prev => ({ ...prev, schedules: [...prev.schedules, res.data] }))
@@ -400,6 +426,7 @@ export default function Admin() {
   }
 
   const teachers = users.filter(u => u.role === 'teacher')
+  const superadminId = users.filter(u => u.role === 'admin').reduce((min, u) => u.id < min ? u.id : min, Infinity)
 
   const teachersForCategory = (category) => {
     if (!category) return []
@@ -418,16 +445,14 @@ export default function Admin() {
   return (
     <main id="main-content" className="page">
       {dialog}
+      {toast && (
+        <div className={`toast ${toast.type==='success'?'toast-success':'toast-error'}`}>{toast.text}</div>
+      )}
 
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
-        <div>
-          <h1 className="page-title">Admin Panel</h1>
-          <p className="page-sub">จัดการบัญชีครูและรายวิชา</p>
-        </div>
-        {toast && (
-          <div className={`toast ${toast.type==='success'?'toast-success':'toast-error'}`}>{toast.text}</div>
-        )}
+      <div style={{marginBottom:24}}>
+        <h1 className="page-title">Admin Panel</h1>
+        <p className="page-sub">จัดการบัญชีครูและรายวิชา</p>
       </div>
 
       {/* Tabs */}
@@ -475,10 +500,18 @@ export default function Admin() {
                   </td>
                   <td style={{color:'var(--fc-text-3)',fontSize:13}}>{u.email}</td>
                   <td>
-                    <span className="chip" style={u.role==='admin'
-                      ? {background:'rgba(124,58,237,0.1)',color:'var(--fc-secondary)'}
-                      : {background:'var(--fc-primary-light)',color:'var(--fc-primary)'}
-                    }>{u.role}</span>
+                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                      <span className="chip" style={u.role==='admin'
+                        ? {background:'rgba(124,58,237,0.1)',color:'var(--fc-secondary)'}
+                        : {background:'var(--fc-primary-light)',color:'var(--fc-primary)'}
+                      }>{u.role}</span>
+                      {u.id === superadminId && (
+                        <span className="chip" style={{background:'rgba(245,158,11,0.12)',color:'var(--fc-warning)',fontSize:10}}>หลัก</span>
+                      )}
+                      {u.id === user?.id && (
+                        <span className="chip" style={{background:'var(--fc-muted)',color:'var(--fc-text-4)',fontSize:10}}>คุณ</span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5}}>
@@ -487,26 +520,38 @@ export default function Admin() {
                     </div>
                   </td>
                   <td>
-                    <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
-                      {u.role==='teacher' && <>
-                        <button className="btn btn-ghost btn-sm" onClick={async ()=>{
-                          setTeacherDetail(u)
-                          setTeacherEdit(false)
-                          setTeacherForm({full_name:u.full_name,email:u.email,username:u.username||'',role:u.role,new_password:'',categories:u.categories||[]})
-                          try {
-                            const res = await axios.get(`${API}/auth/users/${u.id}/subjects`)
-                            setTeacherSubjectIds(new Set(res.data.map(s => s.id)))
-                          } catch { setTeacherSubjectIds(new Set()) }
-                        }}>ดูข้อมูล</button>
-                        <button className="btn btn-ghost btn-sm" onClick={()=>openAssign(u)}>มอบหมายวิชา</button>
-                      </>}
-                      <button
-                        className={`btn btn-sm ${u.is_active?'btn-ghost':'btn-ghost'}`}
-                        style={{color: u.is_active ? 'var(--fc-warning)' : 'var(--fc-success-dark)'}}
-                        onClick={()=>toggleUser(u.id)}
-                      >{u.is_active?'ระงับ':'เปิดใช้'}</button>
-                      <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u.id)}>ลบ</button>
-                    </div>
+                    {(() => {
+                      const isSelf = u.id === user?.id
+                      const isSuperadmin = u.id === superadminId
+                      const canManage = !isSelf && !(isSuperadmin && user?.id !== superadminId)
+                      if (!canManage) return (
+                        <div style={{textAlign:'right',paddingRight:4,fontSize:12,color:'var(--fc-text-4)'}}>
+                          {isSelf ? 'บัญชีของคุณ' : 'ผู้ดูแลหลัก'}
+                        </div>
+                      )
+                      return (
+                        <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+                          {u.role==='teacher' && <>
+                            <button className="btn btn-ghost btn-sm" onClick={async ()=>{
+                              setTeacherDetail(u)
+                              setTeacherEdit(false)
+                              setTeacherForm({full_name:u.full_name,email:u.email,username:u.username||'',role:u.role,new_password:'',categories:u.categories||[]})
+                              try {
+                                const res = await axios.get(`${API}/auth/users/${u.id}/subjects`)
+                                setTeacherSubjectIds(new Set(res.data.map(s => s.id)))
+                              } catch { setTeacherSubjectIds(new Set()) }
+                            }}>ดูข้อมูล</button>
+                            <button className="btn btn-ghost btn-sm" onClick={()=>openAssign(u)}>มอบหมายวิชา</button>
+                          </>}
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{color: u.is_active ? 'var(--fc-warning)' : 'var(--fc-success-dark)'}}
+                            onClick={()=>toggleUser(u.id)}
+                          >{u.is_active?'ระงับ':'เปิดใช้'}</button>
+                          <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u.id)}>ลบ</button>
+                        </div>
+                      )
+                    })()}
                   </td>
                 </tr>
               ))}
@@ -1429,8 +1474,33 @@ export default function Admin() {
             )}
             <SchedForm
               sched={newSched} setSched={setNewSched}
-              onAdd={()=>setNewSub(s=>({...s,schedules:[...s.schedules,{...newSched}]}))}
+              onAdd={() => {
+                const period = PERIODS[Number(newSched.period)]
+                if (newSub.teacher_name) {
+                  const conflict = subjects.find(s =>
+                    s.teacher_name === newSub.teacher_name &&
+                    s.schedules?.some(sc =>
+                      sc.day_of_week === newSched.day_of_week &&
+                      sc.time_start === period.start &&
+                      sc.time_end === period.end
+                    )
+                  )
+                  if (conflict) {
+                    flash(`ครู${newSub.teacher_name} มีคาบนี้แล้ว (${conflict.subject_name})`, 'error')
+                    return
+                  }
+                }
+                const selfConflict = newSub.schedules.some(sc =>
+                  sc.day_of_week === newSched.day_of_week && String(sc.period) === String(newSched.period)
+                )
+                if (selfConflict) {
+                  flash('คาบนี้ถูกเพิ่มในรายวิชานี้แล้ว', 'error')
+                  return
+                }
+                setNewSub(s => ({...s, schedules: [...s.schedules, {...newSched}]}))
+              }}
               gradeRooms={gradeRooms}
+              requireTeacher={!newSub.teacher_name}
             />
           </div>
 

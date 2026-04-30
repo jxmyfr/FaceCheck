@@ -200,11 +200,13 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
 
 /* ── Toast / Flash ── */
 .toast {
+  position: fixed; top: 20px; right: 20px; z-index: 10000;
   padding: 10px 16px; border-radius: 8px;
   font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14);
 }
-.toast-success { background: var(--fc-success-light); color: var(--fc-success); }
-.toast-error   { background: var(--fc-danger-light);  color: var(--fc-danger); }
+.toast-success { background: #166534; color: #ffffff; }
+.toast-error   { background: #991b1b; color: #ffffff; }
 
 /* ── Skip navigation link ── */
 .skip-link {

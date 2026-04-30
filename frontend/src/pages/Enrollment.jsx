@@ -5,7 +5,7 @@ import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useDialog } from '../hooks/useDialog'
 
-const API = 'http://127.0.0.1:8000/api/v1'
+const API = import.meta.env.VITE_API_URL
 
 const IcCamera = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

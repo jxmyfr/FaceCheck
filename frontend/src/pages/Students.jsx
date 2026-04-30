@@ -4,7 +4,7 @@ import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useDialog } from '../hooks/useDialog'
 
-const API = 'http://127.0.0.1:8000/api/v1/enroll'
+const API = `${import.meta.env.VITE_API_URL}/enroll`
 
 export default function Students() {
   const { user } = useAuth()

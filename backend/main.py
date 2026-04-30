@@ -52,7 +52,7 @@ app = FastAPI(title="FaceCheck API")
 # 2. ตั้งค่า CORS (สำคัญมากเพื่อให้ React คุยกับ API ได้)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Port มาตรฐานของ Vite
+    allow_origins=["http://localhost:5173", os.getenv("FRONTEND_URL", "")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

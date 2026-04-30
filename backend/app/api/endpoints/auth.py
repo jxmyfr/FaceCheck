@@ -15,6 +15,12 @@ router = APIRouter()
 bearer_scheme = HTTPBearer()
 
 
+def get_superadmin_id(db: Session) -> int | None:
+    """Primary admin = admin with the lowest id."""
+    result = db.query(User.id).filter(User.role == "admin").order_by(User.id).first()
+    return result[0] if result else None
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class LoginRequest(BaseModel):
     email: str      # รับได้ทั้ง email และ username
@@ -144,15 +150,17 @@ def list_users(
 ):
     """Admin ดูรายชื่อ user ทั้งหมด"""
     users = db.query(User).order_by(User.id).all()
+    superadmin_id = get_superadmin_id(db)
     return [
         {
-            "id":         u.id,
-            "email":      u.email,
-            "username":   u.username,
-            "full_name":  u.full_name,
-            "role":       u.role,
-            "is_active":  u.is_active,
-            "categories": u.categories.split(",") if u.categories else [],
+            "id":            u.id,
+            "email":         u.email,
+            "username":      u.username,
+            "full_name":     u.full_name,
+            "role":          u.role,
+            "is_active":     u.is_active,
+            "is_superadmin": u.id == superadmin_id,
+            "categories":    u.categories.split(",") if u.categories else [],
         }
         for u in users
     ]
@@ -193,9 +201,14 @@ def update_user(
     user_id: int,
     body: UpdateUserRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ):
     """Admin แก้ไขข้อมูลบัญชีผู้ใช้"""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="ไม่สามารถแก้ไขบัญชีของตัวเองในหน้านี้ได้")
+    superadmin_id = get_superadmin_id(db)
+    if user_id == superadmin_id and current_user.id != superadmin_id:
+        raise HTTPException(status_code=403, detail="ไม่สามารถแก้ไขบัญชีผู้ดูแลหลักได้")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
@@ -228,9 +241,14 @@ def update_user(
 def toggle_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ):
     """Admin เปิด/ปิดบัญชีผู้ใช้"""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="ไม่สามารถระงับบัญชีของตัวเองได้")
+    superadmin_id = get_superadmin_id(db)
+    if user_id == superadmin_id and current_user.id != superadmin_id:
+        raise HTTPException(status_code=403, detail="ไม่สามารถจัดการบัญชีผู้ดูแลหลักได้")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
@@ -265,12 +283,15 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Admin ลบบัญชีผู้ใช้ (ไม่สามารถลบตัวเองได้)"""
+    """Admin ลบบัญชีผู้ใช้ (ไม่สามารถลบตัวเองหรือผู้ดูแลหลักได้)"""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="ไม่สามารถลบบัญชีของตัวเองได้")
+    superadmin_id = get_superadmin_id(db)
+    if user_id == superadmin_id and current_user.id != superadmin_id:
+        raise HTTPException(status_code=403, detail="ไม่สามารถลบบัญชีผู้ดูแลหลักได้")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
-    if user.id == current_user.id:
-        raise HTTPException(status_code=400, detail="ไม่สามารถลบบัญชีของตัวเองได้")
     db.delete(user)
     db.commit()
 

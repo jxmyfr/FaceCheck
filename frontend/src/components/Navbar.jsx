@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 
-const API = 'http://127.0.0.1:8000/api/v1'
+const API = import.meta.env.VITE_API_URL
 
 function NavLink({ to, label, active }) {
   const [hov, setHov] = useState(false)
@@ -141,14 +141,7 @@ export default function Navbar() {
 
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 7,
-            background: 'var(--fc-primary)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 11, fontWeight: 700,
-            fontFamily: 'var(--fc-font-display)',
-            letterSpacing: '0.02em',
-          }}>FC</div>
+          <img src="/logo.png" alt="FaceCheck" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6 }} />
           <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--fc-text)' }}>FaceCheck</span>
         </div>
 
