@@ -417,6 +417,7 @@ def list_logs(
             "subject_code": subject.subject_code,
             "subject_name": subject.subject_name,
             "status":      log.status,
+            "reason":      log.reason,
             "timestamp":   log.timestamp.strftime("%H:%M:%S"),
             "date":        log.timestamp.strftime("%Y-%m-%d"),
         }
@@ -427,19 +428,21 @@ def list_logs(
 @router.patch("/logs/{log_id}")
 def update_log_status(
     log_id: int,
-    status: str = Query(..., description="present | late | absent"),
+    status: str = Query(..., description="present | late | absent | excused"),
+    reason: str = Query(None, description="เหตุผล (สำหรับ excused)"),
     db: Session = Depends(get_db),
     _: User = Depends(require_teacher_or_admin),
 ):
     """แก้ไขสถานะการเช็คชื่อ"""
-    if status not in ("present", "late", "absent"):
-        raise HTTPException(status_code=400, detail="status ต้องเป็น present, late หรือ absent")
+    if status not in ("present", "late", "absent", "excused"):
+        raise HTTPException(status_code=400, detail="status ต้องเป็น present, late, absent หรือ excused")
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
     log.status = status
+    log.reason = reason if status == "excused" else None
     db.commit()
-    return {"log_id": log_id, "status": status}
+    return {"log_id": log_id, "status": status, "reason": log.reason}
 
 
 @router.delete("/logs/{log_id}", status_code=204)
@@ -526,6 +529,64 @@ def manual_attendance(
         "status":  "success",
         "message": f"บันทึก {STATUS_LABEL.get(status, status)} — {name}",
     }
+
+
+@router.post("/subjects/{subject_id}/mark-absent", status_code=200)
+def mark_absent(
+    subject_id:  int,
+    schedule_id: Optional[int] = Query(default=None, description="ID ของตารางสอน (เพื่อดึงห้อง/ชั้น)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """ปิดคาบ: บันทึกขาดเรียนให้นักเรียนที่ยังไม่ได้เช็คชื่อวิชานี้วันนี้"""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+
+    if current_user.role == "teacher":
+        assigned = db.query(TeacherSubject).filter_by(
+            teacher_id=current_user.id, subject_id=subject_id
+        ).first()
+        if not assigned:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์จัดการวิชานี้")
+
+    grade_level: Optional[str] = None
+    room_number: Optional[str] = None
+    if schedule_id:
+        sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+        if sched:
+            grade_level = sched.grade_level
+            room_number = sched.room_number
+
+    student_q = db.query(Student)
+    if grade_level:
+        student_q = student_q.filter(Student.grade_level == grade_level)
+    if room_number:
+        student_q = student_q.filter(Student.room_number == room_number)
+    students = student_q.all()
+
+    today_str = str(date.today())
+    existing_ids = {
+        row[0]
+        for row in db.query(AttendanceLog.student_id).filter(
+            AttendanceLog.subject_id == subject_id,
+            func.date(AttendanceLog.timestamp) == today_str,
+        ).all()
+    }
+
+    now = datetime.now()
+    count = 0
+    for student in students:
+        if student.id not in existing_ids:
+            db.add(AttendanceLog(
+                student_id=student.id,
+                subject_id=subject_id,
+                status="absent",
+                timestamp=now,
+            ))
+            count += 1
+    db.commit()
+    return {"marked_absent": count, "total_students": len(students)}
 
 
 @router.delete("/subjects/{subject_id}", status_code=204)

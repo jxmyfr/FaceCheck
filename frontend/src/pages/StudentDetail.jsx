@@ -61,10 +61,18 @@ const STATUS_MAP = {
   present: { label: 'มาเรียน', color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
   late:    { label: 'มาสาย',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)' },
   absent:  { label: 'ขาดเรียน',color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)'  },
+  excused: { label: 'ลา',      color: '#7c3aed',                bg: 'rgba(124,58,237,0.1)'    },
 }
-function StatusChip({ status }) {
+function StatusChip({ status, reason }) {
   const s = STATUS_MAP[status] ?? { label: status, color: 'var(--fc-text-3)', bg: 'var(--fc-muted)' }
-  return <span className="chip" style={{ background: s.bg, color: s.color }}>{s.label}</span>
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span className="chip" style={{ background: s.bg, color: s.color }}>{s.label}</span>
+      {status === 'excused' && reason && (
+        <span style={{ fontSize: 10, color: '#7c3aed', fontStyle: 'italic' }}>{reason}</span>
+      )}
+    </span>
+  )
 }
 
 // ── Face slot thumbnail (lazy image fetch) ───────────────────────
@@ -235,6 +243,10 @@ export default function StudentDetail() {
   const [lightbox, setLightbox] = useState(null) // { embId, url | null }
   // scan image view
   const [scanView, setScanView] = useState(null)  // { url }
+  // attendance log detail modal
+  const [attendLog, setAttendLog]           = useState(null)
+  const [attendLogUrl, setAttendLogUrl]     = useState(null)
+  const [attendLogLoading, setAttendLogLoading] = useState(false)
 
   const load = async () => {
     try {
@@ -488,6 +500,25 @@ export default function StudentDetail() {
   // ── Scan image view (URL owned by ScanThumb, no revoke here) ─
   const closeScanView = () => setScanView(null)
 
+  const openAttendLog = async (r) => {
+    setAttendLog(r)
+    setAttendLogUrl(null)
+    if (r.has_scan_image && r.log_id) {
+      setAttendLogLoading(true)
+      try {
+        const res = await axios.get(`${API_ATTEND}/logs/${r.log_id}/image`, { responseType: 'blob' })
+        setAttendLogUrl(URL.createObjectURL(res.data))
+      } catch {}
+      finally { setAttendLogLoading(false) }
+    }
+  }
+
+  const closeAttendLog = () => {
+    if (attendLogUrl) URL.revokeObjectURL(attendLogUrl)
+    setAttendLog(null)
+    setAttendLogUrl(null)
+  }
+
   // ── Edit info ─────────────────────────────────────────────────
   const openEdit = () => {
     if (!detail) return
@@ -642,14 +673,20 @@ export default function StudentDetail() {
         ) : (
           <div>
             {records.map((r, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '12px 20px',
-                borderBottom: i < records.length - 1 ? '1px solid var(--fc-border)' : 'none',
-              }}>
+              <div key={i}
+                onClick={() => openAttendLog(r)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '12px 20px',
+                  borderBottom: i < records.length - 1 ? '1px solid var(--fc-border)' : 'none',
+                  cursor: 'pointer', transition: 'background 0.12s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--fc-muted)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
                 <div style={{ flexShrink: 0 }}>
                   {r.has_scan_image && r.log_id ? (
-                    <ScanThumb logId={r.log_id} onView={url => setScanView({ url })} size={56} />
+                    <ScanThumb logId={r.log_id} onView={() => {}} size={56} />
                   ) : (
                     <div style={{
                       width: 56, height: 56, borderRadius: 10,
@@ -673,8 +710,11 @@ export default function StudentDetail() {
                     <span style={{ fontSize: 11, color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>{r.time}</span>
                   </div>
                 </div>
-                <div style={{ flexShrink: 0 }}>
-                  <StatusChip status={r.status} />
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <StatusChip status={r.status} reason={r.reason} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fc-text-4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
                 </div>
               </div>
             ))}
@@ -1221,6 +1261,72 @@ export default function StudentDetail() {
                 background: 'rgba(0,0,0,0.6)', color: '#fff',
                 border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: '32px', textAlign: 'center', padding: 0,
               }}>✕</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Attendance log detail modal ─────────────────────────── */}
+      {attendLog && (
+        <div className="modal-overlay" onClick={closeAttendLog}>
+          <div className="modal" style={{ maxWidth: 400, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            {/* Scan image area */}
+            <div style={{ background: '#111', minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+              {attendLog.has_scan_image ? (
+                attendLogLoading ? (
+                  <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: '#fff' }} />
+                ) : attendLogUrl ? (
+                  <img src={attendLogUrl} alt="รูปสแกน"
+                    style={{ width: '100%', maxHeight: 320, objectFit: 'contain', display: 'block' }} />
+                ) : (
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>โหลดรูปไม่สำเร็จ</span>
+                )
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'rgba(255,255,255,0.3)' }}>
+                  <IcScan />
+                  <span style={{ fontSize: 12 }}>ไม่มีรูปสแกน</span>
+                </div>
+              )}
+              <button onClick={closeAttendLog} style={{
+                position: 'absolute', top: 10, right: 10,
+                width: 30, height: 30, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)', color: '#fff',
+                border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: '30px', textAlign: 'center', padding: 0,
+              }}>✕</button>
+            </div>
+
+            {/* Info section */}
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--fc-text)', marginBottom: 4 }}>
+                {attendLog.subject_name}
+              </div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--fc-font-mono)', color: 'var(--fc-text-4)', marginBottom: 16 }}>
+                {attendLog.subject_code}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>วันที่</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fc-text-2)' }}>
+                    {new Date(attendLog.date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>เวลา</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fc-text-2)', fontVariantNumeric: 'tabular-nums' }}>
+                    {attendLog.time} น.
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>สถานะ</div>
+                  <StatusChip status={attendLog.status} reason={attendLog.reason} />
+                </div>
+                {attendLog.status === 'excused' && attendLog.reason && (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>เหตุผล</div>
+                    <div style={{ fontSize: 13, color: 'var(--fc-text-2)', fontStyle: 'italic' }}>{attendLog.reason}</div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

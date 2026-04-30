@@ -89,6 +89,7 @@ class AttendanceLog(Base):
     # บันทึกเวลาที่สแกนสำเร็จโดยอัตโนมัติ
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     status: Mapped[str] = mapped_column(String(20), default="present")
+    reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     scan_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     
     # ✅ แก้ไขแล้ว: ระบุชื่อ Class ใน Mapped["ClassName"] ให้ครบถ้วน

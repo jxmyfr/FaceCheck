@@ -9,6 +9,7 @@ const STATUS_CFG = {
   present: { label: 'มาเรียน', color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
   late:    { label: 'มาสาย',   color: 'var(--fc-warning)',       bg: 'var(--fc-warning-light)' },
   absent:  { label: 'ขาดเรียน',color: 'var(--fc-danger)',        bg: 'var(--fc-danger-light)'  },
+  excused: { label: 'ลา',      color: '#7c3aed',                 bg: 'rgba(124,58,237,0.1)'    },
 }
 
 const IcDownload = () => (
@@ -125,16 +126,18 @@ export default function Reports() {
     present: logs.filter(l => l.status === 'present').length,
     late:    logs.filter(l => l.status === 'late').length,
     absent:  logs.filter(l => l.status === 'absent').length,
+    excused: logs.filter(l => l.status === 'excused').length,
   }
 
   const summaryRows = (() => {
     const map = {}
     logs.forEach(l => {
       const key = `${l.grade_level || '—'}__${l.room_number || '—'}`
-      if (!map[key]) map[key] = { grade_level: l.grade_level || '—', room_number: l.room_number || '—', present: 0, late: 0, absent: 0 }
+      if (!map[key]) map[key] = { grade_level: l.grade_level || '—', room_number: l.room_number || '—', present: 0, late: 0, absent: 0, excused: 0 }
       if (l.status === 'present') map[key].present++
       else if (l.status === 'late') map[key].late++
       else if (l.status === 'absent') map[key].absent++
+      else if (l.status === 'excused') map[key].excused++
     })
     return Object.values(map).sort((a, b) => {
       const ga = a.grade_level, gb = b.grade_level
@@ -249,6 +252,7 @@ export default function Reports() {
             { label: `มาเรียน ${totals.present}`, color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
             { label: `มาสาย ${totals.late}`,      color: 'var(--fc-warning)',       bg: 'var(--fc-warning-light)' },
             { label: `ขาดเรียน ${totals.absent}`, color: 'var(--fc-danger)',        bg: 'var(--fc-danger-light)'  },
+            ...(totals.excused > 0 ? [{ label: `ลา ${totals.excused}`, color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' }] : []),
             { label: `ทั้งหมด ${logs.length}`,    color: 'var(--fc-primary)',       bg: 'var(--fc-primary-light)' },
           ].map(s => (
             <span key={s.label} className="chip" style={{ background: s.bg, color: s.color, fontSize: 13, padding: '5px 12px' }}>
@@ -294,13 +298,14 @@ export default function Reports() {
                   <th style={{ color: 'var(--fc-success-dark)' }}>มาเรียน</th>
                   <th style={{ color: 'var(--fc-warning)' }}>มาสาย</th>
                   <th style={{ color: 'var(--fc-danger)' }}>ขาดเรียน</th>
+                  <th style={{ color: '#7c3aed' }}>ลา</th>
                   <th>รวม</th>
                   <th>อัตรามา</th>
                 </tr>
               </thead>
               <tbody>
                 {summaryRows.map(row => {
-                  const total = row.present + row.late + row.absent
+                  const total = row.present + row.late + row.absent + row.excused
                   const rate  = total > 0 ? Math.round(((row.present + row.late) / total) * 100) : 0
                   return (
                     <tr key={`${row.grade_level}-${row.room_number}`}>
@@ -320,6 +325,12 @@ export default function Reports() {
                       <td>
                         {row.absent > 0
                           ? <span className="chip" style={{ background: 'var(--fc-danger-light)', color: 'var(--fc-danger)' }}>{row.absent}</span>
+                          : <span style={{ color: 'var(--fc-text-4)', fontSize: 12 }}>—</span>
+                        }
+                      </td>
+                      <td>
+                        {row.excused > 0
+                          ? <span className="chip" style={{ background: 'rgba(124,58,237,0.1)', color: '#7c3aed' }}>{row.excused}</span>
                           : <span style={{ color: 'var(--fc-text-4)', fontSize: 12 }}>—</span>
                         }
                       </td>
@@ -385,7 +396,7 @@ export default function Reports() {
                             <td key={d} style={{ textAlign: 'center', padding: '6px 4px' }}>
                               {cfg
                                 ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 12, background: cfg.bg, color: cfg.color }}>
-                                    {s === 'present' ? 'ม' : s === 'late' ? 'ส' : 'ข'}
+                                    {s === 'present' ? 'ม' : s === 'late' ? 'ส' : s === 'excused' ? 'ล' : 'ข'}
                                   </span>
                                 : <span style={{ fontSize: 11, color: 'var(--fc-border)' }}>—</span>
                               }
@@ -448,6 +459,9 @@ export default function Reports() {
                       </td>
                       <td>
                         <span className="chip" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+                        {log.status === 'excused' && log.reason && (
+                          <span style={{ fontSize: 11, color: '#7c3aed', marginLeft: 6, fontStyle: 'italic' }}>{log.reason}</span>
+                        )}
                       </td>
                     </tr>
                   )

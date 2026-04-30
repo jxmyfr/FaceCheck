@@ -38,32 +38,75 @@ const STATUS_MAP = {
   present: { label: 'มาเรียน', color: 'var(--fc-success)', bg: 'rgba(16,185,129,0.1)' },
   late:    { label: 'สาย',     color: 'var(--fc-warning)', bg: 'rgba(245,158,11,0.1)' },
   absent:  { label: 'ขาด',    color: 'var(--fc-danger)',  bg: 'rgba(239,68,68,0.1)' },
+  excused: { label: 'ลา',     color: '#7c3aed',           bg: 'rgba(124,58,237,0.1)' },
 }
 
-function StatusBadge({ status, logId, onUpdate }) {
+function StatusBadge({ status, reason, logId, onUpdate }) {
   const [open, setOpen] = useState(false)
+  const [excuseMode, setExcuseMode] = useState(false)
+  const [excuseReason, setExcuseReason] = useState('')
   const s = STATUS_MAP[status]
+
+  const handleSelect = (v) => {
+    if (v === 'excused') { setExcuseMode(true); setExcuseReason('') }
+    else { onUpdate(logId, v); setOpen(false) }
+  }
+
+  const confirmExcuse = () => {
+    onUpdate(logId, 'excused', excuseReason)
+    setOpen(false); setExcuseMode(false)
+  }
+
   return (
     <div style={{position:'relative',display:'inline-block'}}>
-      <span
-        onClick={e=>{e.stopPropagation();setOpen(o=>!o)}}
-        style={{
-          fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,cursor:'pointer',
-          background: s?.bg || 'var(--fc-muted)',
-          color: s?.color || 'var(--fc-text-3)',
-        }}
-      >{s?.label || '—'}</span>
+      <div>
+        <span
+          onClick={e=>{e.stopPropagation();setOpen(o=>!o);setExcuseMode(false)}}
+          style={{
+            fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,cursor:'pointer',
+            background: s?.bg || 'var(--fc-muted)',
+            color: s?.color || 'var(--fc-text-3)',
+          }}
+        >{s?.label || '—'}</span>
+        {status === 'excused' && reason && (
+          <span style={{fontSize:10,color:'#7c3aed',marginLeft:4,fontStyle:'italic'}}>{reason}</span>
+        )}
+      </div>
       {open && (
         <div
-          style={{position:'absolute',top:'110%',left:0,zIndex:50,background:'var(--fc-card)',border:'1px solid var(--fc-border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.12)',padding:4,minWidth:100}}
+          style={{position:'absolute',top:'110%',left:0,zIndex:50,background:'#ffffff',border:'1px solid var(--fc-border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.12)',padding:4,minWidth:130}}
           onClick={e=>e.stopPropagation()}
         >
-          {Object.entries(STATUS_MAP).map(([v,{label,color}])=>(
-            <button key={v}
-              onClick={()=>{onUpdate(logId,v);setOpen(false)}}
-              style={{display:'block',width:'100%',textAlign:'left',padding:'6px 10px',fontSize:12,color,fontWeight:600,background:'none',border:'none',cursor:'pointer',borderRadius:6}}
-            >{label}</button>
-          ))}
+          {!excuseMode ? (
+            Object.entries(STATUS_MAP).map(([v,{label,color}])=>(
+              <button key={v}
+                onClick={()=>handleSelect(v)}
+                style={{display:'block',width:'100%',textAlign:'left',padding:'6px 10px',fontSize:12,color,fontWeight:600,background:'none',border:'none',cursor:'pointer',borderRadius:6}}
+              >{label}</button>
+            ))
+          ) : (
+            <div style={{padding:'8px 10px',minWidth:180}}>
+              <div style={{fontSize:11,color:'var(--fc-text-3)',marginBottom:6}}>ระบุเหตุผลการลา</div>
+              <input
+                autoFocus
+                value={excuseReason}
+                onChange={e=>setExcuseReason(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') confirmExcuse() }}
+                placeholder="เช่น ป่วย, ธุระสำคัญ"
+                style={{width:'100%',fontSize:12,padding:'4px 8px',borderRadius:6,border:'1px solid var(--fc-border)',boxSizing:'border-box'}}
+              />
+              <div style={{display:'flex',gap:6,marginTop:8}}>
+                <button onClick={()=>setExcuseMode(false)}
+                  style={{flex:1,padding:'4px 0',fontSize:11,borderRadius:6,border:'1px solid var(--fc-border)',background:'none',cursor:'pointer'}}>
+                  ยกเลิก
+                </button>
+                <button onClick={confirmExcuse}
+                  style={{flex:1,padding:'4px 0',fontSize:11,borderRadius:6,border:'none',background:'#7c3aed',color:'#fff',cursor:'pointer',fontWeight:600}}>
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -356,11 +399,14 @@ export default function Admin() {
     } catch (e) { flash(e.response?.data?.detail || 'เกิดข้อผิดพลาด', 'error') }
   }
 
-  const updateLogStatus = async (logId, status) => {
+  const updateLogStatus = async (logId, status, reason = '') => {
     try {
-      await axios.patch(`${API}/attendance/logs/${logId}?status=${status}`)
-      setLogs(prev => prev.map(l => l.log_id === logId ? { ...l, status } : l))
-      if (logDetail?.log_id === logId) setLogDetail(d => ({ ...d, status }))
+      const params = new URLSearchParams({ status })
+      if (status === 'excused' && reason) params.append('reason', reason)
+      await axios.patch(`${API}/attendance/logs/${logId}?${params}`)
+      const newReason = status === 'excused' ? reason : null
+      setLogs(prev => prev.map(l => l.log_id === logId ? { ...l, status, reason: newReason } : l))
+      if (logDetail?.log_id === logId) setLogDetail(d => ({ ...d, status, reason: newReason }))
       flash('อัปเดตสถานะสำเร็จ')
     } catch (e) { flash(e.response?.data?.detail || 'อัปเดตไม่สำเร็จ', 'error') }
   }
@@ -743,7 +789,7 @@ export default function Admin() {
                         <span style={{fontSize:12,color:'var(--fc-text-3)',marginLeft:6}}>{log.subject_name}</span>
                       </td>
                       <td onClick={e=>e.stopPropagation()}>
-                        <StatusBadge status={log.status} logId={log.log_id} onUpdate={updateLogStatus}/>
+                        <StatusBadge status={log.status} reason={log.reason} logId={log.log_id} onUpdate={updateLogStatus}/>
                       </td>
                       <td onClick={e=>e.stopPropagation()}>
                         <button className="btn btn-danger btn-sm" onClick={()=>deleteLog(log.log_id)}>ยกเลิก</button>
@@ -1263,13 +1309,26 @@ export default function Admin() {
                   <span style={{fontSize:13,color:'var(--fc-text-2)',fontWeight:600,fontVariantNumeric:'tabular-nums'}}>{logDetail.timestamp}</span>
                 </div>
               </div>
-              <div style={{marginTop:20}}>
+              <div style={{marginTop:16}}>
                 <div style={{fontSize:12,fontWeight:600,color:'var(--fc-text-4)',marginBottom:8}}>เปลี่ยนสถานะ</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                  {[{v:'present',l:'มาเรียน',c:'var(--fc-success)'},{v:'late',l:'สาย',c:'var(--fc-warning)'},{v:'absent',l:'ขาด',c:'var(--fc-danger)'}].map(({v,l,c})=>(
+                  {[
+                    {v:'present', l:'มาเรียน', c:'var(--fc-success)'},
+                    {v:'late',    l:'มาสาย',   c:'var(--fc-warning)'},
+                    {v:'absent',  l:'ขาดเรียน',c:'var(--fc-danger)'},
+                    {v:'excused', l:'ลา',      c:'#7c3aed'},
+                  ].map(({v,l,c})=>(
                     <button key={v}
                       className="btn btn-sm"
-                      onClick={()=>updateLogStatus(logDetail.log_id, v)}
+                      onClick={()=>{
+                        if (v === 'excused') {
+                          const r = window.prompt('ระบุเหตุผลการลา (เว้นว่างได้):','')
+                          if (r === null) return
+                          updateLogStatus(logDetail.log_id, v, r)
+                        } else {
+                          updateLogStatus(logDetail.log_id, v)
+                        }
+                      }}
                       style={{
                         background: logDetail.status === v ? c : 'var(--fc-muted)',
                         color: logDetail.status === v ? '#fff' : 'var(--fc-text-3)',
@@ -1279,6 +1338,11 @@ export default function Admin() {
                     >{l}</button>
                   ))}
                 </div>
+                {logDetail.status === 'excused' && logDetail.reason && (
+                  <div style={{marginTop:8,fontSize:12,color:'#7c3aed',fontStyle:'italic'}}>
+                    เหตุผล: {logDetail.reason}
+                  </div>
+                )}
               </div>
               <div style={{display:'flex',gap:8,marginTop:16}}>
                 <button className="btn btn-danger btn-full" onClick={()=>{deleteLog(logDetail.log_id);closeLogDetail()}}>

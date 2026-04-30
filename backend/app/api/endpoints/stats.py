@@ -280,6 +280,7 @@ def get_student_attendance(
             AttendanceLog.id,
             AttendanceLog.timestamp,
             AttendanceLog.status,
+            AttendanceLog.reason,
             func.coalesce(func.length(AttendanceLog.scan_image), 0).label("scan_len"),
             Subject.subject_code,
             Subject.subject_name,
@@ -301,6 +302,7 @@ def get_student_attendance(
             "date":           str(r.timestamp.date()),
             "time":           r.timestamp.strftime("%H:%M"),
             "status":         r.status,
+            "reason":         r.reason,
             "subject_code":   r.subject_code,
             "subject_name":   r.subject_name,
         }

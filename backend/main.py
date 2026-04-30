@@ -23,6 +23,7 @@ _MIGRATIONS = [
     "ALTER TABLE semester_settings ADD COLUMN min_det_score REAL DEFAULT 0.65",
     "ALTER TABLE semester_settings ADD COLUMN min_face_ratio REAL DEFAULT 0.08",
     "ALTER TABLE semester_settings ADD COLUMN min_blur_score REAL DEFAULT 40.0",
+    "ALTER TABLE attendance_logs ADD COLUMN reason VARCHAR(200)",
 ]
 
 if os.getenv("DATABASE_URL"):
@@ -52,8 +53,8 @@ app = FastAPI(title="FaceCheck API")
 # 2. ตั้งค่า CORS (สำคัญมากเพื่อให้ React คุยกับ API ได้)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", os.getenv("FRONTEND_URL", "")],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

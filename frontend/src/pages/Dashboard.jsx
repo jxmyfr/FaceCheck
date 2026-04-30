@@ -58,14 +58,22 @@ const IcChevronRight = ({ color = '#D1D5DB', size = 16 }) => (
 )
 
 // ── Components ─────────────────────────────────────────────────
-function Chip({ status }) {
+function Chip({ status, reason }) {
   const map = {
     present: [{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)' }, 'มาเรียน'],
     absent:  [{ background: 'var(--fc-danger-light)',  color: 'var(--fc-danger)'       }, 'ขาดเรียน'],
     late:    [{ background: 'var(--fc-warning-light)', color: 'var(--fc-warning)'      }, 'มาสาย'],
+    excused: [{ background: 'rgba(124,58,237,0.1)',    color: '#7c3aed'                }, 'ลา'],
   }
   const [style, label] = map[status] ?? [{ background: 'rgba(0,0,0,0.06)', color: 'var(--fc-text-3)' }, status]
-  return <span className="chip" style={style}>{label}</span>
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span className="chip" style={style}>{label}</span>
+      {status === 'excused' && reason && (
+        <span style={{ fontSize: 10, color: '#7c3aed', fontStyle: 'italic' }}>{reason}</span>
+      )}
+    </span>
+  )
 }
 
 function StatCard({ label, value, color, sub, icon }) {
@@ -519,6 +527,58 @@ export default function Dashboard() {
   const [drillStudents, setDrillStudents] = useState([])
   const [studentDetail, setStudentDetail] = useState(null)
   const [drillLoading, setDrillLoading]   = useState(false)
+
+  // Log detail modal
+  const [logModal, setLogModal]             = useState(null)
+  const [logModalUrl, setLogModalUrl]       = useState(null)
+  const [logModalLoading, setLogModalLoading] = useState(false)
+  const API_ATTEND = import.meta.env.VITE_API_URL + '/attendance'
+
+  const openLogModal = async (r) => {
+    setLogModal(r)
+    setLogModalUrl(null)
+    if (r.has_scan_image && r.log_id) {
+      setLogModalLoading(true)
+      try {
+        const res = await axios.get(`${API_ATTEND}/logs/${r.log_id}/image`, { responseType: 'blob' })
+        setLogModalUrl(URL.createObjectURL(res.data))
+      } catch {}
+      finally { setLogModalLoading(false) }
+    }
+  }
+
+  const closeLogModal = () => {
+    if (logModalUrl) URL.revokeObjectURL(logModalUrl)
+    setLogModal(null)
+    setLogModalUrl(null)
+  }
+
+  const updateLogModalStatus = async (logId, status, reason = '') => {
+    try {
+      const params = new URLSearchParams({ status })
+      if (status === 'excused' && reason) params.append('reason', reason)
+      await axios.patch(`${API_ATTEND}/logs/${logId}?${params}`)
+      const newReason = status === 'excused' ? reason : null
+      setLogModal(d => ({ ...d, status, reason: newReason }))
+      if (studentDetail) {
+        setStudentDetail(d => ({
+          ...d,
+          records: d.records.map(r => r.log_id === logId ? { ...r, status, reason: newReason } : r)
+        }))
+      }
+    } catch {}
+  }
+
+  const deleteLogModal = async (logId) => {
+    if (!window.confirm('ยืนยันการยกเลิกการเช็คชื่อนี้?')) return
+    try {
+      await axios.delete(`${API_ATTEND}/logs/${logId}`)
+      if (studentDetail) {
+        setStudentDetail(d => ({ ...d, records: d.records.filter(r => r.log_id !== logId) }))
+      }
+      closeLogModal()
+    } catch {}
+  }
 
   const load = useCallback(async () => {
     try {
@@ -1086,7 +1146,12 @@ export default function Dashboard() {
                       </thead>
                       <tbody>
                         {studentDetail.records.map((r, i) => (
-                          <tr key={i}>
+                          <tr key={i}
+                            onClick={() => openLogModal(r)}
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--fc-muted)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
                             <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fc-text-2)' }}>
                               {new Date(r.date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
                             </td>
@@ -1095,7 +1160,12 @@ export default function Dashboard() {
                               <div style={{ fontSize: 11, color: 'var(--fc-text-4)', fontFamily: 'var(--fc-font-mono)' }}>{r.subject_code}</div>
                             </td>
                             <td style={{ color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>{r.time}</td>
-                            <td><Chip status={r.status} /></td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Chip status={r.status} reason={r.reason} />
+                                <IcChevronRight color="var(--fc-border)" size={13} />
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1108,6 +1178,101 @@ export default function Dashboard() {
           ) : null}
         </div>
       </div>
+
+      {/* Log detail modal */}
+      {logModal && (
+        <div className="modal-overlay" onClick={closeLogModal}>
+          <div className="modal" style={{ maxWidth: 420, padding: 0, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            {/* Scan image */}
+            <div style={{ background: '#111', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+              {logModal.has_scan_image ? (
+                logModalLoading ? (
+                  <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: '#fff' }} />
+                ) : logModalUrl ? (
+                  <img src={logModalUrl} alt="รูปสแกน"
+                    style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block' }} />
+                ) : (
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>โหลดรูปไม่สำเร็จ</span>
+                )
+              ) : (
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>ไม่มีรูปสแกน</span>
+              )}
+              <button onClick={closeLogModal} style={{
+                position: 'absolute', top: 10, right: 10,
+                width: 30, height: 30, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)', color: '#fff',
+                border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: '30px', textAlign: 'center', padding: 0,
+              }}>✕</button>
+            </div>
+
+            {/* Info */}
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--fc-text)', marginBottom: 4 }}>{logModal.subject_name}</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--fc-font-mono)', color: 'var(--fc-text-4)', marginBottom: 16 }}>{logModal.subject_code}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>วันที่</div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                    {new Date(logModal.date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>เวลา</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{logModal.time} น.</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>สถานะ</div>
+                  <Chip status={logModal.status} reason={logModal.reason} />
+                </div>
+                {logModal.status === 'excused' && logModal.reason && (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 3 }}>เหตุผล</div>
+                    <div style={{ fontSize: 13, color: '#7c3aed', fontStyle: 'italic' }}>{logModal.reason}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Admin actions */}
+              {user?.role === 'admin' && logModal.log_id && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-4)', marginBottom: 8 }}>เปลี่ยนสถานะ</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {[
+                      { v: 'present', l: 'มาเรียน', c: 'var(--fc-success)' },
+                      { v: 'late',    l: 'มาสาย',   c: 'var(--fc-warning)' },
+                      { v: 'absent',  l: 'ขาดเรียน',c: 'var(--fc-danger)'  },
+                      { v: 'excused', l: 'ลา',      c: '#7c3aed'           },
+                    ].map(({ v, l, c }) => (
+                      <button key={v}
+                        className="btn btn-sm"
+                        onClick={() => {
+                          if (v === 'excused') {
+                            const r = window.prompt('ระบุเหตุผลการลา (เว้นว่างได้):', '')
+                            if (r === null) return
+                            updateLogModalStatus(logModal.log_id, v, r)
+                          } else {
+                            updateLogModalStatus(logModal.log_id, v)
+                          }
+                        }}
+                        style={{
+                          background: logModal.status === v ? c : 'var(--fc-muted)',
+                          color: logModal.status === v ? '#fff' : 'var(--fc-text-3)',
+                          border: `1px solid ${logModal.status === v ? c : 'var(--fc-border)'}`,
+                          fontWeight: logModal.status === v ? 600 : 400,
+                        }}
+                      >{l}</button>
+                    ))}
+                  </div>
+                  <button className="btn btn-danger btn-full btn-sm"
+                    onClick={() => deleteLogModal(logModal.log_id)}>
+                    ยกเลิกการเช็คชื่อ
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   )
