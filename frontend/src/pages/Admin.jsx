@@ -186,6 +186,24 @@ export default function Admin() {
   const [semester, setSemester]     = useState({ name: '', term_start: '', term_end: '', face_threshold: 1.0 })
   const [semSaving, setSemSaving]   = useState(false)
 
+  // Audit log state
+  const [auditLogs, setAuditLogs]     = useState([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditTotal, setAuditTotal]   = useState(0)
+  const [auditOffset, setAuditOffset] = useState(0)
+  const AUDIT_LIMIT = 50
+
+  const loadAuditLogs = async (offset = 0) => {
+    setAuditLoading(true)
+    try {
+      const res = await axios.get(`${API}/audit/logs?limit=${AUDIT_LIMIT}&offset=${offset}`)
+      setAuditLogs(res.data.logs || [])
+      setAuditTotal(res.data.total || 0)
+      setAuditOffset(offset)
+    } catch {}
+    finally { setAuditLoading(false) }
+  }
+
   // Attendance log state
   const [logs, setLogs]             = useState([])
   const [logDate, setLogDate]       = useState(() => new Date().toISOString().slice(0, 10))
@@ -514,6 +532,9 @@ export default function Admin() {
         </button>
         <button className={`tab-item ${tab==='semester'?'active':''}`} onClick={()=>setTab('semester')}>
           ภาคเรียน
+        </button>
+        <button className={`tab-item ${tab==='audit'?'active':''}`} onClick={()=>{ setTab('audit'); loadAuditLogs(0) }}>
+          Audit Log
         </button>
       </div>
 
@@ -1573,6 +1594,106 @@ export default function Admin() {
             <button className="btn btn-primary btn-full" onClick={createSub}>เพิ่มวิชา</button>
           </div>
         </Modal>
+      )}
+
+      {/* Audit Log tab */}
+      {tab === 'audit' && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--fc-border)' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-text)' }}>ประวัติการเปลี่ยนแปลง</div>
+              <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 2 }}>รวม {auditTotal} รายการ</div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => loadAuditLogs(0)}>รีเฟรช</button>
+          </div>
+          {auditLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+              <div className="spinner" />
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '48px 0', fontSize: 13 }}>
+              ยังไม่มีประวัติการเปลี่ยนแปลง
+            </div>
+          ) : (
+            <>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>เวลา</th>
+                    <th>การกระทำ</th>
+                    <th>ผู้แก้ไข</th>
+                    <th>นักเรียน</th>
+                    <th>วิชา</th>
+                    <th>สถานะเดิม</th>
+                    <th>สถานะใหม่</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map(r => {
+                    const ACTION_CLR = { status_change: '#1A56DB', delete: '#DC2626', create: '#16A34A' }
+                    const S = STATUS_MAP
+                    return (
+                      <tr key={r.id}>
+                        <td style={{ fontSize: 11, color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                          <div>{r.log_date}</div>
+                          <div>{new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+                        </td>
+                        <td>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                            background: `${ACTION_CLR[r.action] || '#666'}18`,
+                            color: ACTION_CLR[r.action] || 'var(--fc-text-3)',
+                          }}>
+                            {r.action_label}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--fc-text-2)' }}>{r.changed_by_name}</td>
+                        <td>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{r.student_name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--fc-text-4)', fontFamily: 'var(--fc-font-mono)' }}>{r.student_id}</div>
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--fc-text-3)' }}>
+                          <div>{r.subject_name}</div>
+                          <div style={{ fontSize: 11, fontFamily: 'var(--fc-font-mono)', color: 'var(--fc-text-4)' }}>{r.subject_code}</div>
+                        </td>
+                        <td>
+                          {r.old_status && (
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: S[r.old_status]?.bg, color: S[r.old_status]?.color }}>
+                              {S[r.old_status]?.label || r.old_status}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {r.new_status && (
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: S[r.new_status]?.bg, color: S[r.new_status]?.color }}>
+                              {S[r.new_status]?.label || r.new_status}
+                            </span>
+                          )}
+                          {r.reason && <span style={{ fontSize: 10, color: '#7c3aed', marginLeft: 6, fontStyle: 'italic' }}>{r.reason}</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {auditTotal > AUDIT_LIMIT && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 0', borderTop: '1px solid var(--fc-border)' }}>
+                <button className="btn btn-ghost btn-sm" disabled={auditOffset === 0} onClick={() => loadAuditLogs(Math.max(0, auditOffset - AUDIT_LIMIT))}>
+                  ← ก่อนหน้า
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>
+                  {auditOffset + 1}–{Math.min(auditOffset + AUDIT_LIMIT, auditTotal)} / {auditTotal}
+                </span>
+                <button className="btn btn-ghost btn-sm" disabled={auditOffset + AUDIT_LIMIT >= auditTotal} onClick={() => loadAuditLogs(auditOffset + AUDIT_LIMIT)}>
+                  ถัดไป →
+                </button>
+              </div>
+            )}
+            </>
+          )}
+        </div>
       )}
     </main>
   )

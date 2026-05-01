@@ -9,6 +9,7 @@ import Admin from './Admin'
 import Students from './Students'
 import StudentDetail from './StudentDetail'
 import Reports from './Reports'
+import QRCheckin from './QRCheckin'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -44,6 +45,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/checkin" element={<QRCheckin />} />
         <Route path="/*" element={<Layout />} />
       </Routes>
     </AuthProvider>

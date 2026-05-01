@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 
 const API = `${import.meta.env.VITE_API_URL}/stats`
+const API_ATTEND = `${import.meta.env.VITE_API_URL}/attendance`
 const pct = (v, t) => (t > 0 ? Math.round((v / t) * 100) : 0)
 const fmt = (n) => Number(n).toLocaleString('th-TH')
 const DAY = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
@@ -216,6 +217,7 @@ function TeacherDashboard() {
   const [dl30, setDl30]       = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshed, setRefreshed] = useState(new Date())
+  const [todaySched, setTodaySched] = useState([])
 
   // drill-down state: null = subjects, {subject} = rooms, {subject,room} = students
   const [selSubject, setSelSubject] = useState(null)
@@ -227,12 +229,14 @@ function TeacherDashboard() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [a, b] = await Promise.all([
+      const [a, b, c] = await Promise.all([
         axios.get(`${API}/teacher-overview`).then(r => r.data),
         axios.get(`${API}/daily?days=30`).then(r => r.data).catch(() => []),
+        axios.get(`${API_ATTEND}/today-schedules`).then(r => r.data).catch(() => []),
       ])
       setOv(a)
       setDl30(Array.isArray(b) ? b : [])
+      setTodaySched(Array.isArray(c) ? c : [])
     } catch { setOv(null) }
     finally { setLoading(false) }
   }, [])
@@ -283,6 +287,49 @@ function TeacherDashboard() {
           <IcRefresh /> รีเฟรช
         </button>
       </div>
+
+      {/* Today's schedule */}
+      {todaySched.length > 0 && (
+        <div className="card" style={{ marginBottom: 20, padding: '16px 20px' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+            ตารางสอนวันนี้
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {todaySched.map(sc => (
+              <div key={sc.schedule_id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 10,
+                background: sc.is_now ? 'var(--fc-primary-light)' : 'var(--fc-muted)',
+                border: sc.is_now ? '1px solid var(--fc-primary)' : '1px solid transparent',
+                minWidth: 220,
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                  background: sc.is_now ? 'var(--fc-primary)' : 'var(--fc-text-4)',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: sc.is_now ? 'var(--fc-primary)' : 'var(--fc-text)', lineHeight: 1.3 }}>
+                    {sc.subject_code} {sc.subject_name}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>
+                    {sc.time_start}–{sc.time_end}
+                    {sc.grade_level && ` · ม.${sc.grade_level}`}
+                    {sc.room_number && ` ห้อง ${sc.room_number}`}
+                    {sc.is_now && <span style={{ marginLeft: 6, fontWeight: 700, color: 'var(--fc-primary)' }}>● กำลังสอน</span>}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => navigate('/scan')}
+                  style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
+                >
+                  สแกน
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI row */}
       {ov && (

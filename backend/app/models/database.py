@@ -112,6 +112,26 @@ class SemesterSetting(Base):
     min_blur_score: Mapped[float] = mapped_column(default=40.0)
 
 
+class AttendanceAuditLog(Base):
+    """บันทึก audit trail การเปลี่ยนแปลงสถานะการเช็คชื่อ"""
+    __tablename__ = "attendance_audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    log_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    action: Mapped[str] = mapped_column(String(30))  # "status_change" | "delete" | "create"
+    changed_by_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_by_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    old_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    new_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    student_id_str: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    student_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    subject_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    subject_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    log_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
+
 import os
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 

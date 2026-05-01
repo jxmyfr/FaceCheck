@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import Webcam from 'react-webcam'
 import axios from 'axios'
+import { QRCodeCanvas } from 'qrcode.react'
 import { useDialog } from '../hooks/useDialog'
 import { useAuth } from '../hooks/useAuth'
 
@@ -492,6 +493,34 @@ export default function Scanner() {
     setLogs(prev => prev.filter(l => l.logId !== logId && l.log_id !== logId))
   }
 
+  // QR Code state
+  const [qrData, setQrData]       = useState(null)   // { token, subject_name, expires_at }
+  const [qrLoading, setQrLoading] = useState(false)
+  const [showQr, setShowQr]       = useState(false)
+  const [qrSecondsLeft, setQrSecondsLeft] = useState(0)
+
+  const handleGenerateQr = async () => {
+    if (!subjectId || qrLoading) return
+    setQrLoading(true)
+    try {
+      const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
+      const url = `${API}/attendance/subjects/${subjectId}/qr-session${activeSchedId ? `?schedule_id=${activeSchedId}` : ''}`
+      const res = await axios.post(url)
+      setQrData(res.data)
+      setQrSecondsLeft(30 * 60)
+      setShowQr(true)
+    } catch (e) {
+      await alert(e.response?.data?.detail || 'สร้าง QR Code ไม่สำเร็จ')
+    } finally { setQrLoading(false) }
+  }
+
+  // QR countdown timer
+  useEffect(() => {
+    if (!showQr || qrSecondsLeft <= 0) return
+    const t = setInterval(() => setQrSecondsLeft(s => s - 1), 1000)
+    return () => clearInterval(t)
+  }, [showQr, qrSecondsLeft])
+
   // Mark absent
   const [markingAbsent, setMarkingAbsent] = useState(false)
   const [absentResult, setAbsentResult]   = useState(null) // { marked_absent, total_students }
@@ -893,6 +922,30 @@ export default function Scanner() {
                   }
                 </div>
               )}
+
+              {/* QR Code button */}
+              <button
+                onClick={handleGenerateQr}
+                disabled={!subjectId || qrLoading}
+                style={{
+                  marginTop: 8,
+                  width: '100%', padding: '8px 16px', borderRadius: 8,
+                  border: '1px solid var(--fc-primary)',
+                  background: 'transparent', color: 'var(--fc-primary)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  opacity: (!subjectId || qrLoading) ? 0.5 : 1,
+                }}
+              >
+                {qrLoading
+                  ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderColor: 'rgba(26,86,219,0.3)', borderTopColor: 'var(--fc-primary)' }} />
+                  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
+                    </svg>
+                }
+                QR Code สำรอง
+              </button>
             </div>
           </div>
         </div>
@@ -1048,6 +1101,56 @@ export default function Scanner() {
         </div>
       </div>
       </div>
+
+      {/* QR Code modal */}
+      {showQr && qrData && (() => {
+        const qrUrl = `${window.location.origin}/checkin?token=${qrData.token}`
+        const mins = Math.floor(qrSecondsLeft / 60)
+        const secs = qrSecondsLeft % 60
+        const expired = qrSecondsLeft <= 0
+        return (
+          <div className="modal-overlay" onClick={() => setShowQr(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center' }}>
+              <div className="modal-title">QR Code สำหรับเช็คชื่อ</div>
+              <div style={{ fontSize: 13, color: 'var(--fc-text-3)', marginBottom: 4 }}>{qrData.subject_name}</div>
+              <div style={{
+                fontSize: 13, fontWeight: 600,
+                color: expired ? 'var(--fc-danger)' : qrSecondsLeft < 120 ? 'var(--fc-warning)' : 'var(--fc-success-dark)',
+                marginBottom: 20,
+              }}>
+                {expired ? 'หมดอายุแล้ว' : `หมดอายุใน ${mins}:${String(secs).padStart(2, '0')}`}
+              </div>
+              {!expired ? (
+                <>
+                  <div style={{
+                    display: 'inline-block', padding: 16,
+                    background: '#fff', borderRadius: 12,
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+                    marginBottom: 16,
+                  }}>
+                    <QRCodeCanvas value={qrUrl} size={200} />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 20 }}>
+                    นักเรียนสแกน QR ด้วยกล้องมือถือแล้วกรอกรหัสนักเรียน
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '32px 0', color: 'var(--fc-text-4)', fontSize: 13 }}>
+                  QR Code หมดอายุแล้ว กรุณาสร้างใหม่
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {expired && (
+                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => { setShowQr(false); handleGenerateQr() }}>
+                    สร้าง QR ใหม่
+                  </button>
+                )}
+                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setShowQr(false)}>ปิด</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Log detail modal */}
       {logDetail && (() => {

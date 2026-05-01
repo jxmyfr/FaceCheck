@@ -7,7 +7,7 @@ from sqlalchemy import func
 from datetime import date, datetime
 from typing import Optional
 
-from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding
+from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding, AttendanceAuditLog
 from app.models.user import User, TeacherSubject
 from app.services.face_proc import FaceProcessor
 from app.core.dependencies import require_teacher_or_admin, require_admin, get_current_user
@@ -431,7 +431,7 @@ def update_log_status(
     status: str = Query(..., description="present | late | absent | excused"),
     reason: str = Query(None, description="เหตุผล (สำหรับ excused)"),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
     """แก้ไขสถานะการเช็คชื่อ"""
     if status not in ("present", "late", "absent", "excused"):
@@ -439,8 +439,23 @@ def update_log_status(
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+    old_status = log.status
     log.status = status
     log.reason = reason if status == "excused" else None
+    db.add(AttendanceAuditLog(
+        log_id=log.id,
+        action="status_change",
+        changed_by_id=current_user.id,
+        changed_by_name=current_user.full_name,
+        old_status=old_status,
+        new_status=status,
+        reason=reason if status == "excused" else None,
+        student_id_str=log.student.student_id,
+        student_name=f"{log.student.first_name} {log.student.last_name}",
+        subject_code=log.subject.subject_code,
+        subject_name=log.subject.subject_name,
+        log_date=log.timestamp.date(),
+    ))
     db.commit()
     return {"log_id": log_id, "status": status, "reason": log.reason}
 
@@ -449,11 +464,24 @@ def update_log_status(
 def delete_log(
     log_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+    db.add(AttendanceAuditLog(
+        log_id=log.id,
+        action="delete",
+        changed_by_id=current_user.id,
+        changed_by_name=current_user.full_name,
+        old_status=log.status,
+        student_id_str=log.student.student_id,
+        student_name=f"{log.student.first_name} {log.student.last_name}",
+        subject_code=log.subject.subject_code,
+        subject_name=log.subject.subject_name,
+        log_date=log.timestamp.date(),
+    ))
+    db.commit()
     db.delete(log)
     db.commit()
 
@@ -601,3 +629,155 @@ def delete_subject(
     db.query(TeacherSubject).filter(TeacherSubject.subject_id == subject_id).delete()
     db.delete(subject)
     db.commit()
+
+
+@router.get("/today-schedules")
+def get_today_schedules(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """ตารางสอนทั้งหมดของวันนี้ (สำหรับ Teacher Dashboard)"""
+    DAY_MAP = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+    now = datetime.now()
+    today_day = DAY_MAP[now.weekday()]
+    now_minutes = now.hour * 60 + now.minute
+
+    if current_user.role == "teacher":
+        subj_list = (
+            db.query(Subject)
+            .join(TeacherSubject, TeacherSubject.subject_id == Subject.id)
+            .filter(TeacherSubject.teacher_id == current_user.id)
+            .all()
+        )
+    else:
+        subj_list = db.query(Subject).all()
+
+    results = []
+    for s in subj_list:
+        for sc in s.schedules:
+            if sc.day_of_week != today_day:
+                continue
+            try:
+                sh, sm = map(int, sc.time_start.split(':'))
+                eh, em = map(int, sc.time_end.split(':'))
+                start_min = sh * 60 + sm
+                end_min   = eh * 60 + em
+                is_now = start_min - 10 <= now_minutes <= end_min + 10
+            except Exception:
+                is_now = False
+            results.append({
+                "schedule_id":  sc.id,
+                "subject_id":   s.id,
+                "subject_code": s.subject_code,
+                "subject_name": s.subject_name,
+                "time_start":   sc.time_start,
+                "time_end":     sc.time_end,
+                "grade_level":  sc.grade_level,
+                "room_number":  sc.room_number,
+                "is_now":       is_now,
+            })
+    results.sort(key=lambda x: x["time_start"])
+    return results
+
+
+@router.post("/subjects/{subject_id}/qr-session")
+def create_qr_session(
+    subject_id: int,
+    schedule_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """สร้าง QR token สำหรับเช็คชื่อด้วย QR Code (อายุ 30 นาที)"""
+    from app.core.security import SECRET_KEY, ALGORITHM
+    from jose import jwt as _jwt
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+    if current_user.role == "teacher":
+        assigned = db.query(TeacherSubject).filter_by(
+            teacher_id=current_user.id, subject_id=subject_id
+        ).first()
+        if not assigned:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์จัดการวิชานี้")
+    expire = datetime.utcnow() + __import__("datetime").timedelta(minutes=30)
+    token = _jwt.encode({
+        "subject_id":  subject_id,
+        "schedule_id": schedule_id,
+        "type":        "qr_session",
+        "exp":         expire,
+    }, SECRET_KEY, algorithm=ALGORITHM)
+    return {
+        "token":        token,
+        "expires_at":   expire.isoformat(),
+        "subject_code": subject.subject_code,
+        "subject_name": subject.subject_name,
+    }
+
+
+@router.post("/qr-checkin", status_code=201)
+def qr_checkin(
+    token: str = Query(..., description="QR session token"),
+    student_id_str: str = Query(..., alias="student_id", description="รหัสนักเรียน"),
+    db: Session = Depends(get_db),
+):
+    """นักเรียนเช็คชื่อผ่าน QR Code (ไม่ต้อง login)"""
+    from app.core.security import SECRET_KEY, ALGORITHM
+    from jose import jwt as _jwt, JWTError
+    try:
+        payload = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="QR Code หมดอายุหรือไม่ถูกต้อง")
+    if payload.get("type") != "qr_session":
+        raise HTTPException(status_code=400, detail="Token ประเภทไม่ถูกต้อง")
+
+    subject_id  = payload["subject_id"]
+    schedule_id = payload.get("schedule_id")
+
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+
+    student = db.query(Student).filter(Student.student_id == student_id_str).first()
+    if not student:
+        raise HTTPException(status_code=404, detail=f"ไม่พบนักเรียนรหัส {student_id_str}")
+
+    already = (
+        db.query(AttendanceLog)
+        .filter(
+            AttendanceLog.student_id == student.id,
+            AttendanceLog.subject_id == subject_id,
+            func.date(AttendanceLog.timestamp) == str(date.today()),
+        )
+        .first()
+    )
+    if already:
+        return {
+            "status": "already_checked",
+            "message": f"เช็คชื่อวิชานี้ไปแล้ววันนี้ (เวลา {already.timestamp.strftime('%H:%M')})",
+            "student_name": f"{student.first_name} {student.last_name}",
+            "subject_name": subject.subject_name,
+        }
+
+    now = datetime.now()
+    scan_status = "present"
+    if schedule_id:
+        sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+        if sched and sched.time_start:
+            try:
+                sh, sm = map(int, sched.time_start.split(':'))
+                if now.hour * 60 + now.minute > sh * 60 + sm + 15:
+                    scan_status = "late"
+            except Exception:
+                pass
+
+    log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=scan_status, timestamp=now)
+    db.add(log)
+    db.commit()
+    STATUS_LABEL = {"present": "มาเรียน", "late": "มาสาย"}
+    return {
+        "status":       "success",
+        "scan_status":  scan_status,
+        "message":      STATUS_LABEL.get(scan_status, scan_status),
+        "student_name": f"{student.first_name} {student.last_name}",
+        "subject_name": subject.subject_name,
+    }
