@@ -1,10 +1,11 @@
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # ── ตั้งค่า ──────────────────────────────────────────────────────────────────
-SECRET_KEY = "d4e8f1a2b7c3e9f0a5b2d6e1c8f4a0b3d7e2f5a9b1c6e0f3a8b4d1e7f2a6b0"
+SECRET_KEY = os.getenv("SECRET_KEY", "changeme-set-SECRET_KEY-in-env")
 ALGORITHM  = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES  = 60       # 1 ชั่วโมง
 REFRESH_TOKEN_EXPIRE_DAYS    = 7        # 7 วัน
