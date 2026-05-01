@@ -1104,7 +1104,8 @@ export default function Scanner() {
 
       {/* QR Code modal */}
       {showQr && qrData && (() => {
-        const qrUrl = `${window.location.origin}/checkin?token=${qrData.token}`
+        const appOrigin = import.meta.env.VITE_APP_URL ?? window.location.origin
+        const qrUrl = `${appOrigin}/checkin?token=${qrData.token}`
         const mins = Math.floor(qrSecondsLeft / 60)
         const secs = qrSecondsLeft % 60
         const expired = qrSecondsLeft <= 0
