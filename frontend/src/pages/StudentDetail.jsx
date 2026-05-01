@@ -75,6 +75,17 @@ function StatusChip({ status, reason }) {
   )
 }
 
+const METHOD_CFG = {
+  face:   { label: 'สแกนใบหน้า', color: '#1A56DB', bg: '#EFF6FF' },
+  qr:     { label: 'QR Code',    color: '#7C3AED', bg: '#F5F3FF' },
+  manual: { label: 'กรอกมือ',   color: '#6B7280', bg: '#F3F4F6' },
+}
+function MethodChip({ method }) {
+  if (!method) return null
+  const m = METHOD_CFG[method] ?? { label: method, color: '#6B7280', bg: '#F3F4F6' }
+  return <span className="chip" style={{ background: m.bg, color: m.color, fontSize: 11 }}>{m.label}</span>
+}
+
 // ── Face slot thumbnail (lazy image fetch) ───────────────────────
 function FaceSlotThumb({ studentId, embId, hasImage }) {
   const [url, setUrl] = useState(null)
@@ -710,7 +721,8 @@ export default function StudentDetail() {
                     <span style={{ fontSize: 11, color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>{r.time}</span>
                   </div>
                 </div>
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MethodChip method={r.check_method} />
                   <StatusChip status={r.status} reason={r.reason} />
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fc-text-4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                     <polyline points="9 18 15 12 9 6"/>

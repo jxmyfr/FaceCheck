@@ -90,6 +90,7 @@ class AttendanceLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     status: Mapped[str] = mapped_column(String(20), default="present")
     reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    check_method: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "face" | "qr" | "manual"
     scan_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     
     # ✅ แก้ไขแล้ว: ระบุชื่อ Class ใน Mapped["ClassName"] ให้ครบถ้วน

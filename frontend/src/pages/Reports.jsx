@@ -433,6 +433,7 @@ export default function Reports() {
                   <th>ชื่อ-นามสกุล</th>
                   <th>ชั้น/ห้อง</th>
                   <th>วิชา</th>
+                  <th>วิธีเช็คชื่อ</th>
                   <th>สถานะ</th>
                 </tr>
               </thead>
@@ -456,6 +457,12 @@ export default function Reports() {
                           {log.subject_code}
                         </span>
                         <span style={{ fontSize: 12, color: 'var(--fc-text-3)', marginLeft: 6 }}>{log.subject_name}</span>
+                      </td>
+                      <td>
+                        {log.check_method === 'face' && <span className="chip" style={{ background: '#EFF6FF', color: '#1A56DB', fontSize: 11 }}>สแกนใบหน้า</span>}
+                        {log.check_method === 'qr' && <span className="chip" style={{ background: '#F5F3FF', color: '#7C3AED', fontSize: 11 }}>QR Code</span>}
+                        {log.check_method === 'manual' && <span className="chip" style={{ background: '#F3F4F6', color: '#6B7280', fontSize: 11 }}>กรอกมือ</span>}
+                        {!log.check_method && <span style={{ color: 'var(--fc-text-4)', fontSize: 12 }}>—</span>}
                       </td>
                       <td>
                         <span className="chip" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>

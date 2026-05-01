@@ -148,7 +148,7 @@ async def scan_attendance(
     _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
     new_log = AttendanceLog(
         student_id=best_match.id, subject_id=subject_id, status=scan_status,
-        scan_image=jpeg_buf.tobytes(), timestamp=now,
+        scan_image=jpeg_buf.tobytes(), timestamp=now, check_method="face",
     )
     db.add(new_log)
 
@@ -416,10 +416,11 @@ def list_logs(
             "room_number": student.room_number,
             "subject_code": subject.subject_code,
             "subject_name": subject.subject_name,
-            "status":      log.status,
-            "reason":      log.reason,
-            "timestamp":   log.timestamp.strftime("%H:%M:%S"),
-            "date":        log.timestamp.strftime("%Y-%m-%d"),
+            "status":        log.status,
+            "reason":        log.reason,
+            "check_method":  log.check_method,
+            "timestamp":     log.timestamp.strftime("%H:%M:%S"),
+            "date":          log.timestamp.strftime("%Y-%m-%d"),
         }
         for log, student, subject in rows
     ]
@@ -545,7 +546,7 @@ def manual_attendance(
             "checked_at": already.timestamp.strftime("%H:%M"),
         }
 
-    log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=status, timestamp=now)
+    log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=status, timestamp=now, check_method="manual")
     db.add(log)
     db.commit()
     db.refresh(log)
@@ -611,6 +612,7 @@ def mark_absent(
                 subject_id=subject_id,
                 status="absent",
                 timestamp=now,
+                check_method="manual",
             ))
             count += 1
     db.commit()
@@ -770,7 +772,7 @@ def qr_checkin(
             except Exception:
                 pass
 
-    log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=scan_status, timestamp=now)
+    log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=scan_status, timestamp=now, check_method="qr")
     db.add(log)
     db.commit()
     STATUS_LABEL = {"present": "มาเรียน", "late": "มาสาย"}
