@@ -133,6 +133,14 @@ class AttendanceAuditLog(Base):
     log_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
 
+class QRSessionUsed(Base):
+    """ติดตาม QR token ที่ถูกใช้แล้ว — 1 token ใช้ได้ครั้งเดียว"""
+    __tablename__ = "qr_sessions_used"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    used_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 import os
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 

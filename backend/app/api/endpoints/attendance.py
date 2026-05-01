@@ -7,7 +7,7 @@ from sqlalchemy import func
 from datetime import date, datetime
 from typing import Optional
 
-from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding, AttendanceAuditLog
+from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding, AttendanceAuditLog, QRSessionUsed
 from app.models.user import User, TeacherSubject
 from app.services.face_proc import FaceProcessor
 from app.core.dependencies import require_teacher_or_admin, require_admin, get_current_user
@@ -701,11 +701,13 @@ def create_qr_session(
         ).first()
         if not assigned:
             raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์จัดการวิชานี้")
+    import uuid
     expire = datetime.utcnow() + __import__("datetime").timedelta(minutes=30)
     token = _jwt.encode({
         "subject_id":  subject_id,
         "schedule_id": schedule_id,
         "type":        "qr_session",
+        "jti":         str(uuid.uuid4()),
         "exp":         expire,
     }, SECRET_KEY, algorithm=ALGORITHM)
     return {
@@ -732,6 +734,11 @@ def qr_checkin(
     if payload.get("type") != "qr_session":
         raise HTTPException(status_code=400, detail="Token ประเภทไม่ถูกต้อง")
 
+    jti = payload.get("jti")
+    if jti:
+        if db.query(QRSessionUsed).filter(QRSessionUsed.jti == jti).first():
+            raise HTTPException(status_code=400, detail="QR Code นี้ถูกใช้แล้ว — ขอ QR ใหม่จากครู")
+
     subject_id  = payload["subject_id"]
     schedule_id = payload.get("schedule_id")
 
@@ -753,6 +760,9 @@ def qr_checkin(
         .first()
     )
     if already:
+        if jti:
+            db.add(QRSessionUsed(jti=jti))
+            db.commit()
         return {
             "status": "already_checked",
             "message": f"เช็คชื่อวิชานี้ไปแล้ววันนี้ (เวลา {already.timestamp.strftime('%H:%M')})",
@@ -774,6 +784,8 @@ def qr_checkin(
 
     log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=scan_status, timestamp=now, check_method="qr")
     db.add(log)
+    if jti:
+        db.add(QRSessionUsed(jti=jti))
     db.commit()
     STATUS_LABEL = {"present": "มาเรียน", "late": "มาสาย"}
     return {

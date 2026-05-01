@@ -1131,8 +1131,12 @@ export default function Scanner() {
                   }}>
                     <QRCodeCanvas value={qrUrl} size={200} />
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginBottom: 20 }}>
-                    นักเรียนสแกน QR ด้วยกล้องมือถือแล้วกรอกรหัสนักเรียน
+                  <div style={{
+                    fontSize: 12, color: '#92400E', background: '#FEF3C7',
+                    borderRadius: 8, padding: '8px 12px', marginBottom: 16,
+                    fontWeight: 500,
+                  }}>
+                    ⚠️ QR นี้ใช้ได้ <strong>1 ครั้ง / 1 คน</strong> — หลังนักเรียนสแกนแล้วให้กด "สร้าง QR ใหม่"
                   </div>
                 </>
               ) : (
