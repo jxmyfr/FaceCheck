@@ -124,7 +124,7 @@ function ResultCard({ result, onDismiss, onCancel }) {
                   <div style={{ fontSize: 12, color: 'var(--fc-text-3)' }}>
                     <span style={{ color: 'var(--fc-text-4)' }}>เวลา</span>{' '}
                     <strong style={{ color: 'var(--fc-text-2)', fontVariantNumeric: 'tabular-nums' }}>
-                      {result.status === 'already_checked' ? result.checked_at : result.timestamp}
+                      {result.scan_time || result.timestamp}
                     </strong>
                     {result.status === 'already_checked' && (
                       <span style={{ color: 'var(--fc-warning)', marginLeft: 6 }}>
@@ -434,7 +434,9 @@ export default function Scanner() {
       const fd   = new FormData()
       fd.append('file', blob, 'scan.jpg')
       const res = await axios.post(scanUrl, fd)
-      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate: new Date().toISOString().slice(0, 10) }
+      const _now = new Date()
+      const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime }
       setResult(entry)
       setErrMsg('')
       setLogs(prev => [entry, ...prev])
@@ -549,7 +551,9 @@ export default function Scanner() {
       const res = await axios.post(
         `${API}/attendance/manual?subject_id=${subjectId}&student_id=${encodeURIComponent(lookupId.trim())}&status=${lookupStatus}`
       )
-      const entry = { ...res.data, photo: null, logId: Date.now(), scanDate: new Date().toISOString().slice(0, 10) }
+      const _now = new Date()
+      const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+      const entry = { ...res.data, photo: null, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime }
       setResult(entry)
       setLogs(prev => [entry, ...prev])
       setLookupId('')
@@ -1058,7 +1062,7 @@ export default function Scanner() {
                             {cfg.label}
                           </span>
                           <div style={{ fontSize: 13, color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>
-                            {log.status === 'already_checked' ? log.checked_at : log.timestamp}
+                            {log.scan_time || (log.status === 'already_checked' ? log.checked_at : log.timestamp)}
                           </div>
                           {log.log_id && (
                             <button
@@ -1226,7 +1230,7 @@ function LogDetailModal({ log, cfg, onClose, onCancel }) {
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, color: 'var(--fc-text-4)' }}>เวลา</span>
             <span style={{ fontSize: 13, color: 'var(--fc-text-2)', fontVariantNumeric: 'tabular-nums' }}>
-              {log.status === 'already_checked' ? log.checked_at : log.timestamp}
+              {log.scan_time || (log.status === 'already_checked' ? log.checked_at : log.timestamp)}
             </span>
           </div>
           {log.subject && (
