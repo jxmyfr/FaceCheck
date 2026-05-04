@@ -35,10 +35,11 @@ const periodLabel = (start, end) => {
 }
 
 const STATUS_MAP = {
-  present: { label: 'มาเรียน', color: 'var(--fc-success)', bg: 'rgba(16,185,129,0.1)' },
-  late:    { label: 'สาย',     color: 'var(--fc-warning)', bg: 'rgba(245,158,11,0.1)' },
-  absent:  { label: 'ขาด',    color: 'var(--fc-danger)',  bg: 'rgba(239,68,68,0.1)' },
-  excused: { label: 'ลา',     color: '#7c3aed',           bg: 'rgba(124,58,237,0.1)' },
+  present:         { label: 'มาเรียน',  color: 'var(--fc-success)', bg: 'rgba(16,185,129,0.1)' },
+  late:            { label: 'สาย',      color: 'var(--fc-warning)', bg: 'rgba(245,158,11,0.1)' },
+  absent:          { label: 'ขาด',     color: 'var(--fc-danger)',  bg: 'rgba(239,68,68,0.1)' },
+  excused:         { label: 'ลา',      color: '#7c3aed',           bg: 'rgba(124,58,237,0.1)' },
+  already_checked: { label: 'สแกนซ้ำ', color: '#0891b2',           bg: 'rgba(8,145,178,0.08)' },
 }
 
 function StatusBadge({ status, reason, logId, onUpdate }) {
@@ -211,6 +212,7 @@ export default function Admin() {
   const [logLoading, setLogLoading] = useState(false)
   const [logDetail, setLogDetail]   = useState(null)   // selected log for detail modal
   const [logPhoto, setLogPhoto]     = useState(null)   // blob URL for scan image
+  const [showDupScans, setShowDupScans] = useState(false) // toggle already_checked
 
   const [showUser, setShowUser]     = useState(false)
   const [newUser, setNewUser]       = useState({email:'',username:'',password:'',full_name:'',role:'teacher',categories:[]})
@@ -762,8 +764,17 @@ export default function Admin() {
             <button className="btn btn-primary btn-sm" onClick={() => loadLogs(logDate, logSubject)} disabled={logLoading}>
               {logLoading ? 'กำลังโหลด...' : 'แสดงข้อมูล'}
             </button>
+            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--fc-text-3)',cursor:'pointer',userSelect:'none'}}>
+              <input type="checkbox" checked={showDupScans} onChange={e=>setShowDupScans(e.target.checked)}/>
+              แสดงสแกนซ้ำ
+            </label>
             <div style={{marginLeft:'auto',fontSize:12,color:'var(--fc-text-4)',alignSelf:'center'}}>
-              {logs.length} รายการ
+              {logs.filter(l => showDupScans || l.status !== 'already_checked').length} รายการ
+              {!showDupScans && logs.filter(l=>l.status==='already_checked').length > 0 && (
+                <span style={{color:'#0891b2',marginLeft:6}}>
+                  (+{logs.filter(l=>l.status==='already_checked').length} สแกนซ้ำ)
+                </span>
+              )}
             </div>
           </div>
 
@@ -789,10 +800,10 @@ export default function Admin() {
                   <th></th>
                 </tr></thead>
                 <tbody>
-                  {logs.map(log=>(
+                  {logs.filter(l => showDupScans || l.status !== 'already_checked').map(log=>(
                     <tr key={log.log_id}
                       onClick={()=>openLogDetail(log)}
-                      style={{cursor:'pointer'}}
+                      style={{cursor:'pointer',opacity: log.status==='already_checked' ? 0.75 : 1}}
                     >
                       <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>
                         {log.timestamp}

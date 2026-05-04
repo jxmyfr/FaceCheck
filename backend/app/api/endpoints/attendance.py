@@ -137,9 +137,17 @@ async def scan_attendance(
     }
 
     if already_checked:
+        _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        dup_log = AttendanceLog(
+            student_id=best_match.id, subject_id=subject_id, status="already_checked",
+            scan_image=jpeg_buf.tobytes(), timestamp=now, check_method="face",
+        )
+        db.add(dup_log)
+        db.commit()
+        db.refresh(dup_log)
         return {
             **student_info,
-            "log_id":  already_checked.id,
+            "log_id":  dup_log.id,
             "status":  "already_checked",
             "message": f"{best_match.first_name} เช็คชื่อวิชานี้ไปแล้ววันนี้",
             "checked_at": already_checked.timestamp.strftime("%H:%M"),

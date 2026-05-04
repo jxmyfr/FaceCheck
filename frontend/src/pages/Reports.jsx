@@ -123,10 +123,11 @@ export default function Reports() {
     : [...new Set(Object.values(gradeRooms).flat())].sort((a, b) => Number(a) - Number(b))
 
   const totals = {
-    present: logs.filter(l => l.status === 'present').length,
-    late:    logs.filter(l => l.status === 'late').length,
-    absent:  logs.filter(l => l.status === 'absent').length,
-    excused: logs.filter(l => l.status === 'excused').length,
+    present:         logs.filter(l => l.status === 'present').length,
+    late:            logs.filter(l => l.status === 'late').length,
+    absent:          logs.filter(l => l.status === 'absent').length,
+    excused:         logs.filter(l => l.status === 'excused').length,
+    already_checked: logs.filter(l => l.status === 'already_checked').length,
   }
 
   const summaryRows = (() => {
@@ -253,7 +254,8 @@ export default function Reports() {
             { label: `มาสาย ${totals.late}`,      color: 'var(--fc-warning)',       bg: 'var(--fc-warning-light)' },
             { label: `ขาดเรียน ${totals.absent}`, color: 'var(--fc-danger)',        bg: 'var(--fc-danger-light)'  },
             ...(totals.excused > 0 ? [{ label: `ลา ${totals.excused}`, color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' }] : []),
-            { label: `ทั้งหมด ${logs.length}`,    color: 'var(--fc-primary)',       bg: 'var(--fc-primary-light)' },
+            ...(totals.already_checked > 0 ? [{ label: `สแกนซ้ำ ${totals.already_checked}`, color: '#0891b2', bg: 'rgba(8,145,178,0.08)' }] : []),
+            { label: `ทั้งหมด ${logs.filter(l=>l.status!=='already_checked').length}`, color: 'var(--fc-primary)', bg: 'var(--fc-primary-light)' },
           ].map(s => (
             <span key={s.label} className="chip" style={{ background: s.bg, color: s.color, fontSize: 13, padding: '5px 12px' }}>
               {s.label}
