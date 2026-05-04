@@ -16,3 +16,23 @@ storage/faces/*
 !storage/faces/.gitkeep
 backend/models_ai/*.onnx
 backend/models_ai/*.pt
+
+# AI Tools metadata
+.agents/
+.claude/
+.kode/
+.impeccable.md
+.mcp.json
+skills-lock.json
+
+# Environment files (Sensitive)
+frontend/.env.production
+.env*
+!.env.example
+
+# Personal / Junk folders
+"~/"
+
+# OS generated files
+.DS_Store
+Thumbs.db
