@@ -139,56 +139,109 @@ function DrillCard({ title, sub, studentCount, attendance, rate, color = '#1A56D
 
 // ── AreaChart ───────────────────────────────────────────────────
 function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, title }) {
+  const [hover, setHover] = useState(null) // { i, x, y, val, date }
+
   if (!data || data.length < 2) return (
     <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>ยังไม่มีข้อมูลกราฟ</span>
     </div>
   )
+
   const vals   = data.map(d => d[valueKey])
   const max    = Math.max(...vals, 1)
+  const min    = Math.min(...vals)
+  // stretch range so small variations look visible
+  const range  = Math.max(max - min, max * 0.1, 1)
+  const bottom = Math.max(0, min - range * 0.15)
+  const top    = max + range * 0.1
+
   const chartH = height - 24
   const PAD    = 4
 
   const xs = (i) => PAD + (i / (data.length - 1)) * (100 - PAD * 2)
-  const ys = (v) => PAD + (1 - v / max) * (chartH - PAD * 2)
+  const ys = (v) => PAD + (1 - (v - bottom) / (top - bottom)) * (chartH - PAD * 2)
 
-  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs(i)},${ys(d[valueKey])}`).join(' ')
-  const areaPath = `${linePath} L ${xs(data.length - 1)},${chartH} L ${PAD},${chartH} Z`
+  // smooth cubic bezier curve
+  const smoothPath = data.reduce((acc, d, i) => {
+    const x = xs(i), y = ys(d[valueKey])
+    if (i === 0) return `M ${x},${y}`
+    const px = xs(i - 1), py = ys(data[i - 1][valueKey])
+    const cp = (x - px) * 0.4
+    return `${acc} C ${px + cp},${py} ${x - cp},${y} ${x},${y}`
+  }, '')
+  const areaPath = `${smoothPath} L ${xs(data.length - 1)},${chartH} L ${PAD},${chartH} Z`
 
   const n    = data.length
   const step = Math.max(1, Math.floor(n / 5))
   const idxs = [...new Set([0, step, step * 2, step * 3, step * 4, n - 1])].filter(i => i < n)
-  const dotIdxs = n <= 30 ? data.map((_, i) => i) : idxs
   const gradId = `ag${color.replace(/[^a-zA-Z0-9]/g, '')}`
 
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const relX = (e.clientX - rect.left) / rect.width
+    const i = Math.min(Math.round(relX * (data.length - 1)), data.length - 1)
+    setHover({ i, x: xs(i), y: ys(data[i][valueKey]), val: data[i][valueKey], date: data[i].date })
+  }
+
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      {/* tooltip */}
+      {hover && (
+        <div style={{
+          position: 'absolute',
+          left: `clamp(0px, calc(${hover.x}% - 36px), calc(100% - 72px))`,
+          top: 0,
+          background: 'var(--fc-surface, #fff)',
+          border: '1px solid var(--fc-border, #e5e7eb)',
+          borderRadius: 6,
+          padding: '4px 8px',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--fc-text)',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+          zIndex: 10,
+        }}>
+          {new Date(hover.date + 'T00:00:00').toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
+          {' · '}
+          <span style={{ color }}>{hover.val}</span>
+        </div>
+      )}
       <svg viewBox={`0 0 100 ${chartH}`} width="100%" height={chartH}
         preserveAspectRatio="none"
         role="img"
         aria-labelledby={`${gradId}-chart-title`}
-        style={{ display: 'block', overflow: 'visible' }}>
+        style={{ display: 'block', overflow: 'visible', cursor: 'crosshair' }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHover(null)}>
         <title id={`${gradId}-chart-title`}>{title || 'กราฟแนวโน้ม'}</title>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={color} stopOpacity="0.18"/>
-            <stop offset="100%" stopColor={color} stopOpacity="0.01"/>
+            <stop offset="0%"   stopColor={color} stopOpacity="0.28"/>
+            <stop offset="75%"  stopColor={color} stopOpacity="0.06"/>
+            <stop offset="100%" stopColor={color} stopOpacity="0"/>
           </linearGradient>
         </defs>
         {/* grid lines */}
         {[0.25, 0.5, 0.75].map(t => (
           <line key={t} x1="0" y1={PAD + (1 - t) * (chartH - PAD * 2)}
             x2="100" y2={PAD + (1 - t) * (chartH - PAD * 2)}
-            stroke="rgba(0,0,0,0.06)" strokeWidth="0.5" vectorEffect="non-scaling-stroke"/>
+            stroke="rgba(0,0,0,0.05)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" strokeDasharray="2,2"/>
         ))}
         <path d={areaPath} fill={`url(#${gradId})`}/>
-        <path d={linePath} fill="none" stroke={color} strokeWidth="1.8"
+        <path d={smoothPath} fill="none" stroke={color} strokeWidth="2"
           vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"/>
-        {/* dots */}
-        {dotIdxs.map(i => (
-          <circle key={i} cx={xs(i)} cy={ys(data[i][valueKey])} r="1.4"
-            fill={color} vectorEffect="non-scaling-stroke"/>
-        ))}
+        {/* hover indicator */}
+        {hover && (
+          <>
+            <line x1={hover.x} y1={PAD} x2={hover.x} y2={chartH}
+              stroke={color} strokeWidth="0.8" strokeDasharray="2,2"
+              vectorEffect="non-scaling-stroke" strokeOpacity="0.5"/>
+            <circle cx={hover.x} cy={hover.y} r="2.5"
+              fill="#fff" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+          </>
+        )}
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
         {idxs.map(i => (
