@@ -108,7 +108,7 @@ function SingleTab() {
 
   const switchFaceTab = (t) => { setFaceTab(t); setShots([]); setStep(0); setPhotoItems([]); setState('idle'); setMessage(''); setAngleMsg({ text: '', ok: false }) }
 
-  const EXPECTED = ['front', 'left', 'right']
+  const EXPECTED = ['front', 'right', 'left']  // mirrored screenshot flips yaw sign
 
   const capture = async () => {
     const img = cam.current?.getScreenshot()
@@ -315,7 +315,7 @@ function SingleTab() {
             {!allCaptured ? (
               <>
                 <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 8 }}>
-                  <Webcam ref={cam} audio={false} screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <Webcam ref={cam} audio={false} mirrored screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   {/* angle instruction */}
                   <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center' }}>
                     <span style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 12, padding: '4px 10px', borderRadius: 6 }}>
@@ -861,7 +861,7 @@ function FacePanel({ students, fetching, onFaceSaved }) {
                 <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 12 }}>
                   {preview
                     ? <img src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt="preview" />
-                    : <Webcam ref={cam} audio={false} screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    : <Webcam ref={cam} audio={false} mirrored screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   }
                   {preview && (
                     <button onClick={() => setPreview(null)} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>ถ่ายใหม่</button>
