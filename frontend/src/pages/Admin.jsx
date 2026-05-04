@@ -748,7 +748,7 @@ export default function Admin() {
           {/* Filter bar */}
           <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:12,padding:'12px 20px',borderBottom:'1px solid var(--fc-border)'}}>
             {/* Left: filters */}
-            <div style={{display:'flex',alignItems:'flex-end',gap:10,flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'flex-end',gap:16,flexWrap:'wrap'}}>
               <div>
                 <label className="form-label" htmlFor="log-date">วันที่</label>
                 <input id="log-date" type="date" value={logDate}
