@@ -176,7 +176,7 @@ function SingleTab() {
 
   const validCount   = photoItems.filter(p => p.status === 'valid').length
   const shotCount    = shots.filter(Boolean).length
-  const infoComplete = !!(form.student_id.trim() && form.first_name.trim() && form.last_name.trim() && form.grade_level && form.room_number)
+  const infoComplete = !!(form.student_id.trim() && form.title && form.first_name.trim() && form.last_name.trim() && form.grade_level && form.room_number)
   const canSubmit    = infoComplete && state !== 'loading' && (faceTab === 'camera' ? shotCount > 0 : validCount > 0)
   const allCaptured  = shotCount === ANGLE_STEPS.length
 
@@ -250,7 +250,7 @@ function SingleTab() {
               <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-3)' }}>กรอกข้อมูลนักเรียนให้ครบก่อน</div>
-            <div style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>รหัสนักเรียน · ชื่อ · นามสกุล · ระดับชั้น · ห้อง</div>
+            <div style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>รหัสนักเรียน · คำนำหน้า · ชื่อ · นามสกุล · ระดับชั้น · ห้อง</div>
           </div>
         )}
         <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--fc-muted)', borderRadius: 8, padding: 4 }}>
