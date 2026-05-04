@@ -746,35 +746,52 @@ export default function Admin() {
       {tab === 'logs' && (
         <div className="card" style={{padding:0,overflow:'hidden'}}>
           {/* Filter bar */}
-          <div style={{display:'flex',flexWrap:'wrap',gap:10,padding:'14px 20px',borderBottom:'1px solid var(--fc-border)',alignItems:'flex-end'}}>
-            <div>
-              <label className="form-label" htmlFor="log-date">วันที่</label>
-              <input id="log-date" type="date" value={logDate}
-                onChange={e=>setLogDate(e.target.value)}
-                style={{width:160}}
-              />
+          <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:12,padding:'12px 20px',borderBottom:'1px solid var(--fc-border)'}}>
+            {/* Left: filters */}
+            <div style={{display:'flex',alignItems:'flex-end',gap:10,flexWrap:'wrap'}}>
+              <div>
+                <label className="form-label" htmlFor="log-date">วันที่</label>
+                <input id="log-date" type="date" value={logDate}
+                  onChange={e=>setLogDate(e.target.value)}
+                  style={{width:155}}
+                />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="log-subject">วิชา</label>
+                <select id="log-subject" value={logSubject} onChange={e=>setLogSubject(e.target.value)} style={{width:210}}>
+                  <option value="">ทุกวิชา</option>
+                  {subjects.map(s=><option key={s.id} value={s.id}>{s.subject_code} — {s.subject_name}</option>)}
+                </select>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => loadLogs(logDate, logSubject)} disabled={logLoading}>
+                {logLoading ? 'กำลังโหลด...' : 'แสดงข้อมูล'}
+              </button>
             </div>
-            <div>
-              <label className="form-label" htmlFor="log-subject">วิชา</label>
-              <select id="log-subject" value={logSubject} onChange={e=>setLogSubject(e.target.value)} style={{width:200}}>
-                <option value="">ทุกวิชา</option>
-                {subjects.map(s=><option key={s.id} value={s.id}>{s.subject_code} — {s.subject_name}</option>)}
-              </select>
-            </div>
-            <button className="btn btn-primary btn-sm" onClick={() => loadLogs(logDate, logSubject)} disabled={logLoading}>
-              {logLoading ? 'กำลังโหลด...' : 'แสดงข้อมูล'}
-            </button>
-            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--fc-text-3)',cursor:'pointer',userSelect:'none'}}>
-              <input type="checkbox" checked={showDupScans} onChange={e=>setShowDupScans(e.target.checked)}/>
-              แสดงสแกนซ้ำ
-            </label>
-            <div style={{marginLeft:'auto',fontSize:12,color:'var(--fc-text-4)',alignSelf:'center'}}>
-              {logs.filter(l => showDupScans || l.status !== 'already_checked').length} รายการ
-              {!showDupScans && logs.filter(l=>l.status==='already_checked').length > 0 && (
-                <span style={{color:'#0891b2',marginLeft:6}}>
-                  (+{logs.filter(l=>l.status==='already_checked').length} สแกนซ้ำ)
-                </span>
-              )}
+
+            {/* Right: toggle + count */}
+            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14}}>
+              <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',userSelect:'none'}}>
+                <span style={{fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>แสดงสแกนซ้ำ</span>
+                <button
+                  role="switch" aria-checked={showDupScans}
+                  onClick={()=>setShowDupScans(v=>!v)}
+                  style={{width:36,height:20,borderRadius:99,border:'none',cursor:'pointer',flexShrink:0,
+                    background:showDupScans?'var(--fc-primary)':'var(--fc-neutral)',
+                    position:'relative',transition:'background 0.2s'}}
+                >
+                  <div style={{position:'absolute',top:2,left:showDupScans?18:2,width:16,height:16,
+                    borderRadius:'50%',background:'#fff',transition:'left 0.2s',
+                    boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}/>
+                </button>
+              </label>
+              <div style={{fontSize:12,color:'var(--fc-text-4)',whiteSpace:'nowrap'}}>
+                {logs.filter(l => showDupScans || l.status !== 'already_checked').length} รายการ
+                {!showDupScans && logs.filter(l=>l.status==='already_checked').length > 0 && (
+                  <span style={{color:'#0891b2',marginLeft:6}}>
+                    (+{logs.filter(l=>l.status==='already_checked').length} สแกนซ้ำ)
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
