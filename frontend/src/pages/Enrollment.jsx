@@ -81,6 +81,12 @@ function PhotoGrid({ items, onRemove }) {
   )
 }
 
+const ANGLE_STEPS = [
+  { label: 'มุมตรง',  hint: 'มองตรงเข้าหากล้อง' },
+  { label: 'หันซ้าย', hint: 'หันหน้าไปทางซ้ายเล็กน้อย (~15°)' },
+  { label: 'หันขวา',  hint: 'หันหน้าไปทางขวาเล็กน้อย (~15°)' },
+]
+
 // ── Single enrollment tab ────────────────────────────────────────
 function SingleTab() {
   const cam      = useRef(null)
@@ -89,14 +95,26 @@ function SingleTab() {
   const [state, setState]     = useState('idle')
   const [message, setMessage] = useState('')
   const [faceTab, setFaceTab] = useState('camera')
-  const [preview, setPreview] = useState(null)
+  const [shots, setShots]     = useState([])      // array of base64 per angle step
+  const [step, setStep]       = useState(0)       // current angle index
   const [photoItems, setPhotoItems] = useState([])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const switchFaceTab = (t) => { setFaceTab(t); setPreview(null); setPhotoItems([]); setState('idle'); setMessage('') }
+  const switchFaceTab = (t) => { setFaceTab(t); setShots([]); setStep(0); setPhotoItems([]); setState('idle'); setMessage('') }
 
-  const capture = () => { const img = cam.current?.getScreenshot(); if (img) setPreview(img) }
+  const capture = () => {
+    const img = cam.current?.getScreenshot()
+    if (!img) return
+    setShots(prev => {
+      const next = [...prev]
+      next[step] = img
+      return next
+    })
+    if (step < ANGLE_STEPS.length - 1) setStep(s => s + 1)
+  }
+
+  const retake = (i) => { setShots(prev => { const n = [...prev]; n[i] = null; return n }); setStep(i) }
 
   const validateOne = async (item) => {
     const fd = new FormData()
@@ -132,11 +150,13 @@ function SingleTab() {
       Object.entries(form).forEach(([k, v]) => fd.append(k, v))
       let res
       if (faceTab === 'camera') {
-        const img = preview || cam.current?.getScreenshot()
-        if (!img) { setState('error'); setMessage('กรุณาถ่ายภาพก่อน'); return }
-        const blob = await fetch(img).then(r => r.blob())
-        fd.append('file', blob, `${form.student_id}.jpg`)
-        res = await axios.post(`${API}/enroll/register`, fd)
+        const captured = shots.filter(Boolean)
+        if (!captured.length) { setState('error'); setMessage('กรุณาถ่ายภาพอย่างน้อย 1 มุม'); return }
+        await Promise.all(captured.map(async (img, i) => {
+          const blob = await fetch(img).then(r => r.blob())
+          fd.append('files', blob, `${form.student_id}_angle${i}.jpg`)
+        }))
+        res = await axios.post(`${API}/enroll/register-multi`, fd)
       } else {
         const valid = photoItems.filter(p => p.status === 'valid')
         if (!valid.length) { setState('error'); setMessage('กรุณาอัปโหลดรูปที่ผ่านการตรวจสอบอย่างน้อย 1 รูป'); return }
@@ -145,14 +165,16 @@ function SingleTab() {
       }
       setState('success'); setMessage(res.data.message)
       setForm({ student_id: '', title: '', first_name: '', last_name: '', grade_level: '', room_number: '' })
-      setPreview(null); setPhotoItems([])
+      setShots([]); setStep(0); setPhotoItems([])
     } catch (e) {
       setState('error'); setMessage(e.response?.data?.detail || 'ลงทะเบียนไม่สำเร็จ')
     }
   }
 
-  const validCount = photoItems.filter(p => p.status === 'valid').length
-  const canSubmit  = state !== 'loading' && (faceTab === 'camera' ? !!preview : validCount > 0)
+  const validCount   = photoItems.filter(p => p.status === 'valid').length
+  const shotCount    = shots.filter(Boolean).length
+  const canSubmit    = state !== 'loading' && (faceTab === 'camera' ? shotCount > 0 : validCount > 0)
+  const allCaptured  = shotCount === ANGLE_STEPS.length
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 480px) minmax(300px, 640px)', gap: 20 }}>
@@ -198,7 +220,9 @@ function SingleTab() {
         <button className="btn btn-primary btn-lg btn-full" onClick={submit} disabled={!canSubmit}>
           {state === 'loading'
             ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} /> กำลังประมวลผล...</>
-            : faceTab === 'upload' && validCount > 0 ? `ลงทะเบียน (${validCount} รูป)` : 'ลงทะเบียน'
+            : faceTab === 'camera' && shotCount > 0 ? `ลงทะเบียน (${shotCount} มุม)`
+            : faceTab === 'upload' && validCount > 0 ? `ลงทะเบียน (${validCount} รูป)`
+            : 'ลงทะเบียน'
           }
         </button>
       </div>
@@ -221,20 +245,73 @@ function SingleTab() {
 
         {faceTab === 'camera' && (
           <>
-            <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 12 }}>
-              {preview
-                ? <img src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt="preview" />
-                : <Webcam ref={cam} audio={false} screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-              }
-              {preview && (
-                <button onClick={() => setPreview(null)} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>ถ่ายใหม่</button>
-              )}
+            {/* Step indicators */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+              {ANGLE_STEPS.map((s, i) => {
+                const done = !!shots[i]
+                const active = i === step && !allCaptured
+                return (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 700, transition: 'all 0.2s',
+                      background: done ? 'var(--fc-success)' : active ? 'var(--fc-primary)' : 'var(--fc-muted)',
+                      color: done || active ? '#fff' : 'var(--fc-text-4)',
+                    }}>
+                      {done ? '✓' : i + 1}
+                    </div>
+                    <span style={{ fontSize: 11, color: done ? 'var(--fc-success)' : active ? 'var(--fc-primary)' : 'var(--fc-text-4)', fontWeight: active ? 600 : 400 }}>
+                      {s.label}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
-            {!preview && <button className="btn btn-ghost btn-full" onClick={capture} style={{ marginBottom: 12 }}><IcCamera /> ถ่ายภาพ</button>}
-            <div style={{ background: 'var(--fc-muted)', borderRadius: 8, padding: '12px 14px' }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-2)', marginBottom: 6 }}>คำแนะนำ</p>
-              {['มองตรงเข้าหากล้อง', 'แสงสว่างเพียงพอ ไม่มีเงาบนใบหน้า', 'ถอดแว่นและหน้ากากออก', 'ใบหน้าอยู่กึ่งกลางภาพ'].map(t => (
-                <p key={t} style={{ fontSize: 12, color: 'var(--fc-text-3)', lineHeight: 1.8 }}>· {t}</p>
+
+            {/* Webcam / preview */}
+            {!allCaptured ? (
+              <>
+                <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 8 }}>
+                  <Webcam ref={cam} audio={false} screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center' }}>
+                    <span style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 12, padding: '4px 10px', borderRadius: 6 }}>
+                      {ANGLE_STEPS[step]?.hint}
+                    </span>
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-full" onClick={capture} style={{ marginBottom: 12 }}>
+                  <IcCamera /> ถ่าย{ANGLE_STEPS[step]?.label}
+                </button>
+              </>
+            ) : (
+              <div style={{ background: 'var(--fc-success-light)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, textAlign: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-success-dark)' }}>ถ่ายครบ 3 มุมแล้ว — กดลงทะเบียนได้เลย</span>
+              </div>
+            )}
+
+            {/* Shot thumbnails */}
+            {shotCount > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {ANGLE_STEPS.map((s, i) => (
+                  <div key={i} style={{ flex: 1, position: 'relative' }}>
+                    {shots[i]
+                      ? <>
+                          <img src={shots[i]} alt={s.label} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8, display: 'block' }} />
+                          <button onClick={() => retake(i)} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 6px', fontSize: 10, cursor: 'pointer' }}>ถ่ายใหม่</button>
+                          <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--fc-success-dark)', marginTop: 3, fontWeight: 600 }}>{s.label} ✓</div>
+                        </>
+                      : <div style={{ width: '100%', aspectRatio: '1', borderRadius: 8, background: 'var(--fc-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 10, color: 'var(--fc-text-4)' }}>{s.label}</span>
+                        </div>
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ background: 'var(--fc-muted)', borderRadius: 8, padding: '10px 14px' }}>
+              {['แสงสว่างเพียงพอ ไม่มีเงาบนใบหน้า', 'ถอดแว่นและหน้ากากออก', 'ยิ่งหลายมุมยิ่งสแกนได้แม่นขึ้น'].map(t => (
+                <p key={t} style={{ fontSize: 11, color: 'var(--fc-text-3)', lineHeight: 1.8, margin: 0 }}>· {t}</p>
               ))}
             </div>
           </>
