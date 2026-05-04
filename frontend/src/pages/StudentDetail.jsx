@@ -643,22 +643,42 @@ export default function StudentDetail() {
         </div>
 
         {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginTop: 20, borderTop: '1px solid var(--fc-border)', paddingTop: 16 }}>
-          {[
-            { label: 'มาเรียน',    value: summary.present, color: 'var(--fc-success)'  },
-            { label: 'มาสาย',      value: summary.late,    color: 'var(--fc-warning)'  },
-            { label: 'ขาดเรียน',   value: summary.absent,  color: 'var(--fc-danger)'   },
-            { label: 'รวมทั้งหมด', value: summary.total,   color: 'var(--fc-text-2)'   },
-          ].map((s, i) => (
-            <div key={s.label} style={{
-              textAlign: 'center', padding: '4px 8px',
-              borderRight: i < 3 ? '1px solid var(--fc-border)' : 'none',
-            }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: s.color, letterSpacing: '-0.02em', lineHeight: 1 }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>{s.label}</div>
+        {(() => {
+          const rate = summary.total > 0 ? Math.round(((summary.present + summary.late) / summary.total) * 100) : null
+          const rateColor = rate == null ? 'var(--fc-text-2)' : rate >= 80 ? 'var(--fc-success)' : rate >= 60 ? 'var(--fc-warning)' : 'var(--fc-danger)'
+          return (
+            <div style={{ marginTop: 20, borderTop: '1px solid var(--fc-border)', paddingTop: 16 }}>
+              {/* Attendance rate bar */}
+              {rate != null && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>อัตราการเข้าเรียน</span>
+                    <span style={{ fontSize: 22, fontWeight: 700, color: rateColor, letterSpacing: '-0.02em', lineHeight: 1 }}>{rate}%</span>
+                  </div>
+                  <div style={{ height: 6, background: 'var(--fc-muted)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${rate}%`, background: rateColor, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                {[
+                  { label: 'มาเรียน',    value: summary.present, color: 'var(--fc-success)'  },
+                  { label: 'มาสาย',      value: summary.late,    color: 'var(--fc-warning)'  },
+                  { label: 'ขาดเรียน',   value: summary.absent,  color: 'var(--fc-danger)'   },
+                  { label: 'รวมทั้งหมด', value: summary.total,   color: 'var(--fc-text-2)'   },
+                ].map((s, i) => (
+                  <div key={s.label} style={{
+                    textAlign: 'center', padding: '4px 8px',
+                    borderRight: i < 3 ? '1px solid var(--fc-border)' : 'none',
+                  }}>
+                    <div style={{ fontSize: 26, fontWeight: 700, color: s.color, letterSpacing: '-0.02em', lineHeight: 1 }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          )
+        })()}
       </div>
 
       {/* Trend chart */}

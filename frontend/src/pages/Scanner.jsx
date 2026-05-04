@@ -348,7 +348,7 @@ function CameraSettings() {
 }
 
 export default function Scanner() {
-  const { dialog, alert } = useDialog()
+  const { dialog, alert, confirm } = useDialog()
   const { user } = useAuth()
   const cam = useRef(null)
   const [subjects, setSubjects]   = useState([])
@@ -543,6 +543,11 @@ export default function Scanner() {
 
   const handleMarkAbsent = async () => {
     if (!subjectId || markingAbsent) return
+    const ok = await confirm('บันทึกขาดเรียนให้นักเรียนทุกคนที่ยังไม่ได้เช็คชื่อวันนี้ใช่หรือไม่?', {
+      title: 'ปิดคาบ — บันทึกขาดเรียน',
+      danger: true,
+    })
+    if (!ok) return
     const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
     const url = `${API}/attendance/subjects/${subjectId}/mark-absent${activeSchedId ? `?schedule_id=${activeSchedId}` : ''}`
     setMarkingAbsent(true)
