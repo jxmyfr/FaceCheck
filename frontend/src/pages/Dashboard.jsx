@@ -138,6 +138,14 @@ function DrillCard({ title, sub, studentCount, attendance, rate, color = '#1A56D
 }
 
 // ── AreaChart ───────────────────────────────────────────────────
+function levelColor(ratio) {
+  // ratio 0-1 (val/max): green=high, yellow=mid, red=low
+  if (ratio >= 0.75) return '#16a34a'
+  if (ratio >= 0.5)  return '#ca8a04'
+  if (ratio >= 0.25) return '#ea580c'
+  return '#dc2626'
+}
+
 function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, title }) {
   const [hover, setHover] = useState(null) // { i, x, y, val, date }
 
@@ -150,7 +158,6 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
   const vals   = data.map(d => d[valueKey])
   const max    = Math.max(...vals, 1)
   const min    = Math.min(...vals)
-  // stretch range so small variations look visible
   const range  = Math.max(max - min, max * 0.1, 1)
   const bottom = Math.max(0, min - range * 0.15)
   const top    = max + range * 0.1
@@ -161,7 +168,6 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
   const xs = (i) => PAD + (i / (data.length - 1)) * (100 - PAD * 2)
   const ys = (v) => PAD + (1 - (v - bottom) / (top - bottom)) * (chartH - PAD * 2)
 
-  // smooth cubic bezier curve
   const smoothPath = data.reduce((acc, d, i) => {
     const x = xs(i), y = ys(d[valueKey])
     if (i === 0) return `M ${x},${y}`
@@ -174,7 +180,12 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
   const n    = data.length
   const step = Math.max(1, Math.floor(n / 5))
   const idxs = [...new Set([0, step, step * 2, step * 3, step * 4, n - 1])].filter(i => i < n)
-  const gradId = `ag${color.replace(/[^a-zA-Z0-9]/g, '')}`
+  const uid  = `ac${Math.abs(title?.charCodeAt(0) ?? 0)}${n}`
+
+  // y positions for level color stops (userSpaceOnUse: top=high=green, bottom=low=red)
+  const yTop = PAD
+  const yBot = chartH - PAD
+  const hoverColor = hover ? levelColor(hover.val / max) : color
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -192,7 +203,7 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
           left: `clamp(0px, calc(${hover.x}% - 36px), calc(100% - 72px))`,
           top: 0,
           background: 'var(--fc-surface, #fff)',
-          border: '1px solid var(--fc-border, #e5e7eb)',
+          border: `1px solid ${hoverColor}40`,
           borderRadius: 6,
           padding: '4px 8px',
           fontSize: 11,
@@ -205,22 +216,31 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
         }}>
           {new Date(hover.date + 'T00:00:00').toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
           {' · '}
-          <span style={{ color }}>{hover.val}</span>
+          <span style={{ color: hoverColor }}>{hover.val}</span>
         </div>
       )}
       <svg viewBox={`0 0 100 ${chartH}`} width="100%" height={chartH}
         preserveAspectRatio="none"
         role="img"
-        aria-labelledby={`${gradId}-chart-title`}
+        aria-labelledby={`${uid}-title`}
         style={{ display: 'block', overflow: 'visible', cursor: 'crosshair' }}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHover(null)}>
-        <title id={`${gradId}-chart-title`}>{title || 'กราฟแนวโน้ม'}</title>
+        <title id={`${uid}-title`}>{title || 'กราฟแนวโน้ม'}</title>
         <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={color} stopOpacity="0.28"/>
-            <stop offset="75%"  stopColor={color} stopOpacity="0.06"/>
-            <stop offset="100%" stopColor={color} stopOpacity="0"/>
+          {/* vertical level gradient for line stroke */}
+          <linearGradient id={`${uid}-line`} x1="0" y1={yTop} x2="0" y2={yBot} gradientUnits="userSpaceOnUse">
+            <stop offset="0%"   stopColor="#16a34a"/>
+            <stop offset="40%"  stopColor="#ca8a04"/>
+            <stop offset="70%"  stopColor="#ea580c"/>
+            <stop offset="100%" stopColor="#dc2626"/>
+          </linearGradient>
+          {/* same gradient with opacity for fill */}
+          <linearGradient id={`${uid}-fill`} x1="0" y1={yTop} x2="0" y2={yBot} gradientUnits="userSpaceOnUse">
+            <stop offset="0%"   stopColor="#16a34a" stopOpacity="0.22"/>
+            <stop offset="40%"  stopColor="#ca8a04" stopOpacity="0.14"/>
+            <stop offset="70%"  stopColor="#ea580c" stopOpacity="0.08"/>
+            <stop offset="100%" stopColor="#dc2626" stopOpacity="0.02"/>
           </linearGradient>
         </defs>
         {/* grid lines */}
@@ -229,17 +249,22 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
             x2="100" y2={PAD + (1 - t) * (chartH - PAD * 2)}
             stroke="rgba(0,0,0,0.05)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" strokeDasharray="2,2"/>
         ))}
-        <path d={areaPath} fill={`url(#${gradId})`}/>
-        <path d={smoothPath} fill="none" stroke={color} strokeWidth="2"
+        <path d={areaPath} fill={`url(#${uid}-fill)`}/>
+        <path d={smoothPath} fill="none" stroke={`url(#${uid}-line)`} strokeWidth="2"
           vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"/>
+        {/* dots colored by level */}
+        {data.map((d, i) => (
+          <circle key={i} cx={xs(i)} cy={ys(d[valueKey])} r="1.5"
+            fill={levelColor(d[valueKey] / max)} vectorEffect="non-scaling-stroke" fillOpacity="0.7"/>
+        ))}
         {/* hover indicator */}
         {hover && (
           <>
             <line x1={hover.x} y1={PAD} x2={hover.x} y2={chartH}
-              stroke={color} strokeWidth="0.8" strokeDasharray="2,2"
+              stroke={hoverColor} strokeWidth="0.8" strokeDasharray="2,2"
               vectorEffect="non-scaling-stroke" strokeOpacity="0.5"/>
-            <circle cx={hover.x} cy={hover.y} r="2.5"
-              fill="#fff" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+            <circle cx={hover.x} cy={hover.y} r="3"
+              fill="#fff" stroke={hoverColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
           </>
         )}
       </svg>
