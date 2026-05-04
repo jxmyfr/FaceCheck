@@ -180,10 +180,12 @@ function ResultCard({ result, onDismiss, onCancel }) {
 }
 
 // ── Log thumbnail (fetches from backend if no in-memory photo) ───
-function LogThumb({ photo, logId }) {
+function LogThumb({ photo, logId, status }) {
   const [src, setSrc] = useState(photo || null)
   useEffect(() => {
-    if (src || !logId) return
+    // already_checked entries share the original log_id — fetching would show the same
+    // image for every duplicate scan of the same person, which is confusing after refresh
+    if (src || !logId || status === 'already_checked') return
     axios.get(`${API}/attendance/logs/${logId}/image`, { responseType: 'blob' })
       .then(r => setSrc(URL.createObjectURL(r.data)))
       .catch(() => {})
@@ -1046,7 +1048,7 @@ export default function Scanner() {
                         animation: i === 0 ? 'slideIn 0.2s ease-out' : 'none',
                         cursor: 'pointer',
                       }} onClick={() => setLogDetail(log)}>
-                        <LogThumb photo={log.photo} logId={log.log_id} />
+                        <LogThumb photo={log.photo} logId={log.log_id} status={log.status} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {log.name ?? '—'}
