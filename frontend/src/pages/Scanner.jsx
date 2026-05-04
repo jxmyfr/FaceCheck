@@ -380,13 +380,20 @@ export default function Scanner() {
   const [result, setResult]     = useState(null)
   const [errMsg, setErrMsg]     = useState('')
   const [logs, setLogs]         = useState(() => {
-    try { return JSON.parse(localStorage.getItem('scanner-logs') || '[]') } catch { return [] }
+    try {
+      const saved = JSON.parse(localStorage.getItem('scanner-logs') || '[]')
+      // already_checked entries are session-only — hide on return visit
+      return saved.filter(l => l.status !== 'already_checked')
+    } catch { return [] }
   })
   const [logDetail, setLogDetail] = useState(null)
 
   useEffect(() => {
     try {
-      const slim = logs.map(({ photo, ...rest }) => rest)
+      // don't persist already_checked — they're noise on return visits
+      const slim = logs
+        .filter(l => l.status !== 'already_checked')
+        .map(({ photo, ...rest }) => rest)
       localStorage.setItem('scanner-logs', JSON.stringify(slim))
     } catch {}
   }, [logs])
