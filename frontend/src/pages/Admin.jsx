@@ -749,15 +749,15 @@ export default function Admin() {
           <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:12,padding:'12px 20px',borderBottom:'1px solid var(--fc-border)'}}>
             {/* Left: filters */}
             <div style={{display:'flex',alignItems:'flex-end',gap:16,flexWrap:'wrap'}}>
-              <div>
-                <label className="form-label" htmlFor="log-date">วันที่</label>
+              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                <label className="form-label" htmlFor="log-date" style={{marginBottom:0}}>วันที่</label>
                 <input id="log-date" type="date" value={logDate}
                   onChange={e=>setLogDate(e.target.value)}
                   style={{width:155}}
                 />
               </div>
-              <div>
-                <label className="form-label" htmlFor="log-subject">วิชา</label>
+              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                <label className="form-label" htmlFor="log-subject" style={{marginBottom:0}}>วิชา</label>
                 <select id="log-subject" value={logSubject} onChange={e=>setLogSubject(e.target.value)} style={{width:210}}>
                   <option value="">ทุกวิชา</option>
                   {subjects.map(s=><option key={s.id} value={s.id}>{s.subject_code} — {s.subject_name}</option>)}
