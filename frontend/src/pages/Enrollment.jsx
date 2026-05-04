@@ -87,6 +87,12 @@ const ANGLE_STEPS = [
   { label: 'หันขวา',  hint: 'หันหน้าไปทางขวาเล็กน้อย (~15°)' },
 ]
 
+const GRADE_LEVELS = [
+  'ป.1','ป.2','ป.3','ป.4','ป.5','ป.6',
+  'ม.1','ม.2','ม.3','ม.4','ม.5','ม.6',
+]
+const ROOMS = Array.from({ length: 15 }, (_, i) => String(i + 1))
+
 // ── Single enrollment tab ────────────────────────────────────────
 function SingleTab() {
   const cam      = useRef(null)
@@ -173,7 +179,8 @@ function SingleTab() {
 
   const validCount   = photoItems.filter(p => p.status === 'valid').length
   const shotCount    = shots.filter(Boolean).length
-  const canSubmit    = state !== 'loading' && (faceTab === 'camera' ? shotCount > 0 : validCount > 0)
+  const infoComplete = !!(form.student_id.trim() && form.first_name.trim() && form.last_name.trim())
+  const canSubmit    = infoComplete && state !== 'loading' && (faceTab === 'camera' ? shotCount > 0 : validCount > 0)
   const allCaptured  = shotCount === ANGLE_STEPS.length
 
   return (
@@ -209,11 +216,17 @@ function SingleTab() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div className="form-group">
             <label htmlFor="enroll-grade" className="form-label">ระดับชั้น</label>
-            <input id="enroll-grade" placeholder="ม.5" value={form.grade_level} onChange={e => set('grade_level', e.target.value)} />
+            <select id="enroll-grade" value={form.grade_level} onChange={e => set('grade_level', e.target.value)}>
+              <option value="">-- เลือกชั้น --</option>
+              {GRADE_LEVELS.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
           <div className="form-group">
             <label htmlFor="enroll-room" className="form-label">ห้อง</label>
-            <input id="enroll-room" placeholder="1" value={form.room_number} onChange={e => set('room_number', e.target.value)} />
+            <select id="enroll-room" value={form.room_number} onChange={e => set('room_number', e.target.value)}>
+              <option value="">-- เลือกห้อง --</option>
+              {ROOMS.map(r => <option key={r} value={r}>ห้อง {r}</option>)}
+            </select>
           </div>
         </div>
         {message && <div className={`toast ${state === 'success' ? 'toast-success' : 'toast-error'}`} style={{ marginBottom: 14 }}>{message}</div>}
@@ -228,7 +241,21 @@ function SingleTab() {
       </div>
 
       {/* Right: face capture */}
-      <div className="card">
+      <div className="card" style={{ position: 'relative' }}>
+        {!infoComplete && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 10, borderRadius: 'inherit',
+            background: 'rgba(var(--fc-surface-rgb, 255,255,255), 0.82)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+          }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--fc-text-4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-3)' }}>กรอกข้อมูลนักเรียนให้ครบก่อน</div>
+            <div style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>รหัสนักเรียน · ชื่อ · นามสกุล</div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--fc-muted)', borderRadius: 8, padding: 4 }}>
           {[{ key: 'camera', label: 'กล้อง', icon: <IcCamera /> }, { key: 'upload', label: 'อัปโหลดรูปภาพ', icon: <IcUpload /> }].map(t => (
             <button key={t.key} onClick={() => switchFaceTab(t.key)} style={{
