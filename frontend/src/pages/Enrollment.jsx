@@ -87,10 +87,7 @@ const ANGLE_STEPS = [
   { label: 'หันขวา',  hint: 'หันหน้าไปทางขวาเล็กน้อย (~15°)' },
 ]
 
-const GRADE_LEVELS = [
-  'ป.1','ป.2','ป.3','ป.4','ป.5','ป.6',
-  'ม.1','ม.2','ม.3','ม.4','ม.5','ม.6',
-]
+const GRADE_LEVELS = ['ม.1','ม.2','ม.3','ม.4','ม.5','ม.6']
 const ROOMS = Array.from({ length: 15 }, (_, i) => String(i + 1))
 
 // ── Single enrollment tab ────────────────────────────────────────
