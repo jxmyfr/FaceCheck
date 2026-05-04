@@ -121,6 +121,7 @@ async def scan_attendance(
             AttendanceLog.student_id == best_match.id,
             AttendanceLog.subject_id == subject_id,
             func.date(AttendanceLog.timestamp) == str(date.today()),
+            AttendanceLog.status.in_(["present", "late"]),
         )
         .first()
     )
