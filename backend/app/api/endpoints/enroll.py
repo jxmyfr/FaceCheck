@@ -296,6 +296,47 @@ async def validate_photo(
         return {"valid": False, "reason": str(e)}
 
 
+@router.post("/check-angle")
+async def check_angle(
+    file: UploadFile = File(...),
+    expected: str = "front",
+    _: User = Depends(require_teacher_or_admin),
+):
+    """ตรวจสอบมุมใบหน้าจาก yaw angle ของ InsightFace — ไม่บันทึกลง DB"""
+    contents = await file.read()
+    nparr    = np.frombuffer(contents, np.uint8)
+    frame    = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        return {"valid": False, "detected": False, "message": "ไม่สามารถอ่านไฟล์ภาพได้"}
+
+    faces = face_processor.app.get(frame)
+    if not faces:
+        return {"valid": False, "detected": False, "message": "ไม่พบใบหน้าในภาพ — ให้ใบหน้าอยู่กลางกรอบ"}
+
+    face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+    yaw  = float(face.pose[1])
+
+    if expected == "front":
+        valid = abs(yaw) <= 15
+        if valid:        message = "มุมตรง ✓"
+        elif yaw > 0:    message = "หันซ้ายมากไป — มองตรงเข้าหากล้อง"
+        else:            message = "หันขวามากไป — มองตรงเข้าหากล้อง"
+    elif expected == "left":
+        valid = -50 <= yaw <= -15
+        if yaw > -15:    message = "หันซ้ายให้มากกว่านี้"
+        elif yaw < -50:  message = "หันซ้ายมากไป"
+        else:            message = "มุมซ้าย ✓"
+    elif expected == "right":
+        valid = 15 <= yaw <= 50
+        if yaw < 15:     message = "หันขวาให้มากกว่านี้"
+        elif yaw > 50:   message = "หันขวามากไป"
+        else:            message = "มุมขวา ✓"
+    else:
+        valid, message = True, ""
+
+    return {"valid": valid, "detected": True, "yaw": round(yaw, 1), "message": message}
+
+
 @router.put("/update-face-multi/{student_id}")
 async def update_face_multi(
     student_id: str,

@@ -101,23 +101,42 @@ function SingleTab() {
   const [shots, setShots]     = useState([])      // array of base64 per angle step
   const [step, setStep]       = useState(0)       // current angle index
   const [photoItems, setPhotoItems] = useState([])
+  const [validating, setValidating] = useState(false)
+  const [angleMsg, setAngleMsg]     = useState({ text: '', ok: false })
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const switchFaceTab = (t) => { setFaceTab(t); setShots([]); setStep(0); setPhotoItems([]); setState('idle'); setMessage('') }
+  const switchFaceTab = (t) => { setFaceTab(t); setShots([]); setStep(0); setPhotoItems([]); setState('idle'); setMessage(''); setAngleMsg({ text: '', ok: false }) }
 
-  const capture = () => {
+  const EXPECTED = ['front', 'left', 'right']
+
+  const capture = async () => {
     const img = cam.current?.getScreenshot()
-    if (!img) return
-    setShots(prev => {
-      const next = [...prev]
-      next[step] = img
-      return next
-    })
-    if (step < ANGLE_STEPS.length - 1) setStep(s => s + 1)
+    if (!img || validating) return
+    setValidating(true)
+    setAngleMsg({ text: '', ok: false })
+    try {
+      const blob = await fetch(img).then(r => r.blob())
+      const fd = new FormData()
+      fd.append('file', blob, 'check.jpg')
+      const res = await axios.post(`${API}/enroll/check-angle?expected=${EXPECTED[step]}`, fd)
+      if (res.data.valid) {
+        setShots(prev => { const n = [...prev]; n[step] = img; return n })
+        if (step < ANGLE_STEPS.length - 1) setStep(s => s + 1)
+        setAngleMsg({ text: res.data.message, ok: true })
+      } else {
+        setAngleMsg({ text: res.data.message, ok: false })
+      }
+    } catch {
+      // server error — accept anyway
+      setShots(prev => { const n = [...prev]; n[step] = img; return n })
+      if (step < ANGLE_STEPS.length - 1) setStep(s => s + 1)
+    } finally {
+      setValidating(false)
+    }
   }
 
-  const retake = (i) => { setShots(prev => { const n = [...prev]; n[i] = null; return n }); setStep(i) }
+  const retake = (i) => { setShots(prev => { const n = [...prev]; n[i] = null; return n }); setStep(i); setAngleMsg({ text: '', ok: false }) }
 
   const validateOne = async (item) => {
     const fd = new FormData()
@@ -297,15 +316,45 @@ function SingleTab() {
               <>
                 <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 8 }}>
                   <Webcam ref={cam} audio={false} screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {/* angle instruction */}
                   <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center' }}>
                     <span style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 12, padding: '4px 10px', borderRadius: 6 }}>
                       {ANGLE_STEPS[step]?.hint}
                     </span>
                   </div>
+                  {/* validation overlay */}
+                  {validating && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
+                    </div>
+                  )}
+                  {!validating && angleMsg.text && (
+                    <div style={{
+                      position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: angleMsg.ok ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.45)',
+                      pointerEvents: 'none',
+                    }}>
+                      <div style={{
+                        background: angleMsg.ok ? 'rgba(22,163,74,0.92)' : 'rgba(185,28,28,0.92)',
+                        color: '#fff', fontSize: 14, fontWeight: 700,
+                        padding: '10px 20px', borderRadius: 10, textAlign: 'center', maxWidth: '80%',
+                      }}>
+                        {angleMsg.text}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <button className="btn btn-ghost btn-full" onClick={capture} style={{ marginBottom: 12 }}>
-                  <IcCamera /> ถ่าย{ANGLE_STEPS[step]?.label}
+                <button className="btn btn-ghost btn-full" onClick={capture} disabled={validating} style={{ marginBottom: 4 }}>
+                  {validating
+                    ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderColor: 'rgba(0,0,0,0.2)', borderTopColor: 'currentColor' }} /> กำลังตรวจสอบมุม...</>
+                    : <><IcCamera /> ถ่าย{ANGLE_STEPS[step]?.label}</>
+                  }
                 </button>
+                {!validating && angleMsg.text && !angleMsg.ok && (
+                  <div style={{ fontSize: 12, color: 'var(--fc-danger)', textAlign: 'center', marginBottom: 8, fontWeight: 500 }}>
+                    {angleMsg.text}
+                  </div>
+                )}
               </>
             ) : (
               <div style={{ background: 'var(--fc-success-light)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, textAlign: 'center' }}>
