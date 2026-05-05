@@ -748,7 +748,7 @@ export default function Scanner() {
       </div>
 
       {/* Main layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 640px) minmax(340px, 520px)', gap: 16, maxWidth: 1200, margin: '0 auto' }}>
+      <div className="scanner-grid">
 
         {/* Lookup panel (replaces camera when in lookup mode) */}
         {mode === 'lookup' ? (

@@ -660,7 +660,7 @@ export default function StudentDetail() {
                   </div>
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <div className="stats-4col">
                 {[
                   { label: 'มาเรียน',    value: summary.present, color: 'var(--fc-success)'  },
                   { label: 'มาสาย',      value: summary.late,    color: 'var(--fc-warning)'  },

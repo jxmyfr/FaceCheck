@@ -257,6 +257,45 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
   .page { padding-top: 64px; }
 }
 
+/* ── Scanner main grid ── */
+.scanner-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 640px) minmax(340px, 520px);
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+@media (max-width: 860px) {
+  .scanner-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Stats 4-col row ── */
+.stats-4col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 560px) {
+  .stats-4col { grid-template-columns: repeat(2, 1fr); }
+  .stats-4col > *:nth-child(2) { border-right: none !important; }
+  .stats-4col > *:nth-child(3) { border-right: 1px solid var(--fc-border) !important; }
+}
+
+/* ── Schedule form grid ── */
+.schedule-form-grid {
+  display: grid;
+  grid-template-columns: 60px 1fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: flex-end;
+}
+@media (max-width: 768px) {
+  .schedule-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .schedule-form-grid > *:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ── Enrollment grids ── */
 .enroll-single-grid {
   display: grid;

@@ -127,7 +127,7 @@ function SchedForm({ sched, setSched, onAdd, gradeRooms = {}, requireTeacher = f
   )
 
   return (
-    <div style={{display:'grid',gridTemplateColumns:'60px 1fr 1fr 1fr auto',gap:8,alignItems:'flex-end'}}>
+    <div className="schedule-form-grid">
       <div>
         <label className="form-label">วัน</label>
         <select value={sched.day_of_week} onChange={e=>setSched(s=>({...s,day_of_week:e.target.value}))}>
