@@ -195,8 +195,8 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
     setHover({ i, x: xs(i), y: ys(data[i][valueKey]), val: data[i][valueKey], date: data[i].date })
   }
 
-  // Convert SVG y-coordinate to percent of container height for HTML overlay
-  const dotTopPct = hover ? (hover.y / chartH) * 100 : 0
+  // hover.y is already in px (SVG viewBox height === chartH px, so 1 SVG unit = 1px vertically)
+  // Use px for y-positioning to avoid percentage being relative to full container (SVG + labels)
   const tooltipBelow = hover ? hover.y / chartH < 0.45 : false
 
   return (
@@ -231,7 +231,6 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
         <path d={areaPath} fill={`url(#${uid}-fill)`}/>
         <path d={smoothPath} fill="none" stroke={`url(#${uid}-line)`} strokeWidth="2"
           vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"/>
-        {/* hover vertical line only — dot rendered via HTML to avoid oval distortion */}
         {hover && (
           <line x1={hover.x} y1={PAD} x2={hover.x} y2={chartH}
             stroke={hoverColor} strokeWidth="0.8" strokeDasharray="2,2"
@@ -239,13 +238,13 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
         )}
       </svg>
 
-      {/* HTML overlay: dot + tooltip — avoids SVG non-uniform scaling artifacts */}
       {hover && (
         <>
-          {/* dot */}
+          {/* dot — HTML div avoids SVG oval distortion from non-uniform scaling */}
           <div style={{
             position: 'absolute',
-            left: `${hover.x}%`, top: `${dotTopPct}%`,
+            left: `${hover.x}%`,
+            top: hover.y,           // px: 1 SVG unit = 1 rendered px (height={chartH}, viewBox height=chartH)
             transform: 'translate(-50%, -50%)',
             width: 10, height: 10, borderRadius: '50%',
             background: '#fff',
@@ -254,13 +253,13 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
             pointerEvents: 'none',
             zIndex: 5,
           }} />
-          {/* tooltip */}
+          {/* tooltip — flips above/below based on data position */}
           <div style={{
             position: 'absolute',
             left: `clamp(0px, calc(${hover.x}% - 38px), calc(100% - 76px))`,
             ...(tooltipBelow
-              ? { top: `calc(${dotTopPct}% + 14px)` }
-              : { bottom: `calc(${100 - dotTopPct}% + 10px)` }),
+              ? { top: hover.y + 14 }          // below dot
+              : { top: hover.y - 14, transform: 'translateY(-100%)' }),  // above dot
             background: 'var(--fc-surface)',
             border: `1px solid var(--fc-border)`,
             borderRadius: 7,
