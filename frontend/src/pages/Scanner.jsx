@@ -599,7 +599,7 @@ export default function Scanner() {
   const canScan = camReady && !!subjectId
   const isAdmin = user?.role === 'admin'
   const subjectIdSet = new Set(subjects.map(s => s.id))
-  const displayedLogs = isAdmin ? logs : logs.filter(l => !l.subject_id || subjectIdSet.has(l.subject_id))
+  const displayedLogs = isAdmin ? logs : logs.filter(l => l.subject_id && subjectIdSet.has(l.subject_id))
 
   return (
     <main id="main-content" className="page">
