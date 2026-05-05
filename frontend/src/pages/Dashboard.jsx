@@ -195,31 +195,12 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
     setHover({ i, x: xs(i), y: ys(data[i][valueKey]), val: data[i][valueKey], date: data[i].date })
   }
 
+  // Convert SVG y-coordinate to percent of container height for HTML overlay
+  const dotTopPct = hover ? (hover.y / chartH) * 100 : 0
+  const tooltipBelow = hover ? hover.y / chartH < 0.45 : false
+
   return (
     <div style={{ position: 'relative' }}>
-      {/* tooltip */}
-      {hover && (
-        <div style={{
-          position: 'absolute',
-          left: `clamp(0px, calc(${hover.x}% - 36px), calc(100% - 72px))`,
-          top: 0,
-          background: 'var(--fc-surface, #fff)',
-          border: `1px solid ${hoverColor}40`,
-          borderRadius: 6,
-          padding: '4px 8px',
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--fc-text)',
-          pointerEvents: 'none',
-          whiteSpace: 'nowrap',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
-          zIndex: 10,
-        }}>
-          {new Date(hover.date + 'T00:00:00').toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
-          {' · '}
-          <span style={{ color: hoverColor }}>{hover.val}</span>
-        </div>
-      )}
       <svg viewBox={`0 0 100 ${chartH}`} width="100%" height={chartH}
         preserveAspectRatio="none"
         role="img"
@@ -229,14 +210,12 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
         onMouseLeave={() => setHover(null)}>
         <title id={`${uid}-title`}>{title || 'กราฟแนวโน้ม'}</title>
         <defs>
-          {/* vertical level gradient for line stroke */}
           <linearGradient id={`${uid}-line`} x1="0" y1={yTop} x2="0" y2={yBot} gradientUnits="userSpaceOnUse">
             <stop offset="0%"   stopColor="#16a34a"/>
             <stop offset="40%"  stopColor="#ca8a04"/>
             <stop offset="70%"  stopColor="#ea580c"/>
             <stop offset="100%" stopColor="#dc2626"/>
           </linearGradient>
-          {/* same gradient with opacity for fill */}
           <linearGradient id={`${uid}-fill`} x1="0" y1={yTop} x2="0" y2={yBot} gradientUnits="userSpaceOnUse">
             <stop offset="0%"   stopColor="#16a34a" stopOpacity="0.22"/>
             <stop offset="40%"  stopColor="#ca8a04" stopOpacity="0.14"/>
@@ -244,7 +223,6 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
             <stop offset="100%" stopColor="#dc2626" stopOpacity="0.02"/>
           </linearGradient>
         </defs>
-        {/* grid lines */}
         {[0.25, 0.5, 0.75].map(t => (
           <line key={t} x1="0" y1={PAD + (1 - t) * (chartH - PAD * 2)}
             x2="100" y2={PAD + (1 - t) * (chartH - PAD * 2)}
@@ -253,22 +231,53 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
         <path d={areaPath} fill={`url(#${uid}-fill)`}/>
         <path d={smoothPath} fill="none" stroke={`url(#${uid}-line)`} strokeWidth="2"
           vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"/>
-        {/* dots colored by level */}
-        {data.map((d, i) => (
-          <circle key={i} cx={xs(i)} cy={ys(d[valueKey])} r="1.5"
-            fill={levelColor(d[valueKey] / max)} vectorEffect="non-scaling-stroke" fillOpacity="0.7"/>
-        ))}
-        {/* hover indicator */}
+        {/* hover vertical line only — dot rendered via HTML to avoid oval distortion */}
         {hover && (
-          <>
-            <line x1={hover.x} y1={PAD} x2={hover.x} y2={chartH}
-              stroke={hoverColor} strokeWidth="0.8" strokeDasharray="2,2"
-              vectorEffect="non-scaling-stroke" strokeOpacity="0.5"/>
-            <circle cx={hover.x} cy={hover.y} r="3"
-              fill="#fff" stroke={hoverColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
-          </>
+          <line x1={hover.x} y1={PAD} x2={hover.x} y2={chartH}
+            stroke={hoverColor} strokeWidth="0.8" strokeDasharray="2,2"
+            vectorEffect="non-scaling-stroke" strokeOpacity="0.4"/>
         )}
       </svg>
+
+      {/* HTML overlay: dot + tooltip — avoids SVG non-uniform scaling artifacts */}
+      {hover && (
+        <>
+          {/* dot */}
+          <div style={{
+            position: 'absolute',
+            left: `${hover.x}%`, top: `${dotTopPct}%`,
+            transform: 'translate(-50%, -50%)',
+            width: 10, height: 10, borderRadius: '50%',
+            background: '#fff',
+            border: `2px solid ${hoverColor}`,
+            boxShadow: `0 0 0 3px ${hoverColor}25`,
+            pointerEvents: 'none',
+            zIndex: 5,
+          }} />
+          {/* tooltip */}
+          <div style={{
+            position: 'absolute',
+            left: `clamp(0px, calc(${hover.x}% - 38px), calc(100% - 76px))`,
+            ...(tooltipBelow
+              ? { top: `calc(${dotTopPct}% + 14px)` }
+              : { bottom: `calc(${100 - dotTopPct}% + 10px)` }),
+            background: 'var(--fc-surface)',
+            border: `1px solid var(--fc-border)`,
+            borderRadius: 7,
+            padding: '5px 10px',
+            fontSize: 11, fontWeight: 600,
+            color: 'var(--fc-text)',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            boxShadow: 'var(--fc-shadow-lg)',
+            zIndex: 10,
+          }}>
+            {new Date(hover.date + 'T00:00:00').toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
+            {' · '}
+            <span style={{ color: hoverColor, fontVariantNumeric: 'tabular-nums' }}>{hover.val}</span>
+          </div>
+        </>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
         {idxs.map(i => (
           <span key={i} style={{ fontSize: 10, color: 'var(--fc-text-4)', lineHeight: 1 }}>
