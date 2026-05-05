@@ -80,32 +80,35 @@ graph LR
 แสดงบทบาทและสิทธิ์การเข้าถึงฟีเจอร์ต่างๆ ของผู้ใช้แต่ละกลุ่ม
 
 ```mermaid
-useCaseDiagram
-    actor "Admin" as A
-    actor "Teacher" as T
-    actor "Student" as S
+graph LR
+    %% Actors
+    Admin((Admin))
+    Teacher((Teacher))
+    Student((Student))
 
-    package "FaceCheck System" {
-        usecase "Manage Teachers & Users" as UC1
-        usecase "System Settings (Thresholds)" as UC2
-        usecase "Manage Students & Subjects" as UC3
-        usecase "Face Scanning (Attendance)" as UC4
-        usecase "Manual Attendance Adjustment" as UC5
-        usecase "View Statistics & Reports" as UC6
-        usecase "Export Data (Excel)" as UC7
-    }
+    %% Use Cases
+    subgraph "FaceCheck System"
+        UC1[Manage Teachers & Users]
+        UC2[System Settings - Thresholds]
+        UC3[Manage Students & Subjects]
+        UC4[Face Scanning - Attendance]
+        UC5[Manual Attendance Adjustment]
+        UC6[View Statistics & Reports]
+        UC7[Export Data - Excel]
+    end
 
-    A --> UC1
-    A --> UC2
-    A --> UC3
+    %% Relations
+    Admin --- UC1
+    Admin --- UC2
+    Admin --- UC3
     
-    T --> UC3
-    T --> UC4
-    T --> UC5
-    T --> UC6
-    T --> UC7
+    Teacher --- UC3
+    Teacher --- UC4
+    Teacher --- UC5
+    Teacher --- UC6
+    Teacher --- UC7
     
-    S --> UC4
+    Student --- UC4
 ```
 
 ---
