@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, s
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Student, StudentFaceEmbedding
-from app.models.user import User
+from app.models.database import get_db, Student, StudentFaceEmbedding, SubjectSchedule
+from app.models.user import User, TeacherSubject
 from app.services.face_proc import FaceProcessor
-from app.core.dependencies import require_teacher_or_admin, require_admin
+from app.core.dependencies import require_teacher_or_admin, require_admin, get_current_user
 
 router = APIRouter()
 face_processor = FaceProcessor()
@@ -113,9 +113,30 @@ async def update_face(
 @router.get("/students")
 def list_students(
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
-    students = db.query(Student).order_by(Student.student_id).all()
+    q = db.query(Student)
+
+    if current_user.role == "teacher":
+        # หา (grade_level, room_number) ทั้งหมดที่ครูคนนี้สอน
+        schedules = (
+            db.query(SubjectSchedule)
+            .join(TeacherSubject, TeacherSubject.subject_id == SubjectSchedule.subject_id)
+            .filter(TeacherSubject.teacher_id == current_user.id)
+            .all()
+        )
+        rooms = {(sc.grade_level, sc.room_number) for sc in schedules if sc.grade_level and sc.room_number}
+        if rooms:
+            from sqlalchemy import or_, and_
+            q = q.filter(or_(*[
+                and_(Student.grade_level == g, Student.room_number == r)
+                for g, r in rooms
+            ]))
+        else:
+            # ครูยังไม่มีตารางสอน → ไม่แสดงนักเรียนเลย
+            return []
+
+    students = q.order_by(Student.student_id).all()
     return [
         {
             "id": s.id,
