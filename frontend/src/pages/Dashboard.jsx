@@ -190,8 +190,9 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
-    const relX = (e.clientX - rect.left) / rect.width
-    const i = Math.min(Math.round(relX * (data.length - 1)), data.length - 1)
+    const svgX = (e.clientX - rect.left) / rect.width * 100   // 0-100 SVG units
+    const dataX = (svgX - PAD) / (100 - PAD * 2) * (data.length - 1)
+    const i = Math.min(Math.max(0, Math.round(dataX)), data.length - 1)
     setHover({ i, x: xs(i), y: ys(data[i][valueKey]), val: data[i][valueKey], date: data[i].date })
   }
 
