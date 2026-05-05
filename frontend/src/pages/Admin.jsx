@@ -342,6 +342,7 @@ export default function Admin() {
     const avail = subjects.filter(s => {
       if (assigned.includes(s.id)) return false
       if (teacherCats.length === 0) return true
+      if (!s.category) return true
       return teacherCats.includes(s.category)
     })
     setAssignId(avail[0]?.id ? String(avail[0].id) : '')
@@ -519,7 +520,8 @@ export default function Admin() {
     if (teacherSubs.includes(s.id)) return false
     if (!assignModal) return true
     const teacherCats = assignModal.categories || []
-    if (teacherCats.length === 0) return true
+    if (teacherCats.length === 0) return true   // ครูไม่ได้กำหนดหมวด → แสดงทุกวิชา
+    if (!s.category) return true                // วิชาไม่มีหมวด → แสดงได้ทุกครู
     return teacherCats.includes(s.category)
   })
 
@@ -1126,7 +1128,9 @@ export default function Admin() {
                 </div>
               </>
             : <div style={{textAlign:'center',padding:'8px 0'}}>
-                <p style={{fontSize:13,color:'var(--fc-text-4)',marginBottom:12}}>ได้รับมอบหมายวิชาครบแล้ว</p>
+                <p style={{fontSize:13,color:'var(--fc-text-4)',marginBottom:12}}>
+                  {teacherSubs.length > 0 ? 'ได้รับมอบหมายวิชาครบแล้ว' : 'ไม่มีวิชาในหมวดที่ครูสอน'}
+                </p>
                 <button className="btn btn-ghost btn-full" onClick={()=>setAssignModal(null)}>ปิด</button>
               </div>
           }
