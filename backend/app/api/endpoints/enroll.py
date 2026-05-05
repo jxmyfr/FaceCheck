@@ -837,36 +837,97 @@ async def import_zip(
 
     created, duplicates, errors, sid_list = _import_students_from_ws(wb.active, db)
 
-    # หารูปภาพใน ZIP — ชื่อไฟล์ต้องเป็น {student_id}.jpg/png/jpeg
+    # หารูปภาพใน ZIP — รองรับทั้ง {student_id}.jpg และ {student_id}_front/left/right.jpg
     image_exts = {".jpg", ".jpeg", ".png"}
-    image_files = {
-        Path(n).stem: n for n in names
-        if Path(n).suffix.lower() in image_exts and not n.startswith("__")
-    }
+    ANGLE_LABELS = {"front": "มุมตรง", "left": "มุมซ้าย", "right": "มุมขวา"}
+    ANGLES_ORDER = ["front", "left", "right"]
+
+    # แยก: single={sid: path}, multi={sid: {angle: path}}
+    single_files: dict[str, str] = {}
+    multi_files: dict[str, dict[str, str]] = {}
+    for n in names:
+        p = Path(n)
+        if p.suffix.lower() not in image_exts or n.startswith("__"):
+            continue
+        stem = p.stem
+        for angle in ANGLE_LABELS:
+            if stem.endswith(f"_{angle}"):
+                sid = stem[: -(len(angle) + 1)]
+                multi_files.setdefault(sid, {})[angle] = n
+                break
+        else:
+            single_files[stem] = n
 
     faces_ok, faces_fail = [], []
+    all_sids = set(sid_list) | set(single_files) | set(multi_files)
 
-    for sid in set(sid_list) | set(image_files.keys()):
-        if sid not in image_files:
+    for sid in all_sids:
+        student = db.query(Student).filter(Student.student_id == sid).first()
+        if not student:
+            if sid in single_files or sid in multi_files:
+                faces_fail.append({"student_id": sid, "reason": "ไม่พบนักเรียนในระบบ"})
             continue
-        img_bytes = zf.read(image_files[sid])
+
+        # ── Multi-angle mode ─────────────────────────────────────
+        if sid in multi_files:
+            angle_map = multi_files[sid]
+            pairs = []  # (angle, embedding, jpeg_bytes)
+            any_fail = False
+            for angle in ANGLES_ORDER:
+                if angle not in angle_map:
+                    continue
+                img_bytes = zf.read(angle_map[angle])
+                arr = np.frombuffer(img_bytes, np.uint8)
+                frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if frame is None:
+                    faces_fail.append({"student_id": sid, "reason": f"อ่านรูป {angle} ไม่ได้"})
+                    any_fail = True
+                    break
+                try:
+                    emb = face_processor.extract_embedding(frame)
+                except Exception:
+                    faces_fail.append({"student_id": sid, "reason": f"ตรวจจับใบหน้าไม่พบ ({angle})"})
+                    any_fail = True
+                    break
+                _, jpeg_buf = cv2.imencode(".jpg", frame)
+                pairs.append((angle, emb, jpeg_buf.tobytes()))
+            if any_fail:
+                continue
+            if not pairs:
+                faces_fail.append({"student_id": sid, "reason": "ไม่มีรูปมุมใดเลย"})
+                continue
+            # Clear existing embeddings and replace
+            db.query(StudentFaceEmbedding).filter(
+                StudentFaceEmbedding.student_id == student.id
+            ).delete()
+            for angle, emb, jpeg_bytes in pairs:
+                db.add(StudentFaceEmbedding(
+                    student_id=student.id,
+                    embedding=emb.tobytes(),
+                    face_image=jpeg_bytes,
+                    label=ANGLE_LABELS[angle],
+                ))
+            # primary embedding = front (or first available)
+            front_emb, front_img = pairs[0][1], pairs[0][2]
+            student.face_embedding = front_emb.tobytes()
+            student.face_image = front_img
+            faces_ok.append({"student_id": sid})
+            continue
+
+        # ── Single-angle mode (legacy) ────────────────────────────
+        if sid not in single_files:
+            continue
+        img_bytes = zf.read(single_files[sid])
         arr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if frame is None:
             faces_fail.append({"student_id": sid, "reason": "อ่านรูปไม่ได้"})
             continue
-
         try:
             embedding = face_processor.extract_embedding(frame)
         except Exception:
             faces_fail.append({"student_id": sid, "reason": "ตรวจจับใบหน้าไม่พบ"})
             continue
-
-        student = db.query(Student).filter(Student.student_id == sid).first()
-        if not student:
-            faces_fail.append({"student_id": sid, "reason": "ไม่พบนักเรียนในระบบ"})
-            continue
-
         _, jpeg_buf = cv2.imencode(".jpg", frame)
         student.face_embedding = embedding.tobytes()
         student.face_image = jpeg_buf.tobytes()
