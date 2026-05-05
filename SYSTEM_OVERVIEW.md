@@ -432,7 +432,7 @@ sequenceDiagram
 
 - **Scanner**: สแกนใบหน้าเช็คชื่อ real-time, สร้าง QR, กรอกมือ
 - **รายชื่อนักเรียน**: ค้นหา, กรองชั้น/ห้อง/มีใบหน้า, export Excel
-- **Dashboard**: KPI การเข้าเรียน, กราฟ trend 30 วัน, drill-down ชั้น→ห้อง→รายบุคคล
+- **Dashboard**: KPI การเข้าเรียน, กราฟ trend 30 วัน (นับนักเรียนไม่ซ้ำ เฉพาะ present/late), drill-down ม.ต้น/ม.ปลาย→ชั้น→ห้อง→รายบุคคล — อัตราเข้าเรียนนับ distinct students ไม่เกิน 100%
 - **รายงาน**: ค้นหาตามวันที่/วิชา/ชั้น/ห้อง, export Excel 2 sheet, พิมพ์, Gradebook view
 - **แก้ไขสถานะ**: เปลี่ยน present/late/absent/excused พร้อมบันทึกเหตุผล
 
