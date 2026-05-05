@@ -27,7 +27,7 @@ const PERIODS = [
   { label: 'คาบ 6  (13:50–14:40)', start: '13:50', end: '14:40' },
   { label: 'คาบ 7  (14:40–15:30)', start: '14:40', end: '15:30' },
 ]
-const DAYS = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา']
+const DAYS = ['จ', 'อ', 'พ', 'พฤ', 'ศ']
 
 const periodLabel = (start, end) => {
   const p = PERIODS.find(p => p.start === start && p.end === end)
