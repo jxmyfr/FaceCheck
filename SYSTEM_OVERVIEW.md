@@ -408,7 +408,8 @@ sequenceDiagram
 |-----|------|-----------|
 | **Authentication** | JWT HS256 | token มีอายุ, เก็บใน localStorage |
 | **Authorization** | Role-based | `admin` และ `teacher` มีสิทธิ์ต่างกัน |
-| **Data Scope** | Backend + Frontend filter | `teacher` เห็นเฉพาะนักเรียนในห้องที่ตัวเองสอน (API) และประวัติสแกนเฉพาะวิชาตัวเอง (filter by subject_id) — `admin` เห็นทุกข้อมูล พร้อม subject_code/subject_name/teacher_name |
+| **Data Scope** | Backend + Frontend filter | `teacher` เห็นเฉพาะนักเรียนในห้องที่ตัวเองสอน (API list) และประวัติสแกนเฉพาะวิชาตัวเอง (frontend filter) — `admin` เห็นทุกข้อมูล พร้อม subject_code/subject_name/teacher_name |
+| **Scan Room Lock** | Backend enforce | scan endpoint ตรวจ grade/room ของนักเรียนที่จำได้ vs ตารางสอนของวิชา — ปฏิเสธถ้าไม่ตรง แม้ไม่มี schedule_id (no period lock) |
 | **QR โกง** | JTI tracking | 1 QR token ใช้ได้ 1 ครั้ง |
 | **รูปภาพโกง** | Liveness check | LBP texture + FFT analysis ตรวจหน้าจอ/พิมพ์ |
 | **ภาพคุณภาพต่ำ** | Quality gate | ปฏิเสธภาพเบลอ/ไกล/เอียงก่อน recognition |
