@@ -256,6 +256,59 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
 @media (max-width: 768px) {
   .page { padding-top: 64px; }
 }
+
+/* ── Enrollment grids ── */
+.enroll-single-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 480px) minmax(300px, 640px);
+  gap: 20px;
+}
+.enroll-import-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.enroll-face-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .enroll-single-grid,
+  .enroll-import-grid,
+  .enroll-face-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Tab bar — scroll on small screens ── */
+.tab-bar {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-item { flex-shrink: 0; }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px; padding: 14px 20px;
+  border-top: 1px solid var(--fc-border);
+}
+.pg-btn {
+  min-width: 32px; height: 32px; border-radius: 6px;
+  border: 1.5px solid var(--fc-border); background: var(--fc-surface);
+  color: var(--fc-text-3); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.12s;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 8px;
+}
+.pg-btn:hover:not(:disabled) { border-color: var(--fc-primary); color: var(--fc-primary); }
+.pg-btn.active { background: var(--fc-primary); color: #fff; border-color: var(--fc-primary); }
+.pg-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 @media (max-width: 480px) {
   .grid-kpi { grid-template-columns: 1fr 1fr; }
 }

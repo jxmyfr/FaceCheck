@@ -212,7 +212,9 @@ export default function Admin() {
   const [logLoading, setLogLoading] = useState(false)
   const [logDetail, setLogDetail]   = useState(null)   // selected log for detail modal
   const [logPhoto, setLogPhoto]     = useState(null)   // blob URL for scan image
-  const [showDupScans, setShowDupScans] = useState(false) // toggle already_checked
+  const [showDupScans, setShowDupScans] = useState(false)
+  const [logPage, setLogPage] = useState(1)
+  const LOG_PAGE_SIZE = 25
 
   const [showUser, setShowUser]     = useState(false)
   const [newUser, setNewUser]       = useState({email:'',username:'',password:'',full_name:'',role:'teacher',categories:[]})
@@ -385,7 +387,7 @@ export default function Admin() {
   }
 
   const loadLogs = async (date = logDate, subject = logSubject) => {
-    setLogLoading(true)
+    setLogLoading(true); setLogPage(1)
     try {
       const params = new URLSearchParams({ log_date: date })
       if (subject) params.append('subject_id', subject)
@@ -774,7 +776,7 @@ export default function Admin() {
                 <span style={{fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>แสดงสแกนซ้ำ</span>
                 <button
                   role="switch" aria-checked={showDupScans}
-                  onClick={()=>setShowDupScans(v=>!v)}
+                  onClick={()=>{ setShowDupScans(v=>!v); setLogPage(1) }}
                   style={{width:36,height:20,borderRadius:99,border:'none',cursor:'pointer',flexShrink:0,
                     background:showDupScans?'var(--fc-primary)':'var(--fc-neutral)',
                     position:'relative',transition:'background 0.2s'}}
@@ -804,51 +806,78 @@ export default function Admin() {
             <div style={{textAlign:'center',padding:40,color:'var(--fc-text-4)',fontSize:13}}>
               ไม่พบบันทึกการเช็คชื่อในวันนี้
             </div>
-          ) : (
-            <div style={{overflowX:'auto'}}>
-              <table className="tbl">
-                <thead><tr>
-                  <th>เวลา</th>
-                  <th>รหัสนักเรียน</th>
-                  <th>ชื่อ-นามสกุล</th>
-                  <th>ชั้น/ห้อง</th>
-                  <th>วิชา</th>
-                  <th>สถานะ</th>
-                  <th></th>
-                </tr></thead>
-                <tbody>
-                  {logs.filter(l => showDupScans || l.status !== 'already_checked').map(log=>(
-                    <tr key={log.log_id}
-                      onClick={()=>openLogDetail(log)}
-                      style={{cursor:'pointer',opacity: log.status==='already_checked' ? 0.75 : 1}}
-                    >
-                      <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>
-                        {log.timestamp}
-                      </td>
-                      <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12}}>{log.student_id}</td>
-                      <td style={{fontWeight:500,color:'var(--fc-text)'}}>{log.name}</td>
-                      <td style={{fontSize:12,color:'var(--fc-text-3)'}}>
-                        {log.grade_level ? `ชั้น ${log.grade_level}` : '—'}
-                        {log.room_number ? ` ห้อง ${log.room_number}` : ''}
-                      </td>
-                      <td>
-                        <span style={{fontSize:11,fontFamily:'var(--fc-font-mono)',background:'var(--fc-muted)',padding:'2px 6px',borderRadius:4}}>
-                          {log.subject_code}
-                        </span>
-                        <span style={{fontSize:12,color:'var(--fc-text-3)',marginLeft:6}}>{log.subject_name}</span>
-                      </td>
-                      <td onClick={e=>e.stopPropagation()}>
-                        <StatusBadge status={log.status} reason={log.reason} logId={log.log_id} onUpdate={updateLogStatus}/>
-                      </td>
-                      <td onClick={e=>e.stopPropagation()}>
-                        <button className="btn btn-danger btn-sm" onClick={()=>deleteLog(log.log_id)}>ยกเลิก</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          ) : (() => {
+            const filtered = logs.filter(l => showDupScans || l.status !== 'already_checked')
+            const totalPages = Math.ceil(filtered.length / LOG_PAGE_SIZE)
+            const page = Math.min(logPage, totalPages)
+            const paged = filtered.slice((page - 1) * LOG_PAGE_SIZE, page * LOG_PAGE_SIZE)
+            const pageNums = () => {
+              const pages = []
+              for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || Math.abs(i - page) <= 1) pages.push(i)
+                else if (pages[pages.length - 1] !== '...') pages.push('...')
+              }
+              return pages
+            }
+            return (
+              <>
+                <div style={{overflowX:'auto'}}>
+                  <table className="tbl">
+                    <thead><tr>
+                      <th>เวลา</th>
+                      <th>รหัสนักเรียน</th>
+                      <th>ชื่อ-นามสกุล</th>
+                      <th>ชั้น/ห้อง</th>
+                      <th>วิชา</th>
+                      <th>สถานะ</th>
+                      <th></th>
+                    </tr></thead>
+                    <tbody>
+                      {paged.map(log=>(
+                        <tr key={log.log_id}
+                          onClick={()=>openLogDetail(log)}
+                          style={{cursor:'pointer',opacity: log.status==='already_checked' ? 0.75 : 1}}
+                        >
+                          <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>
+                            {log.timestamp}
+                          </td>
+                          <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12}}>{log.student_id}</td>
+                          <td style={{fontWeight:500,color:'var(--fc-text)'}}>{log.name}</td>
+                          <td style={{fontSize:12,color:'var(--fc-text-3)'}}>
+                            {log.grade_level ? `ชั้น ${log.grade_level}` : '—'}
+                            {log.room_number ? ` ห้อง ${log.room_number}` : ''}
+                          </td>
+                          <td>
+                            <span style={{fontSize:11,fontFamily:'var(--fc-font-mono)',background:'var(--fc-muted)',padding:'2px 6px',borderRadius:4}}>
+                              {log.subject_code}
+                            </span>
+                            <span style={{fontSize:12,color:'var(--fc-text-3)',marginLeft:6}}>{log.subject_name}</span>
+                          </td>
+                          <td onClick={e=>e.stopPropagation()}>
+                            <StatusBadge status={log.status} reason={log.reason} logId={log.log_id} onUpdate={updateLogStatus}/>
+                          </td>
+                          <td onClick={e=>e.stopPropagation()}>
+                            <button className="btn btn-danger btn-sm" onClick={()=>deleteLog(log.log_id)}>ยกเลิก</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button className="pg-btn" onClick={()=>setLogPage(p=>Math.max(1,p-1))} disabled={page===1}>‹</button>
+                    {pageNums().map((n,i) => n === '...'
+                      ? <span key={`e${i}`} style={{padding:'0 4px',color:'var(--fc-text-4)',fontSize:13}}>…</span>
+                      : <button key={n} className={`pg-btn${page===n?' active':''}`} onClick={()=>setLogPage(n)}>{n}</button>
+                    )}
+                    <button className="pg-btn" onClick={()=>setLogPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}>›</button>
+                    <span style={{fontSize:12,color:'var(--fc-text-4)',marginLeft:8}}>{(page-1)*LOG_PAGE_SIZE+1}–{Math.min(page*LOG_PAGE_SIZE,filtered.length)} / {filtered.length}</span>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
 

@@ -200,7 +200,7 @@ function SingleTab() {
   const allCaptured  = shotCount === ANGLE_STEPS.length
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 480px) minmax(300px, 640px)', gap: 20 }}>
+    <div className="enroll-single-grid">
       {/* Left: form */}
       <div className="card">
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 18 }}>ข้อมูลนักเรียน</div>
@@ -431,7 +431,7 @@ function ImportTab() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) 1fr', gap: 20, alignItems: 'start' }}>
+    <div className="enroll-import-grid">
       <ExcelPanel onImported={refreshStudents} />
       <FacePanel students={students} fetching={fetching} onFaceSaved={(id) => {
         setStudents(prev => prev.map(s => s.student_id === id ? { ...s, has_face: true } : s))
@@ -754,7 +754,7 @@ function FacePanel({ students, fetching, onFaceSaved }) {
       </div>
 
       {/* Selector + face capture stacked vertically */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 340px) 1fr', gap: 16, alignItems: 'start' }}>
+      <div className="enroll-face-grid">
 
       {/* Left: student selector */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
