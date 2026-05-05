@@ -82,12 +82,12 @@ export default function Students() {
     <main id="main-content" className="page">
       {dialog}
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 className="page-title">รายชื่อนักเรียน</h1>
           <p className="page-sub">นักเรียนทั้งหมดในระบบ {students.length} คน</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-ghost btn-sm" onClick={load}>รีเฟรช</button>
           <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:4,verticalAlign:'middle'}}>
@@ -195,57 +195,93 @@ export default function Students() {
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>รหัสนักเรียน</th>
-                <th>ชื่อ</th>
-                <th>นามสกุล</th>
-                <th>ระดับชั้น</th>
-                <th>ห้อง</th>
-                <th>ใบหน้า</th>
-                {user?.role === 'admin' && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(s => (
-                <tr
-                  key={s.student_id}
-                  style={{
-                    cursor: 'pointer',
-                    background: !s.has_face ? 'rgba(251,191,36,0.06)' : undefined,
-                  }}
-                  onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
-                >
-                  <td style={{ fontWeight: 600, color: 'var(--fc-text)', fontFamily: 'var(--fc-font-mono)' }}>
-                    {s.student_id}
-                  </td>
-                  <td>{s.first_name}</td>
-                  <td>{s.last_name}</td>
-                  <td>{s.grade_level ?? '—'}</td>
-                  <td>{s.room_number ?? '—'}</td>
-                  <td>
-                    {s.has_face
-                      ? <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)' }}>มีแล้ว</span>
-                      : <span className="chip" style={{ background: 'var(--fc-danger-light)', color: 'var(--fc-danger)' }}>ยังไม่มี</span>
-                    }
-                  </td>
-                  {user?.role === 'admin' && (
-                    <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        disabled={deleting === s.student_id}
-                        onClick={() => setConfirm(s)}
-                      >
-                        {deleting === s.student_id ? '…' : 'ลบ'}
-                      </button>
-                    </td>
-                  )}
+          {/* Desktop table */}
+          <div className="students-table-wrap" style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>รหัสนักเรียน</th>
+                  <th>ชื่อ</th>
+                  <th>นามสกุล</th>
+                  <th>ระดับชั้น</th>
+                  <th>ห้อง</th>
+                  <th>ใบหน้า</th>
+                  {user?.role === 'admin' && <th />}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map(s => (
+                  <tr
+                    key={s.student_id}
+                    style={{
+                      cursor: 'pointer',
+                      background: !s.has_face ? 'rgba(251,191,36,0.06)' : undefined,
+                    }}
+                    onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
+                  >
+                    <td style={{ fontWeight: 600, color: 'var(--fc-text)', fontFamily: 'var(--fc-font-mono)' }}>
+                      {s.student_id}
+                    </td>
+                    <td>{s.first_name}</td>
+                    <td>{s.last_name}</td>
+                    <td>{s.grade_level ?? '—'}</td>
+                    <td>{s.room_number ?? '—'}</td>
+                    <td>
+                      {s.has_face
+                        ? <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)' }}>มีแล้ว</span>
+                        : <span className="chip" style={{ background: 'var(--fc-danger-light)', color: 'var(--fc-danger)' }}>ยังไม่มี</span>
+                      }
+                    </td>
+                    {user?.role === 'admin' && (
+                      <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          disabled={deleting === s.student_id}
+                          onClick={() => setConfirm(s)}
+                        >
+                          {deleting === s.student_id ? '…' : 'ลบ'}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="students-cards-wrap">
+            {filtered.map(s => (
+              <div
+                key={s.student_id}
+                className="student-card-row"
+                style={{ background: !s.has_face ? 'rgba(251,191,36,0.06)' : undefined }}
+                onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
+              >
+                <div className="student-card-main">
+                  <div className="student-card-name">{s.first_name} {s.last_name}</div>
+                  <div className="student-card-id">{s.student_id}</div>
+                  <div className="student-card-meta">
+                    {s.grade_level ?? '—'} · ห้อง {s.room_number ?? '—'}
+                  </div>
+                </div>
+                <div className="student-card-right">
+                  {s.has_face
+                    ? <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)' }}>มีแล้ว</span>
+                    : <span className="chip" style={{ background: 'var(--fc-danger-light)', color: 'var(--fc-danger)' }}>ยังไม่มี</span>
+                  }
+                  {user?.role === 'admin' && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      disabled={deleting === s.student_id}
+                      onClick={e => { e.stopPropagation(); setConfirm(s) }}
+                    >
+                      {deleting === s.student_id ? '…' : 'ลบ'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

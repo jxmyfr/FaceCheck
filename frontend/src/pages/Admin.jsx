@@ -549,85 +549,145 @@ export default function Admin() {
             <span style={{fontSize:14,fontWeight:600,color:'var(--fc-text)'}}>บัญชีผู้ใช้ทั้งหมด</span>
             <button className="btn btn-primary btn-sm" onClick={()=>setShowUser(true)}>+ เพิ่มบัญชี</button>
           </div>
-          <div style={{overflowX:'auto'}}>
-          <table className="tbl">
-            <thead><tr>
-              <th style={{width:'22%'}}>ชื่อ</th>
-              <th style={{width:'26%'}}>Email</th>
-              <th style={{width:'10%'}}>Role</th>
-              <th style={{width:'10%'}}>สถานะ</th>
-              <th style={{width:'32%',textAlign:'right',paddingRight:20}}>การจัดการ</th>
-            </tr></thead>
-            <tbody>
-              {users.map(u=>(
-                <tr key={u.id}>
-                  <td>
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <div style={{width:32,height:32,borderRadius:'50%',background:'var(--fc-primary-light)',color:'var(--fc-primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flexShrink:0}}>
-                        {u.full_name?.[0]}
+
+          {/* Desktop table */}
+          <div className="admin-users-table-wrap" style={{overflowX:'auto'}}>
+            <table className="tbl">
+              <thead><tr>
+                <th style={{width:'22%'}}>ชื่อ</th>
+                <th style={{width:'26%'}}>Email</th>
+                <th style={{width:'10%'}}>Role</th>
+                <th style={{width:'10%'}}>สถานะ</th>
+                <th style={{width:'32%',textAlign:'right',paddingRight:20}}>การจัดการ</th>
+              </tr></thead>
+              <tbody>
+                {users.map(u=>(
+                  <tr key={u.id}>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <div style={{width:32,height:32,borderRadius:'50%',background:'var(--fc-primary-light)',color:'var(--fc-primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flexShrink:0}}>
+                          {u.full_name?.[0]}
+                        </div>
+                        <span style={{fontWeight:600,color:'var(--fc-text)',fontSize:13}}>{u.full_name}</span>
                       </div>
-                      <span style={{fontWeight:600,color:'var(--fc-text)',fontSize:13}}>{u.full_name}</span>
-                    </div>
-                  </td>
-                  <td style={{color:'var(--fc-text-3)',fontSize:13}}>{u.email}</td>
-                  <td>
-                    <div style={{display:'flex',alignItems:'center',gap:6}}>
-                      <span className="chip" style={u.role==='admin'
-                        ? {background:'rgba(124,58,237,0.1)',color:'var(--fc-secondary)'}
-                        : {background:'var(--fc-primary-light)',color:'var(--fc-primary)'}
-                      }>{u.role}</span>
-                      {u.id === superadminId && (
-                        <span className="chip" style={{background:'rgba(245,158,11,0.12)',color:'var(--fc-warning)',fontSize:10}}>หลัก</span>
-                      )}
-                      {u.id === user?.id && (
-                        <span className="chip" style={{background:'var(--fc-muted)',color:'var(--fc-text-4)',fontSize:10}}>คุณ</span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{display:'flex',alignItems:'center',gap:5}}>
+                    </td>
+                    <td style={{color:'var(--fc-text-3)',fontSize:13}}>{u.email}</td>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <span className="chip" style={u.role==='admin'
+                          ? {background:'rgba(124,58,237,0.1)',color:'var(--fc-secondary)'}
+                          : {background:'var(--fc-primary-light)',color:'var(--fc-primary)'}
+                        }>{u.role}</span>
+                        {u.id === superadminId && (
+                          <span className="chip" style={{background:'rgba(245,158,11,0.12)',color:'var(--fc-warning)',fontSize:10}}>หลัก</span>
+                        )}
+                        {u.id === user?.id && (
+                          <span className="chip" style={{background:'var(--fc-muted)',color:'var(--fc-text-4)',fontSize:10}}>คุณ</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center',gap:5}}>
+                        <span className={u.is_active?'dot-on':'dot-off'}/>
+                        <span style={{fontSize:12,color:'var(--fc-text-3)'}}>{u.is_active?'ใช้งาน':'ระงับ'}</span>
+                      </div>
+                    </td>
+                    <td>
+                      {(() => {
+                        const isSelf = u.id === user?.id
+                        const isSuperadmin = u.id === superadminId
+                        const canManage = !isSelf && !(isSuperadmin && user?.id !== superadminId)
+                        if (!canManage) return (
+                          <div style={{textAlign:'right',paddingRight:4,fontSize:12,color:'var(--fc-text-4)'}}>
+                            {isSelf ? 'บัญชีของคุณ' : 'ผู้ดูแลหลัก'}
+                          </div>
+                        )
+                        return (
+                          <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+                            {u.role==='teacher' && <>
+                              <button className="btn btn-ghost btn-sm" onClick={async ()=>{
+                                setTeacherDetail(u)
+                                setTeacherEdit(false)
+                                setTeacherForm({full_name:u.full_name,email:u.email,username:u.username||'',role:u.role,new_password:'',categories:u.categories||[]})
+                                try {
+                                  const res = await axios.get(`${API}/auth/users/${u.id}/subjects`)
+                                  setTeacherSubjectIds(new Set(res.data.map(s => s.id)))
+                                } catch { setTeacherSubjectIds(new Set()) }
+                              }}>ดูข้อมูล</button>
+                              <button className="btn btn-ghost btn-sm" onClick={()=>openAssign(u)}>มอบหมายวิชา</button>
+                            </>}
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{color: u.is_active ? 'var(--fc-warning)' : 'var(--fc-success-dark)'}}
+                              onClick={()=>toggleUser(u.id)}
+                            >{u.is_active?'ระงับ':'เปิดใช้'}</button>
+                            <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u.id)}>ลบ</button>
+                          </div>
+                        )
+                      })()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="admin-users-cards-wrap">
+            {users.map(u => {
+              const isSelf = u.id === user?.id
+              const isSuperadmin = u.id === superadminId
+              const canManage = !isSelf && !(isSuperadmin && user?.id !== superadminId)
+              return (
+                <div key={u.id} className="admin-user-card">
+                  <div className="admin-user-card-top">
+                    <div className="admin-user-card-avatar">{u.full_name?.[0]}</div>
+                    <span className="admin-user-card-name">{u.full_name}</span>
+                    <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
                       <span className={u.is_active?'dot-on':'dot-off'}/>
-                      <span style={{fontSize:12,color:'var(--fc-text-3)'}}>{u.is_active?'ใช้งาน':'ระงับ'}</span>
+                      <span style={{fontSize:11,color:'var(--fc-text-3)'}}>{u.is_active?'ใช้งาน':'ระงับ'}</span>
                     </div>
-                  </td>
-                  <td>
-                    {(() => {
-                      const isSelf = u.id === user?.id
-                      const isSuperadmin = u.id === superadminId
-                      const canManage = !isSelf && !(isSuperadmin && user?.id !== superadminId)
-                      if (!canManage) return (
-                        <div style={{textAlign:'right',paddingRight:4,fontSize:12,color:'var(--fc-text-4)'}}>
-                          {isSelf ? 'บัญชีของคุณ' : 'ผู้ดูแลหลัก'}
-                        </div>
-                      )
-                      return (
-                        <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
-                          {u.role==='teacher' && <>
-                            <button className="btn btn-ghost btn-sm" onClick={async ()=>{
-                              setTeacherDetail(u)
-                              setTeacherEdit(false)
-                              setTeacherForm({full_name:u.full_name,email:u.email,username:u.username||'',role:u.role,new_password:'',categories:u.categories||[]})
-                              try {
-                                const res = await axios.get(`${API}/auth/users/${u.id}/subjects`)
-                                setTeacherSubjectIds(new Set(res.data.map(s => s.id)))
-                              } catch { setTeacherSubjectIds(new Set()) }
-                            }}>ดูข้อมูล</button>
-                            <button className="btn btn-ghost btn-sm" onClick={()=>openAssign(u)}>มอบหมายวิชา</button>
-                          </>}
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{color: u.is_active ? 'var(--fc-warning)' : 'var(--fc-success-dark)'}}
-                            onClick={()=>toggleUser(u.id)}
-                          >{u.is_active?'ระงับ':'เปิดใช้'}</button>
-                          <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u.id)}>ลบ</button>
-                        </div>
-                      )
-                    })()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div className="admin-user-card-email">{u.email}</div>
+                  <div className="admin-user-card-meta">
+                    <span className="chip" style={u.role==='admin'
+                      ? {background:'rgba(124,58,237,0.1)',color:'var(--fc-secondary)'}
+                      : {background:'var(--fc-primary-light)',color:'var(--fc-primary)'}
+                    }>{u.role}</span>
+                    {u.id === superadminId && (
+                      <span className="chip" style={{background:'rgba(245,158,11,0.12)',color:'var(--fc-warning)',fontSize:10}}>หลัก</span>
+                    )}
+                    {u.id === user?.id && (
+                      <span className="chip" style={{background:'var(--fc-muted)',color:'var(--fc-text-4)',fontSize:10}}>คุณ</span>
+                    )}
+                  </div>
+                  <div className="admin-user-card-actions">
+                    {canManage ? <>
+                      {u.role==='teacher' && <>
+                        <button className="btn btn-ghost btn-sm" onClick={async ()=>{
+                          setTeacherDetail(u)
+                          setTeacherEdit(false)
+                          setTeacherForm({full_name:u.full_name,email:u.email,username:u.username||'',role:u.role,new_password:'',categories:u.categories||[]})
+                          try {
+                            const res = await axios.get(`${API}/auth/users/${u.id}/subjects`)
+                            setTeacherSubjectIds(new Set(res.data.map(s => s.id)))
+                          } catch { setTeacherSubjectIds(new Set()) }
+                        }}>ดูข้อมูล</button>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>openAssign(u)}>มอบหมายวิชา</button>
+                      </>}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{color: u.is_active ? 'var(--fc-warning)' : 'var(--fc-success-dark)'}}
+                        onClick={()=>toggleUser(u.id)}
+                      >{u.is_active?'ระงับ':'เปิดใช้'}</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u.id)}>ลบ</button>
+                    </> : (
+                      <span style={{fontSize:12,color:'var(--fc-text-4)'}}>{isSelf ? 'บัญชีของคุณ' : 'ผู้ดูแลหลัก'}</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
