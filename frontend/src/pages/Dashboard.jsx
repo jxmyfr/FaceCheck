@@ -172,10 +172,11 @@ function AreaChart({ data, valueKey = 'rate', color = '#1A56DB', height = 110, t
     const x = xs(i), y = ys(d[valueKey])
     if (i === 0) return `M ${x},${y}`
     const px = xs(i - 1), py = ys(data[i - 1][valueKey])
-    const cp = (x - px) * 0.4
+    const cp = (x - px) * 0.25
     return `${acc} C ${px + cp},${py} ${x - cp},${y} ${x},${y}`
   }, '')
-  const areaPath = `${smoothPath} L ${xs(data.length - 1)},${chartH} L ${PAD},${chartH} Z`
+  const baseline = ys(bottom)
+  const areaPath = `${smoothPath} L ${xs(data.length - 1)},${baseline} L ${PAD},${baseline} Z`
 
   const n    = data.length
   const step = Math.max(1, Math.floor(n / 5))

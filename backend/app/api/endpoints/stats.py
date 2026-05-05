@@ -77,7 +77,10 @@ def get_daily_stats(
     current_user: User = Depends(require_teacher_or_admin),
 ):
     log_date_col = func.date(AttendanceLog.timestamp).label("log_date")
-    q = db.query(log_date_col, func.count(AttendanceLog.id).label("count"))
+    q = (
+        db.query(log_date_col, func.count(distinct(AttendanceLog.student_id)).label("count"))
+        .filter(AttendanceLog.status.in_(["present", "late"]))
+    )
     if current_user.role == "teacher":
         ts_rows = db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()
         subject_ids = [r.subject_id for r in ts_rows]
