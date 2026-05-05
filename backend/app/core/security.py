@@ -5,7 +5,11 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # ── ตั้งค่า ──────────────────────────────────────────────────────────────────
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme-set-SECRET_KEY-in-env")
+_DEFAULT_KEY = "changeme-set-SECRET_KEY-in-env"
+SECRET_KEY   = os.getenv("SECRET_KEY", _DEFAULT_KEY)
+if SECRET_KEY == _DEFAULT_KEY:
+    import warnings
+    warnings.warn("SECRET_KEY is not set — using insecure default. Set SECRET_KEY env var before deploying.", stacklevel=2)
 ALGORITHM  = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES  = 60       # 1 ชั่วโมง
 REFRESH_TOKEN_EXPIRE_DAYS    = 7        # 7 วัน

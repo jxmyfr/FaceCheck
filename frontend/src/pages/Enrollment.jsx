@@ -631,11 +631,15 @@ function FacePanel({ students, fetching, onFaceSaved }) {
   const [selGrade, setSelGrade]   = useState('')
   const [selRoom, setSelRoom]     = useState('')
   const [selStudent, setSelStudent] = useState(null)
-  const [faceMode, setFaceMode]   = useState('camera')
-  const [preview, setPreview]     = useState(null)
+  const [faceMode, setFaceMode]     = useState('camera')
+  const [shots, setShots]           = useState([])
+  const [fpStep, setFpStep]         = useState(0)
+  const [fpValidating, setFpValidating] = useState(false)
+  const [fpAngleMsg, setFpAngleMsg] = useState({ text: '', ok: false })
   const [photoItems, setPhotoItems] = useState([])
-  const [state, setState]         = useState('idle')
-  const [message, setMessage]     = useState('')
+  const [state, setState]           = useState('idle')
+  const [message, setMessage]       = useState('')
+  const FP_EXPECTED = ['front', 'right', 'left']
 
   const pool   = onlyNoFace ? students.filter(s => !s.has_face) : students
   const grades = [...new Set(pool.map(s => s.grade_level).filter(Boolean))].sort((a, b) => {
@@ -651,10 +655,31 @@ function FacePanel({ students, fetching, onFaceSaved }) {
     (!selRoom  || s.room_number === selRoom)
   )
 
-  const resetFace = () => { setPreview(null); setPhotoItems([]); setState('idle'); setMessage('') }
+  const resetFace = () => { setShots([]); setFpStep(0); setFpAngleMsg({ text: '', ok: false }); setPhotoItems([]); setState('idle'); setMessage('') }
   const pickGrade   = (g) => { setSelGrade(g); setSelRoom(''); setSelStudent(null); resetFace() }
   const pickRoom    = (r) => { setSelRoom(r);  setSelStudent(null); resetFace() }
   const pickStudent = (s) => { setSelStudent(s); resetFace() }
+
+  const fpCapture = async () => {
+    const img = cam.current?.getScreenshot()
+    if (!img || fpValidating) return
+    setFpValidating(true); setFpAngleMsg({ text: '', ok: false })
+    try {
+      const blob = await fetch(img).then(r => r.blob())
+      const fd = new FormData(); fd.append('file', blob, 'check.jpg')
+      const res = await axios.post(`${API}/enroll/check-angle?expected=${FP_EXPECTED[fpStep]}`, fd)
+      if (res.data.valid) {
+        setShots(prev => { const n = [...prev]; n[fpStep] = img; return n })
+        if (fpStep < ANGLE_STEPS.length - 1) setFpStep(s => s + 1)
+        setFpAngleMsg({ text: res.data.message, ok: true })
+      } else { setFpAngleMsg({ text: res.data.message, ok: false }) }
+    } catch {
+      setShots(prev => { const n = [...prev]; n[fpStep] = img; return n })
+      if (fpStep < ANGLE_STEPS.length - 1) setFpStep(s => s + 1)
+    } finally { setFpValidating(false) }
+  }
+
+  const fpRetake = (i) => { setShots(prev => { const n = [...prev]; n[i] = null; return n }); setFpStep(i); setFpAngleMsg({ text: '', ok: false }) }
 
   const validateOne = async (item) => {
     const fd = new FormData()
@@ -686,11 +711,13 @@ function FacePanel({ students, fetching, onFaceSaved }) {
     try {
       const fd = new FormData()
       if (faceMode === 'camera') {
-        const img = preview || cam.current?.getScreenshot()
-        if (!img) { setState('error'); setMessage('กรุณาถ่ายภาพก่อน'); return }
-        const blob = await fetch(img).then(r => r.blob())
-        fd.append('file', blob, `${selStudent.student_id}.jpg`)
-        await axios.put(`${API}/enroll/update-face/${selStudent.student_id}`, fd)
+        const captured = shots.filter(Boolean)
+        if (!captured.length) { setState('error'); setMessage('กรุณาถ่ายภาพอย่างน้อย 1 มุม'); return }
+        await Promise.all(captured.map(async (img, i) => {
+          const blob = await fetch(img).then(r => r.blob())
+          fd.append('files', blob, `${selStudent.student_id}_angle${i}.jpg`)
+        }))
+        await axios.put(`${API}/enroll/update-face-multi/${selStudent.student_id}`, fd)
       } else {
         const valid = photoItems.filter(p => p.status === 'valid')
         if (!valid.length) { setState('error'); setMessage('กรุณาอัปโหลดรูปที่ผ่านการตรวจสอบ'); return }
@@ -701,15 +728,17 @@ function FacePanel({ students, fetching, onFaceSaved }) {
       setState('success')
       setMessage(`บันทึกใบหน้าของ ${name} สำเร็จ`)
       onFaceSaved?.(selStudent.student_id)
-      setSelStudent(null); setPreview(null); setPhotoItems([])
+      setSelStudent(null); setShots([]); setFpStep(0); setPhotoItems([])
     } catch (e) {
       setState('error'); setMessage(e.response?.data?.detail || 'บันทึกใบหน้าไม่สำเร็จ')
     }
   }
 
-  const validCount = photoItems.filter(p => p.status === 'valid').length
-  const canSubmit  = !!selStudent && state !== 'loading' && (faceMode === 'camera' ? !!preview : validCount > 0)
-  const noFaceCount = students.filter(s => !s.has_face).length
+  const validCount   = photoItems.filter(p => p.status === 'valid').length
+  const fpShotCount  = shots.filter(Boolean).length
+  const fpAllDone    = fpShotCount === ANGLE_STEPS.length
+  const canSubmit    = !!selStudent && state !== 'loading' && (faceMode === 'camera' ? fpShotCount > 0 : validCount > 0)
+  const noFaceCount  = students.filter(s => !s.has_face).length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -855,28 +884,68 @@ function FacePanel({ students, fetching, onFaceSaved }) {
               ))}
             </div>
 
-            {/* Camera */}
+            {/* Camera — multi-angle */}
             {faceMode === 'camera' && (
               <>
-                <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 12 }}>
-                  {preview
-                    ? <img src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt="preview" />
-                    : <Webcam ref={cam} audio={false} mirrored screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  }
-                  {preview && (
-                    <button onClick={() => setPreview(null)} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>ถ่ายใหม่</button>
-                  )}
+                {/* Step indicators */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  {ANGLE_STEPS.map((s, i) => {
+                    const done = !!shots[i]; const active = i === fpStep && !fpAllDone
+                    return (
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', background: done ? 'var(--fc-success)' : active ? 'var(--fc-primary)' : 'var(--fc-muted)', color: done || active ? '#fff' : 'var(--fc-text-4)' }}>
+                          {done ? '✓' : i + 1}
+                        </div>
+                        <span style={{ fontSize: 11, color: done ? 'var(--fc-success)' : active ? 'var(--fc-primary)' : 'var(--fc-text-4)', fontWeight: active ? 600 : 400 }}>{s.label}</span>
+                      </div>
+                    )
+                  })}
                 </div>
-                {!preview && (
-                  <button className="btn btn-ghost btn-full" onClick={() => { const img = cam.current?.getScreenshot(); if (img) setPreview(img) }} style={{ marginBottom: 12 }}>
-                    <IcCamera /> ถ่ายภาพ
-                  </button>
+
+                {!fpAllDone ? (
+                  <>
+                    <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 8 }}>
+                      <Webcam ref={cam} audio={false} mirrored screenshotFormat="image/jpeg" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center' }}>
+                        <span style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 12, padding: '4px 10px', borderRadius: 6 }}>{ANGLE_STEPS[fpStep]?.hint}</span>
+                      </div>
+                      {fpValidating && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
+                        </div>
+                      )}
+                      {!fpValidating && fpAngleMsg.text && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: fpAngleMsg.ok ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.45)', pointerEvents: 'none' }}>
+                          <div style={{ background: fpAngleMsg.ok ? 'rgba(22,163,74,0.92)' : 'rgba(185,28,28,0.92)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '10px 20px', borderRadius: 10, textAlign: 'center', maxWidth: '80%' }}>{fpAngleMsg.text}</div>
+                        </div>
+                      )}
+                    </div>
+                    <button className="btn btn-ghost btn-full" onClick={fpCapture} disabled={fpValidating} style={{ marginBottom: 4 }}>
+                      {fpValidating ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderColor: 'rgba(0,0,0,0.2)', borderTopColor: 'currentColor' }} /> กำลังตรวจสอบมุม...</> : <><IcCamera /> ถ่าย{ANGLE_STEPS[fpStep]?.label}</>}
+                    </button>
+                    {!fpValidating && fpAngleMsg.text && !fpAngleMsg.ok && (
+                      <div style={{ fontSize: 12, color: 'var(--fc-danger)', textAlign: 'center', marginBottom: 8, fontWeight: 500 }}>{fpAngleMsg.text}</div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ background: 'var(--fc-success-light)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, textAlign: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-success-dark)' }}>ถ่ายครบ 3 มุมแล้ว — กดบันทึกได้เลย</span>
+                  </div>
                 )}
-                <div style={{ background: 'var(--fc-muted)', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
-                  {['มองตรงเข้าหากล้อง', 'แสงสว่างเพียงพอ ไม่มีเงาบนใบหน้า', 'ถอดแว่นและหน้ากากออก'].map(t => (
-                    <p key={t} style={{ fontSize: 11, color: 'var(--fc-text-3)', lineHeight: 1.8, margin: 0 }}>· {t}</p>
-                  ))}
-                </div>
+
+                {/* Thumbnails */}
+                {fpShotCount > 0 && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    {ANGLE_STEPS.map((s, i) => (
+                      <div key={i} style={{ flex: 1, position: 'relative' }}>
+                        {shots[i]
+                          ? <><img src={shots[i]} alt={s.label} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8, display: 'block' }} /><button onClick={() => fpRetake(i)} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 6px', fontSize: 10, cursor: 'pointer' }}>ถ่ายใหม่</button><div style={{ textAlign: 'center', fontSize: 10, color: 'var(--fc-success-dark)', marginTop: 3, fontWeight: 600 }}>{s.label} ✓</div></>
+                          : <div style={{ width: '100%', aspectRatio: '1', borderRadius: 8, background: 'var(--fc-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 10, color: 'var(--fc-text-4)' }}>{s.label}</span></div>
+                        }
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -901,7 +970,9 @@ function FacePanel({ students, fetching, onFaceSaved }) {
             <button className="btn btn-primary btn-lg btn-full" onClick={submit} disabled={!canSubmit}>
               {state === 'loading'
                 ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} /> กำลังบันทึก...</>
-                : faceMode === 'upload' && validCount > 0 ? `บันทึกใบหน้า (${validCount} รูป)` : 'บันทึกใบหน้า'
+                : faceMode === 'camera' && fpShotCount > 0 ? `บันทึกใบหน้า (${fpShotCount} มุม)`
+                : faceMode === 'upload' && validCount > 0 ? `บันทึกใบหน้า (${validCount} รูป)`
+                : 'บันทึกใบหน้า'
               }
             </button>
           </>
