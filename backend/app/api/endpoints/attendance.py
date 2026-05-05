@@ -92,16 +92,36 @@ async def scan_attendance(
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
 
     # ── Room restriction (teacher only) ──────────────────────────
-    if sched and current_user.role != "admin" and (sched.grade_level or sched.room_number):
-        grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
-        room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
-        if not (grade_ok and room_ok):
-            student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
-            sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
-            raise HTTPException(
-                status_code=403,
-                detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้คาบนี้ (ห้องที่เรียน: {sched_loc})",
-            )
+    if current_user.role != "admin":
+        if sched and (sched.grade_level or sched.room_number):
+            # Specific schedule provided — check against it
+            grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
+            room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
+            if not (grade_ok and room_ok):
+                student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
+                sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้คาบนี้ (ห้องที่เรียน: {sched_loc})",
+                )
+        else:
+            # No specific schedule — check against ALL rooms of this subject
+            subject_schedules = db.query(SubjectSchedule).filter(
+                SubjectSchedule.subject_id == subject_id
+            ).all()
+            allowed_rooms = {
+                (sc.grade_level, sc.room_number)
+                for sc in subject_schedules
+                if sc.grade_level and sc.room_number
+            }
+            if allowed_rooms:
+                student_room = (best_match.grade_level, best_match.room_number)
+                if student_room not in allowed_rooms:
+                    student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้",
+                    )
 
     # ── Auto late detection: > 15 min past schedule start ────────
     scan_status = "present"
