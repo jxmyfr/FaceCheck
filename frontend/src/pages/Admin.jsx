@@ -332,11 +332,18 @@ export default function Admin() {
   }
 
   const openAssign = async (teacher) => {
+    let assigned = []
     try {
       const res = await axios.get(`${API}/auth/users/${teacher.id}/subjects`)
-      setTeacherSubs(res.data.map(s=>s.id))
+      assigned = res.data.map(s=>s.id)
+      setTeacherSubs(assigned)
     } catch { setTeacherSubs([]) }
-    const avail = subjects.filter(s => !teacherSubs.includes(s.id))
+    const teacherCats = teacher.categories || []
+    const avail = subjects.filter(s => {
+      if (assigned.includes(s.id)) return false
+      if (teacherCats.length === 0) return true
+      return teacherCats.includes(s.category)
+    })
     setAssignId(avail[0]?.id ? String(avail[0].id) : '')
     setAssignModal(teacher)
   }
@@ -508,7 +515,13 @@ export default function Admin() {
     </div>
   )
 
-  const availSubs = subjects.filter(s => !teacherSubs.includes(s.id))
+  const availSubs = subjects.filter(s => {
+    if (teacherSubs.includes(s.id)) return false
+    if (!assignModal) return true
+    const teacherCats = assignModal.categories || []
+    if (teacherCats.length === 0) return true
+    return teacherCats.includes(s.category)
+  })
 
   return (
     <main id="main-content" className="page">
