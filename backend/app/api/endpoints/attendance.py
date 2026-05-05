@@ -217,6 +217,7 @@ def list_subjects(
             "id": s.id,
             "subject_code": s.subject_code,
             "subject_name": s.subject_name,
+            "teacher_name": s.teacher_name,
             "days": list({sc.day_of_week for sc in s.schedules}),
         }
         for s in rows

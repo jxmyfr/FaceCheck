@@ -450,7 +450,8 @@ export default function Scanner() {
       const res = await axios.post(scanUrl, fd)
       const _now = new Date()
       const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime }
+      const selSubj = subjects.find(s => s.id === Number(subjectId))
+      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
       setResult(entry)
       setErrMsg('')
       setLogs(prev => [entry, ...prev])
@@ -470,7 +471,7 @@ export default function Scanner() {
       }
       // Auto mode: silently ignore (no face / quality fail / no match)
     }
-  }, [subjectId])
+  }, [subjectId, subjects])
 
   // ── Auto scan interval ─────────────────────────────────────────
   useEffect(() => {
@@ -572,7 +573,8 @@ export default function Scanner() {
       )
       const _now = new Date()
       const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-      const entry = { ...res.data, photo: null, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime }
+      const selSubj = subjects.find(s => s.id === Number(subjectId))
+      const entry = { ...res.data, photo: null, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
       setResult(entry)
       setLogs(prev => [entry, ...prev])
       setLookupId('')
@@ -595,6 +597,9 @@ export default function Scanner() {
   }
 
   const canScan = camReady && !!subjectId
+  const isAdmin = user?.role === 'admin'
+  const subjectIdSet = new Set(subjects.map(s => s.id))
+  const displayedLogs = isAdmin ? logs : logs.filter(l => !l.subject_id || subjectIdSet.has(l.subject_id))
 
   return (
     <main id="main-content" className="page">
@@ -1000,14 +1005,14 @@ export default function Scanner() {
           )}
 
           {/* Session log */}
-          {logs.length > 0 && (
+          {displayedLogs.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '12px 16px', borderBottom: '1px solid var(--fc-border)',
               }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-2)' }}>
-                  ประวัติการเช็คชื่อ ({logs.length} คน)
+                  ประวัติการเช็คชื่อ ({displayedLogs.length} คน)
                 </div>
                 <button
                   onClick={() => { setLogs([]); setResult(null) }}
@@ -1029,7 +1034,7 @@ export default function Scanner() {
                   // Build flat list with date separators injected
                   const items = []
                   let lastDate = null
-                  logs.forEach((log, i) => {
+                  displayedLogs.forEach((log, i) => {
                     const d = log.scanDate || null
                     if (d && d !== lastDate) {
                       items.push({ type: 'header', date: d })
@@ -1075,6 +1080,13 @@ export default function Scanner() {
                             {log.grade_level && ` · ชั้น ${log.grade_level}`}
                             {log.room_number && ` ห้อง ${log.room_number}`}
                           </div>
+                          {isAdmin && (log.subject_code || log.subject) && (
+                            <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {log.subject_code && <span style={{ fontFamily: 'var(--fc-font-mono)' }}>{log.subject_code}</span>}
+                              {log.subject && <span>{log.subject}</span>}
+                              {log.teacher_name && <span>· {log.teacher_name}</span>}
+                            </div>
+                          )}
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
                           <span className="chip" style={{ background: cfg.bg, color: cfg.color, fontSize: 12 }}>
@@ -1109,7 +1121,7 @@ export default function Scanner() {
           )}
 
           {/* Tips (collapsed when logs exist) */}
-          {logs.length === 0 && (
+          {displayedLogs.length === 0 && (
             <div className="card" style={{ padding: '14px 16px' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-3)', marginBottom: 8 }}>คำแนะนำ</div>
               {[
