@@ -43,48 +43,149 @@ graph TD
 
 ---
 
-## 2. เส้นทางของข้อมูลในกระบวนการหลัก (Core Data Journeys)
+## 2. โครงสร้างส่วนประกอบซอฟต์แวร์ (Component Diagram)
+
+แสดงการแบ่งโมดูลภายในของทั้ง Frontend และ Backend
+
+```mermaid
+graph LR
+    subgraph "Frontend Components"
+        Pages[Pages: Dashboard, Scanner, Enrollment]
+        Comps[Shared Components: Navbar, Sidebar]
+        Hooks[Hooks: useAuth, useDialog]
+        Axios[API Client: Axios]
+    end
+
+    subgraph "Backend Modules"
+        Router[Router: attendance, enroll, stats, auth]
+        Services[Services: FaceProcessor]
+        Models[Models: Student, Subject, AttendanceLog]
+        Security[Core: Security, Dependencies]
+    end
+
+    Pages --> Comps
+    Pages --> Hooks
+    Hooks --> Axios
+    Axios -- HTTP --> Router
+    Router --> Services
+    Router --> Models
+    Services --> Models
+    Router --> Security
+```
+
+---
+
+## 3. แผนผังผู้ใช้งาน (User Use Case Diagram)
+
+แสดงบทบาทและสิทธิ์การเข้าถึงฟีเจอร์ต่างๆ ของผู้ใช้แต่ละกลุ่ม
+
+```mermaid
+useCaseDiagram
+    actor "Admin" as A
+    actor "Teacher" as T
+    actor "Student" as S
+
+    package "FaceCheck System" {
+        usecase "Manage Teachers & Users" as UC1
+        usecase "System Settings (Thresholds)" as UC2
+        usecase "Manage Students & Subjects" as UC3
+        usecase "Face Scanning (Attendance)" as UC4
+        usecase "Manual Attendance Adjustment" as UC5
+        usecase "View Statistics & Reports" as UC6
+        usecase "Export Data (Excel)" as UC7
+    }
+
+    A --> UC1
+    A --> UC2
+    A --> UC3
+    
+    T --> UC3
+    T --> UC4
+    T --> UC5
+    T --> UC6
+    T --> UC7
+    
+    S --> UC4
+```
+
+---
+
+## 4. แผนผังความสัมพันธ์ข้อมูล (Entity Relationship Diagram - ERD)
+
+แสดงโครงสร้างฐานข้อมูลและความเชื่อมโยงของข้อมูลในระบบ
+
+```mermaid
+erDiagram
+    STUDENT ||--o{ ATTENDANCE_LOG : "has"
+    STUDENT ||--o{ STUDENT_FACE_EMBEDDING : "has slots"
+    SUBJECT ||--o{ ATTENDANCE_LOG : "records"
+    SUBJECT ||--o{ SUBJECT_SCHEDULE : "has"
+    USER ||--o{ TEACHER_SUBJECT : "teaches"
+    SUBJECT ||--o{ TEACHER_SUBJECT : "assigned to"
+
+    STUDENT {
+        int id PK
+        string student_id UK
+        string first_name
+        string last_name
+        binary face_embedding "Primary Vector"
+    }
+
+    STUDENT_FACE_EMBEDDING {
+        int id PK
+        int student_id FK
+        binary embedding "Slot Vector"
+        string label
+    }
+
+    SUBJECT {
+        int id PK
+        string subject_code UK
+        string subject_name
+    }
+
+    SUBJECT_SCHEDULE {
+        int id PK
+        int subject_id FK
+        string day_of_week
+        string time_start
+        string time_end
+    }
+
+    ATTENDANCE_LOG {
+        int id PK
+        int student_id FK
+        int subject_id FK
+        datetime timestamp
+        string status "present/late/absent"
+        string check_method "face/manual"
+    }
+
+    USER {
+        int id PK
+        string username UK
+        string email UK
+        string role "admin/teacher"
+    }
+```
+
+---
+
+## 5. เส้นทางของข้อมูลในกระบวนการหลัก (Core Data Journeys)
 
 ### 📸 กระบวนการสแกนเช็คชื่อ (Attendance Scanning Flow)
-เมื่อนักศึกษามายืนหน้ากล้อง ข้อมูลจะเดินทางดังนี้:
-
-1.  **[Input Node]**: Frontend Capture ภาพใบหน้าจากกล้องวิดีโอ
-2.  **[Transmission Node]**: ส่งภาพผ่าน HTTP POST ไปยัง `/attendance/scan`
-3.  **[AI Processing Node]**: 
+1.  **[Input]**: Frontend Capture ภาพใบหน้าจากกล้องวิดีโอ
+2.  **[AI Processing]**: 
     *   **Detection**: ค้นหาพิกัดใบหน้า
-    *   **Liveness**: ตรวจสอบว่าเป็นคนจริง (ไม่ใช่รูปถ่าย/หน้าจอ)
+    *   **Liveness**: ตรวจสอบว่าเป็นคนจริง (Anti-spoofing)
     *   **Embedding**: แปลงใบหน้าเป็นชุดตัวเลข (Vector)
-4.  **[Matching Node]**: ระบบนำ Vector จากกล้องไปคำนวณระยะห่าง (Euclidean Distance) กับ Vector ทั้งหมดใน Database
-5.  **[Business Logic Node]**: เมื่อพบเจ้าของใบหน้า ระบบเช็คตารางสอนและเวลาปัจจุบันเพื่อกำหนดสถานะ (มาเรียน / สาย)
-6.  **[Output Node]**: บันทึกลงตาราง `AttendanceLog` และส่งชื่อนักศึกษากลับไปแสดงผลที่หน้าจอ
+3.  **[Matching]**: ระบบนำ Vector ไปคำนวณระยะห่างกับ Vector ใน Database
+4.  **[Business Logic]**: เช็คตารางสอนและเวลาเพื่อกำหนดสถานะ (มาเรียน / สาย)
+5.  **[Output]**: บันทึกลงตาราง `AttendanceLog` และส่งผลลัพธ์กลับไปยัง UI
 
 ---
 
-### 📝 กระบวนการลงทะเบียนนักศึกษาใหม่ (Student Enrollment Flow)
-ขั้นตอนการสร้าง "ตัวตน" ให้กับนักศึกษาในระบบ:
+## 6. ความปลอดภัยของข้อมูล (Data Security)
 
-1.  **Admin Input**: กรอกประวัติและอัปโหลดรูปถ่ายหน้าตรง
-2.  **Processing**: AI สกัดเอา "ลักษณะเด่น" ของใบหน้าออกมาเป็น Vector
-3.  **Storage**: 
-    *   เก็บ **ข้อมูลประวัติ + Vector** ไว้ในฐานข้อมูล (เพื่อใช้ค้นหา)
-    *   เก็บ **รูปภาพต้นฉบับ** ไว้ในระบบไฟล์ (เพื่อใช้ยืนยันด้วยตาเปล่า)
-
----
-
-## 3. รายละเอียดหน้าที่ของแต่ละ Node (Node Responsibilities)
-
-| Node | หน้าที่หลัก | เทคโนโลยีที่ใช้ |
-| :--- | :--- | :--- |
-| **Frontend UI** | แสดงผลหน้าจอ, รับอินพุตจากผู้ใช้, จัดการกล้อง | React, Vite |
-| **API Endpoint** | รับคำขอจากหน้าเว็บ, ตรวจสอบสิทธิ์ (Auth), สั่งการ Logic | FastAPI, SQLAlchemy |
-| **FaceProcessor** | ควบคุมลำดับการทำงานของ AI (Detect -> Check -> Embed) | Python, OpenCV |
-| **AI Models** | วิเคราะห์ภาพใบหน้าและแปลงเป็นรหัสคณิตศาสตร์ | InsightFace, ONNX Runtime |
-| **Database** | เก็บข้อมูล Metadata, ตารางเวลา และ Face Vectors | SQLite |
-| **FileSystem** | จัดเก็บไฟล์รูปภาพ JPG เพื่อใช้เป็นหลักฐาน | Local Storage |
-
----
-
-## 4. ความปลอดภัยของข้อมูล (Data Security)
-
-*   **Identity Protection**: ระบบไม่ได้เก็บ "รหัสผ่านใบหน้า" ในรูปแบบรูปภาพอย่างเดียว แต่เก็บเป็น **Vector (Numerical Data)** ซึ่งยากต่อการย้อนกลับไปเป็นรูปภาพต้นฉบับได้โดยตรง
-*   **Authentication**: การส่งข้อมูลระหว่าง Frontend และ Backend ถูกปกป้องด้วย **JWT Token** เพื่อให้มั่นใจว่าเฉพาะผู้ที่มีสิทธิ์เท่านั้นที่สามารถเข้าถึงข้อมูลหรือจัดการระบบได้
+*   **Identity Protection**: ระบบเก็บข้อมูลใบหน้าในรูปแบบ **Vector (Numerical Data)** ซึ่งยากต่อการย้อนกลับไปเป็นรูปภาพต้นฉบับได้
+*   **Authentication**: การเข้าถึง API ถูกปกป้องด้วย **JWT Token** (JSON Web Token) เพื่อระบุตัวตนและสิทธิ์ของผู้ใช้งาน (Role-based Access Control)
