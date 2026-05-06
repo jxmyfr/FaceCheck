@@ -295,7 +295,43 @@ sequenceDiagram
     end
 ```
 
-### 5.4 QRCheckin — หน้า Mobile สำหรับนักเรียน
+### 5.4 Scanner — โหมดการสแกนและ Period-Lock
+
+**3 โหมด:**
+
+| โหมด | พฤติกรรม |
+|------|---------|
+| **Auto** | ถ่ายภาพทุก 2 วิ, หยุด 8 วิหลังสแกนสำเร็จ / already_checked |
+| **Manual** | กดปุ่มทีละครั้ง, ไม่มี cooldown |
+| **Lookup** | ค้นหาด้วยรหัสนักเรียน, เลือก status (present/late/absent) + เหตุผล |
+
+**Period-Lock (ล็อคคาบ):**
+- Scanner ตรวจ schedule ที่ตรงกับเวลาปัจจุบัน + วิชาที่เลือก
+- **1 คาบตรง** → ล็อคอัตโนมัติ, แสดง banner คาบที่กำลังสอน
+- **หลายคาบตรง** → ให้ครูเลือก
+- **ล็อคแล้ว** → scan endpoint ตรวจว่านักเรียนอยู่ห้องที่ถูกต้อง (grade/room ตาม schedule) — ปฏิเสธถ้าไม่ตรง
+- ครูกด "Override" ได้เพื่อยกเลิก lock
+
+**Mark Absent (บันทึกขาดทั้งหมด):**
+- กดปุ่มแล้ว backend นับนักเรียนในห้องที่ยังไม่ได้เช็คชื่อวันนั้น → status = `absent`
+
+**Scan Result States:**
+
+| สถานะ | เงื่อนไข |
+|-------|---------|
+| `present` | พบใบหน้า, มาทันเวลา |
+| `late` | พบใบหน้า, เกิน 15 นาทีหลัง time_start |
+| `already_checked` | นักเรียนคนนี้ + วิชานี้ + วันนี้ เช็คไปแล้ว |
+| error | ตรวจจับไม่ได้ / คุณภาพต่ำ / ไม่พบในระบบ |
+
+**Session Log:**
+- เก็บใน localStorage, แสดง thumbnail (scan image หรือ face ที่ลงทะเบียน)
+- กรอง `already_checked` ออกเมื่อโหลดหน้าใหม่
+- มีปุ่ม Cancel ยกเลิก log รายการ (non-error เท่านั้น)
+
+---
+
+### 5.6 QRCheckin — หน้า Mobile สำหรับนักเรียน
 
 เมื่อนักเรียนสแกน QR บนมือถือ จะได้รับ URL:
 ```
@@ -306,7 +342,7 @@ https://face-check-zeta.vercel.app/qr-checkin?token=<JWT>
 
 ---
 
-### 5.5 นำเข้าข้อมูลจำนวนมาก (Bulk Import via ZIP)
+### 5.7 นำเข้าข้อมูลจำนวนมาก (Bulk Import via ZIP)
 
 ```mermaid
 sequenceDiagram
@@ -343,7 +379,7 @@ sequenceDiagram
 
 ---
 
-### 5.6 ดูผลและ Dashboard
+### 5.8 ดูผลและ Dashboard
 
 ```mermaid
 sequenceDiagram
@@ -409,9 +445,26 @@ sequenceDiagram
 [5] Matching (ตอนสแกน)
     • Euclidean distance กับทุก embedding ในระบบ
     • distance = ||embedding_A - embedding_B||₂
-    • ผ่านถ้า distance ≤ threshold (default 1.0)
+    • ผ่านถ้า distance ≤ threshold (admin ตั้งได้, default 1.0)
     • เลือกผลที่ distance น้อยที่สุด
+    │
+    ▼
+[6] Confidence Score (แสดงบน UI)
+    • confidence = 1 - (distance² / 2)
+    • ยิ่ง distance น้อย → confidence ใกล้ 1.0 (100%)
+    • ตัวอย่าง: distance 0.6 → confidence 82%
 ```
+
+**Quality Check เงื่อนไขครบ:**
+
+| Check | เงื่อนไข | default |
+|-------|----------|---------|
+| Detection confidence | `det_score ≥ min_det_score` | 0.65 |
+| Face size | `face_area ≥ image_area × min_face_ratio` | 8% |
+| Edge margin | ชิดขอบไม่เกิน 3% ทุกด้าน | — |
+| Eye symmetry | `eye_y_diff / eye_dist ≤ 0.25` | — |
+| Yaw (nose offset) | `nose_offset / eye_dist ≤ 0.35` | — |
+| Blur | `Laplacian variance ≥ min_blur_score` | 40 |
 
 ### 6.2 Multi-Angle Enrollment
 
@@ -426,8 +479,10 @@ sequenceDiagram
 ### 6.3 Auto-Learn
 
 เมื่อสแกนสำเร็จ ระบบ **เรียนรู้ใบหน้าใหม่อัตโนมัติ** เพื่อรับมือกับการเปลี่ยนแปลง (ผมยาวขึ้น, แว่นตา, แสง):
-- เพิ่ม embedding ใหม่เข้า `student_face_embeddings` (สูงสุด 50 slots)
-- เรียนรู้ได้ **1 ครั้งต่อวันต่อนักเรียน** เท่านั้น
+- เพิ่ม embedding ใหม่เข้า `student_face_embeddings` (สูงสุด **50 slots** ต่อนักเรียน)
+- เรียนรู้ได้ **1 ครั้งต่อวันต่อนักเรียน** เท่านั้น (ป้องกัน slot overflow)
+- Label ของ embedding ที่เรียนรู้อัตโนมัติ: `"สแกน DD/MM HH:MM"` (วันที่ภาษาไทย)
+- Scan image บันทึกเป็น JPEG quality 70 (auto-learn quality 85)
 - ทำให้ระบบแม่นยำขึ้นเมื่อใช้งานนานขึ้น
 
 ### 6.4 QR Anti-Buddy-Punching
@@ -465,11 +520,13 @@ sequenceDiagram
 | | `/attendance/logs` | GET | ดู log ตามวัน/วิชา |
 | | `/attendance/logs/{id}` | PATCH/DELETE | แก้ไข/ลบ log |
 | | `/attendance/subjects` | GET/POST/PUT/DELETE | จัดการวิชา + ตารางสอน |
-| **Stats** | `/stats/overview` | GET | KPI ภาพรวมโรงเรียน |
-| | `/stats/daily` | GET | time series 30 วัน |
-| | `/stats/by-grade` | GET | สถิติแยกตามชั้น/ห้อง |
-| | `/stats/subject-attendance` | GET | gradebook ต่อวิชา |
-| | `/stats/student/{id}` | GET | ข้อมูลนักเรียนรายบุคคล + trend |
+| **Stats** | `/stats/overview` | GET | KPI ภาพรวมโรงเรียน (นักเรียน/วิชา/log/วันนี้) |
+| | `/stats/daily` | GET | time series `?days=1-90` (default 7), distinct present+late |
+| | `/stats/by-grade` | GET | รายชั้น: student_count + today_attendance |
+| | `/stats/by-room` | GET | `?grade_level=` รายห้องในชั้นนั้น |
+| | `/stats/subject-attendance` | GET | `?subject_id=&date_from=&date_to=` gradebook |
+| | `/stats/student-attendance` | GET | `?student_id=` สถิติ + trend + semester รายบุคคล |
+| | `/stats/logs` | GET | `?subject_code=&log_date=&limit=500` ดู log |
 | **Reports** | `/reports/export` | GET | export Excel รายงาน (2 sheets, กรองได้) |
 | **Settings** | `/settings/semester` | GET/PUT | ตั้งค่าภาคเรียน + threshold ทั้งหมด |
 | **Audit** | `/audit/logs` | GET | ประวัติการแก้ไขข้อมูลทุก action |
@@ -482,7 +539,7 @@ sequenceDiagram
 |-----|------|-----------|
 | **Authentication** | JWT HS256 | token มีอายุ, เก็บใน localStorage |
 | **Authorization** | Role-based | `admin` และ `teacher` มีสิทธิ์ต่างกัน |
-| **Data Scope** | Backend + Frontend filter | `teacher` เห็นเฉพาะนักเรียนในห้องที่ตัวเองสอน (API list) และประวัติสแกนเฉพาะวิชาตัวเอง (frontend filter) — `admin` เห็นทุกข้อมูล พร้อม subject_code/subject_name/teacher_name |
+| **Data Scope** | Backend + Frontend filter | `teacher` เห็นเฉพาะวิชาที่ตัวเองสอน (TeacherSubject join ใน Stats/Reports API), เห็นนักเรียนในห้องที่ตัวเองสอน (list API) — `admin` เห็นทุกข้อมูล |
 | **Scan Room Lock** | Backend enforce | scan endpoint ตรวจ grade/room ของนักเรียนที่จำได้ vs ตารางสอนของวิชา — ปฏิเสธถ้าไม่ตรง แม้ไม่มี schedule_id (no period lock) |
 | **QR โกง** | JTI tracking | 1 QR token ใช้ได้ 1 ครั้ง |
 | **รูปภาพโกง** | Liveness check | LBP texture + FFT analysis ตรวจหน้าจอ/พิมพ์ |
@@ -496,19 +553,19 @@ sequenceDiagram
 
 ### สำหรับผู้ดูแลระบบ (Admin)
 
-- จัดการบัญชีครูและผู้ดูแล (เพิ่ม/ระงับ/ลบ)
-- จัดการรายวิชา + ตารางสอน (วัน/คาบ/ห้อง)
-- มอบหมายวิชาให้ครู
-- ตั้งค่าภาคเรียน (วันเริ่ม-สิ้นสุด, ค่า threshold การจดจำหน้า)
-- ดู Audit Log การเปลี่ยนแปลงข้อมูล
+- จัดการบัญชีครู/ผู้ดูแล (เพิ่ม/ระงับ/ลบ, กำหนด role, กำหนดกลุ่มสาระ)
+- จัดการรายวิชา + ตารางสอน (วัน/เวลา/ห้อง ต่อคาบ) + มอบหมายวิชาให้ครู
+- ตั้งค่าภาคเรียน: วันเริ่ม-สิ้นสุด, threshold การจดจำหน้า 4 ค่า (`face_threshold`, `min_det_score`, `min_face_ratio`, `min_blur_score`)
+- ดู Audit Log ทุก action: status_change / delete / create พร้อม ผู้แก้ไข+เหตุผล+เวลา
 
 ### สำหรับครู
 
-- **Scanner**: สแกนใบหน้าเช็คชื่อ real-time, สร้าง QR, กรอกมือ
+- **Scanner**: 3 โหมด (auto 2s/manual/lookup), Period-lock คาบ, Mark Absent ทั้งห้อง, Session log ใน localStorage, QR generate (30 นาที, 1 ใช้ครั้งเดียว)
 - **รายชื่อนักเรียน**: ค้นหา, กรองชั้น/ห้อง/มีใบหน้า, multi-select → bulk delete / export Excel เฉพาะที่เลือก
-- **Dashboard**: KPI การเข้าเรียน, กราฟ trend 30 วัน (นับนักเรียนไม่ซ้ำ เฉพาะ present/late), drill-down ม.ต้น/ม.ปลาย→ชั้น→ห้อง→รายบุคคล — อัตราเข้าเรียนนับ distinct students ไม่เกิน 100%
-- **รายงาน**: ค้นหาตามวันที่/วิชา/ชั้น/ห้อง, export Excel 2 sheet, พิมพ์, Gradebook view
-- **แก้ไขสถานะ**: เปลี่ยน present/late/absent/excused พร้อมบันทึกเหตุผล
+- **Dashboard**: KPI การเข้าเรียน, กราฟ trend 30 วัน (distinct students, present+late), drill-down ม.ต้น/ปลาย→ชั้น→ห้อง→รายบุคคล
+- **รายงาน**: 3 มุมมอง — Summary (pivot ชั้น/ห้อง + อัตรา%), Detail (ตาราง + chip วิธีเช็ค), Gradebook (วันเป็น column, ม/ส/ข/ล); กรอง date/subject/grade/room; export Excel 2 sheet; พิมพ์
+- **ข้อมูลนักเรียน (StudentDetail)**: สถิติรายบุคคล + trend chart, ประวัติการเช็คชื่อ + ภาพตอนสแกน, จัดการ face slots (gallery, ลบ, เพิ่ม), แก้ไขข้อมูล (ชื่อ/ชั้น/ห้อง)
+- **แก้ไขสถานะ**: เปลี่ยน present/late/absent/excused พร้อมเหตุผล, ทุกการแก้ไขมี Audit Trail
 
 ### สำหรับแอดมิน (ลงทะเบียน)
 
