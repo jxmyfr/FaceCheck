@@ -884,7 +884,7 @@ async def import_zip(
                     any_fail = True
                     break
                 try:
-                    emb = face_processor.extract_embedding(frame)
+                    emb = face_processor.process_capture(frame)
                 except Exception:
                     faces_fail.append({"student_id": sid, "reason": f"ตรวจจับใบหน้าไม่พบ ({angle})"})
                     any_fail = True
@@ -924,7 +924,7 @@ async def import_zip(
             faces_fail.append({"student_id": sid, "reason": "อ่านรูปไม่ได้"})
             continue
         try:
-            embedding = face_processor.extract_embedding(frame)
+            embedding = face_processor.process_capture(frame)
         except Exception:
             faces_fail.append({"student_id": sid, "reason": "ตรวจจับใบหน้าไม่พบ"})
             continue
