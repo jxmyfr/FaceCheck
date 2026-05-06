@@ -451,7 +451,8 @@ export default function Scanner() {
       const _now = new Date()
       const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
       const selSubj = subjects.find(s => s.id === Number(subjectId))
-      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
+      const scanDate = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`
+      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate, scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
       setResult(entry)
       setErrMsg('')
       setLogs(prev => [entry, ...prev])
@@ -574,7 +575,8 @@ export default function Scanner() {
       const _now = new Date()
       const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
       const selSubj = subjects.find(s => s.id === Number(subjectId))
-      const entry = { ...res.data, photo: null, logId: Date.now(), scanDate: _now.toISOString().slice(0, 10), scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
+      const scanDate = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`
+      const entry = { ...res.data, photo: null, logId: Date.now(), scanDate, scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
       setResult(entry)
       setLogs(prev => [entry, ...prev])
       setLookupId('')

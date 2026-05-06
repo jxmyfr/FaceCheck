@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import date, datetime
+from datetime import date, datetime, timezone, timedelta
+
+_BKK = timezone(timedelta(hours=7))
 from typing import Optional
 
 from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding, AttendanceAuditLog, QRSessionUsed
@@ -144,12 +146,12 @@ async def scan_attendance(
         .filter(
             AttendanceLog.student_id == best_match.id,
             AttendanceLog.subject_id == subject_id,
-            func.date(AttendanceLog.timestamp) == str(date.today()),
+            func.date(AttendanceLog.timestamp) == str(datetime.now(_BKK).date()),
             AttendanceLog.status.in_(["present", "late"]),
         )
         .first()
     )
-    now = datetime.now()
+    now = datetime.now(_BKK).replace(tzinfo=None)
     student_info = {
         "student_id":  best_match.student_id,
         "name":        " ".join(filter(None, [best_match.title, best_match.first_name, best_match.last_name])),
@@ -255,7 +257,7 @@ def get_current_schedule(
 ):
     """หา schedule ที่ตรงกับเวลาปัจจุบัน (±10 นาที grace period)"""
     DAY_MAP = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
-    now = datetime.now()
+    now = datetime.now(_BKK).replace(tzinfo=None)
     today_day   = DAY_MAP[now.weekday()]
     now_minutes = now.hour * 60 + now.minute
     GRACE = 10  # นาที
@@ -433,7 +435,7 @@ def list_logs(
     elif log_date:
         q = q.filter(func.date(AttendanceLog.timestamp) == log_date)
     else:
-        q = q.filter(func.date(AttendanceLog.timestamp) == str(date.today()))
+        q = q.filter(func.date(AttendanceLog.timestamp) == str(datetime.now(_BKK).date()))
     if subject_id:
         q = q.filter(AttendanceLog.subject_id == subject_id)
     if grade_level:
@@ -553,12 +555,12 @@ def manual_attendance(
         .filter(
             AttendanceLog.student_id == student.id,
             AttendanceLog.subject_id == subject_id,
-            func.date(AttendanceLog.timestamp) == str(date.today()),
+            func.date(AttendanceLog.timestamp) == str(datetime.now(_BKK).date()),
         )
         .first()
     )
 
-    now  = datetime.now()
+    now  = datetime.now(_BKK).replace(tzinfo=None)
     name = " ".join(filter(None, [student.title, student.first_name, student.last_name]))
     info = {
         "student_id":  student.student_id,
@@ -628,7 +630,7 @@ def mark_absent(
         student_q = student_q.filter(Student.room_number == room_number)
     students = student_q.all()
 
-    today_str = str(date.today())
+    today_str = str(datetime.now(_BKK).date())
     existing_ids = {
         row[0]
         for row in db.query(AttendanceLog.student_id).filter(
@@ -637,7 +639,7 @@ def mark_absent(
         ).all()
     }
 
-    now = datetime.now()
+    now = datetime.now(_BKK).replace(tzinfo=None)
     count = 0
     for student in students:
         if student.id not in existing_ids:
@@ -674,7 +676,7 @@ def get_today_schedules(
 ):
     """ตารางสอนทั้งหมดของวันนี้ (สำหรับ Teacher Dashboard)"""
     DAY_MAP = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
-    now = datetime.now()
+    now = datetime.now(_BKK).replace(tzinfo=None)
     today_day = DAY_MAP[now.weekday()]
     now_minutes = now.hour * 60 + now.minute
 
@@ -789,7 +791,7 @@ def qr_checkin(
         .filter(
             AttendanceLog.student_id == student.id,
             AttendanceLog.subject_id == subject_id,
-            func.date(AttendanceLog.timestamp) == str(date.today()),
+            func.date(AttendanceLog.timestamp) == str(datetime.now(_BKK).date()),
         )
         .first()
     )
@@ -804,7 +806,7 @@ def qr_checkin(
             "subject_name": subject.subject_name,
         }
 
-    now = datetime.now()
+    now = datetime.now(_BKK).replace(tzinfo=None)
     scan_status = "present"
     if schedule_id:
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()

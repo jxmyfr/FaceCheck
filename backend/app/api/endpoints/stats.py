@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
 from typing import Optional
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+_BKK = timezone(timedelta(hours=7))
 
 from app.models.database import get_db, AttendanceLog, Student, Subject, SemesterSetting
 from app.models.user import User, TeacherSubject
@@ -19,7 +21,7 @@ def get_overview(
     total_students = db.query(func.count(Student.id)).scalar()
     total_subjects = db.query(func.count(Subject.id)).scalar()
     total_logs     = db.query(func.count(AttendanceLog.id)).scalar()
-    today_str = str(date.today())
+    today_str = str(datetime.now(_BKK).date())
     today_by_status = dict(
         db.query(AttendanceLog.status, func.count(AttendanceLog.id))
         .filter(func.date(AttendanceLog.timestamp) == today_str)
@@ -171,7 +173,7 @@ def get_stats_by_grade(
     db: Session = Depends(get_db),
     _: User = Depends(require_teacher_or_admin),
 ):
-    today = str(date.today())
+    today = str(datetime.now(_BKK).date())
     rows = (
         db.query(Student.grade_level, func.count(Student.id).label("student_count"))
         .filter(Student.grade_level.isnot(None))
@@ -204,7 +206,7 @@ def get_stats_by_room(
     db: Session = Depends(get_db),
     _: User = Depends(require_teacher_or_admin),
 ):
-    today = str(date.today())
+    today = str(datetime.now(_BKK).date())
     rows = (
         db.query(Student.room_number, func.count(Student.id).label("student_count"))
         .filter(Student.grade_level == grade_level)
@@ -325,7 +327,7 @@ def get_student_attendance(
 
     if all_dates:
         first_day = date.fromisoformat(all_dates[0])
-        end_day   = date.today()
+        end_day   = datetime.now(_BKK).date()
         dates_present = set(all_dates)
 
         present_days = 0
@@ -381,7 +383,7 @@ def get_semester_stats(
 
     total_students = db.query(func.count(Student.id)).scalar() or 0
     start_day = semester.term_start
-    end_day   = min(semester.term_end or date.today(), date.today())
+    end_day   = min(semester.term_end or datetime.now(_BKK).date(), datetime.now(_BKK).date())
 
     daily_rows = (
         db.query(
@@ -424,7 +426,7 @@ def get_teacher_overview(
     current_user: User = Depends(require_teacher_or_admin),
 ):
     """KPI + subject summaries สำหรับครู (กรองเฉพาะวิชาที่ตัวเองสอน)"""
-    today = str(date.today())
+    today = str(datetime.now(_BKK).date())
     if current_user.role == "teacher":
         ts_rows = db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()
         subject_ids = [r.subject_id for r in ts_rows]
@@ -581,7 +583,7 @@ def get_summary(
     db: Session = Depends(get_db),
     _: User = Depends(require_teacher_or_admin),
 ):
-    today   = str(datetime.now().date())
+    today   = str(datetime.now(_BKK).date())
     total   = db.query(func.count(Student.id)).scalar()
     present = (
         db.query(func.count(AttendanceLog.id))
