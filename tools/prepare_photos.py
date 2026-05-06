@@ -2,7 +2,7 @@
 FaceCheck — เตรียมรูปนักเรียนสำหรับ import-zip
 อ่าน Excel → กรอกรหัสนักเรียน → เลือกรูป 3 มุม → rename + copy ไป output folder
 
-ติดตั้ง: pip install openpyxl pillow
+ติดตั้ง: pip install openpyxl pillow insightface onnxruntime
 รัน:     python tools/prepare_photos.py
 """
 
@@ -10,6 +10,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 import ctypes
+import tempfile
+import os
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -49,7 +51,64 @@ C = {
     "save_wait":   "#94A3B8",
 }
 
+# ── Face-crop (optional — requires insightface + onnxruntime) ─────
+try:
+    import numpy as _np_check  # noqa
+    import insightface as _if_check  # noqa
+    _CROP_AVAIL = True
+except ImportError:
+    _CROP_AVAIL = False
 
+_face_app = None
+_face_app_tried = False
+
+
+def _get_face_app():
+    global _face_app, _face_app_tried
+    if _face_app_tried:
+        return _face_app
+    _face_app_tried = True
+    try:
+        from insightface.app import FaceAnalysis
+        app = FaceAnalysis(name="buffalo_sc", providers=["CPUExecutionProvider"])
+        app.prepare(ctx_id=0, det_size=(320, 320))
+        _face_app = app
+    except Exception:
+        _face_app = None
+    return _face_app
+
+
+def _crop_face(path: str) -> str | None:
+    """Detect largest face, crop with head/neck padding. Returns temp JPEG path or None."""
+    app = _get_face_app()
+    if app is None:
+        return None
+    try:
+        import numpy as np
+        pil = Image.open(path).convert("RGB")
+        img_bgr = np.array(pil)[:, :, ::-1]  # RGB → BGR for InsightFace
+        faces = app.get(img_bgr)
+        if not faces:
+            return None
+        face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+        x1, y1, x2, y2 = (int(v) for v in face.bbox)
+        fw, fh = x2 - x1, y2 - y1
+        W, H = pil.size
+        # generous padding: wider sides, extra top for hair, less below chin
+        cx1 = max(0,  x1 - int(fw * 0.55))
+        cy1 = max(0,  y1 - int(fh * 0.70))
+        cx2 = min(W,  x2 + int(fw * 0.55))
+        cy2 = min(H,  y2 + int(fh * 0.35))
+        cropped = pil.crop((cx1, cy1, cx2, cy2))
+        tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        cropped.save(tmp.name, "JPEG", quality=95)
+        tmp.close()
+        return tmp.name
+    except Exception:
+        return None
+
+
+# ── Validation ────────────────────────────────────────────────────
 def _validate(path: str) -> tuple[bool, str]:
     try:
         img = Image.open(path)
@@ -74,13 +133,16 @@ class App(tk.Tk):
 
         self.students:   dict[str, dict] = {}
         self.output_dir: Path | None     = None
-        self.photos:  dict[str, Path | None]      = {a: None for a, _ in ANGLES}
-        self._thumbs: dict[str, ImageTk.PhotoImage] = {}
-        self._img_ok: dict[str, bool | None]       = {a: None for a, _ in ANGLES}
+        self.photos:  dict[str, Path | None]         = {a: None for a, _ in ANGLES}
+        self._thumbs: dict[str, ImageTk.PhotoImage]  = {}
+        self._img_ok: dict[str, bool | None]         = {a: None for a, _ in ANGLES}
         self._done_count = 0
+        self._temp_files: list[str] = []
+        self._auto_crop_var = tk.BooleanVar(value=_CROP_AVAIL)
 
         self._build()
-        self._center(500, 660)
+        self._center(500, 690)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _center(self, w: int, h: int):
         self.update_idletasks()
@@ -145,9 +207,32 @@ class App(tk.Tk):
 
         _sep(self, C["border"])
 
+        # ── Auto-crop toggle ──────────────────────────────────────
+        crop_row = tk.Frame(self, bg=C["bg"])
+        crop_row.pack(fill="x", **p, pady=(6, 2))
+
+        cb_kw = dict(
+            variable=self._auto_crop_var,
+            text="✂  ตัดใบหน้าอัตโนมัติ",
+            font=("Segoe UI", 8, "bold"),
+            bg=C["bg"], activebackground=C["bg"],
+            fg=C["text"] if _CROP_AVAIL else C["sub"],
+            state="normal" if _CROP_AVAIL else "disabled",
+            cursor="hand2" if _CROP_AVAIL else "",
+        )
+        tk.Checkbutton(crop_row, **cb_kw).pack(side="left")
+
+        if not _CROP_AVAIL:
+            tk.Label(crop_row, text="(ต้องติดตั้ง insightface + onnxruntime)",
+                     font=("Segoe UI", 7), bg=C["bg"], fg=C["sub"]).pack(side="left", padx=6)
+
+        self._crop_status = tk.Label(crop_row, text="", font=("Segoe UI", 8),
+                                     bg=C["bg"], fg=C["sub"])
+        self._crop_status.pack(side="right")
+
         # ── Photo slots ──
         photo_fr = tk.Frame(self, bg=C["bg"])
-        photo_fr.pack(fill="x", **p, pady=10)
+        photo_fr.pack(fill="x", **p, pady=(6, 10))
 
         self._slots:        dict[str, tk.Frame]  = {}
         self._slot_img:     dict[str, tk.Label]  = {}
@@ -158,7 +243,6 @@ class App(tk.Tk):
             col.grid(row=0, column=i, padx=6, sticky="n")
             photo_fr.columnconfigure(i, weight=1)
 
-            # Label + check indicator row
             head = tk.Frame(col, bg=C["bg"])
             head.pack(fill="x", pady=(0, 4))
             tk.Label(head, text=label, font=("Segoe UI", 9, "bold"),
@@ -168,7 +252,6 @@ class App(tk.Tk):
             chk.pack(side="right")
             self._slot_status[angle] = chk
 
-            # Slot (clickable)
             slot = tk.Frame(col, bg=C["slot_empty"], width=SLOT_SIZE, height=SLOT_SIZE,
                             highlightthickness=2, highlightbackground=C["slot_border_idle"],
                             cursor="hand2")
@@ -183,12 +266,11 @@ class App(tk.Tk):
             plus.bind("<Button-1>", lambda e, a=angle: self._pick(a))
             self._slot_img[angle] = plus
 
-            # Clear button (hidden until photo selected)
             clr = tk.Button(col, text="ล้าง", command=lambda a=angle: self._clear(a),
                             bg=C["btn_clear"], fg=C["sub"], font=("Segoe UI", 7),
                             relief="flat", padx=6, pady=1, cursor="hand2")
             clr.pack(pady=(4, 0))
-            clr.pack_forget()          # hidden initially
+            clr.pack_forget()
             self._clear_btns = getattr(self, "_clear_btns", {})
             self._clear_btns[angle] = clr
 
@@ -214,7 +296,6 @@ class App(tk.Tk):
                                    relief="flat", pady=13, cursor="hand2")
         self._save_btn.pack(fill="x")
 
-        # Keyboard shortcut
         self.bind("<Control-Return>", lambda _: self._save())
 
     # ── Logic ─────────────────────────────────────────────────────
@@ -265,23 +346,34 @@ class App(tk.Tk):
         path = filedialog.askopenfilename(filetypes=[("รูปภาพ", "*.jpg *.jpeg *.png")])
         if not path:
             return
-        self.photos[angle] = Path(path)
 
-        ok, info = _validate(path)
+        actual_path = path
+
+        if self._auto_crop_var.get() and _CROP_AVAIL:
+            self._crop_status.configure(text="⏳ กำลังตัดใบหน้า...", fg=C["warn"])
+            self.update_idletasks()
+            cropped = _crop_face(path)
+            if cropped:
+                self._temp_files.append(cropped)
+                actual_path = cropped
+                self._crop_status.configure(text="✓ ตัดใบหน้าแล้ว", fg=C["success"])
+            else:
+                self._crop_status.configure(text="⚠ ตรวจจับใบหน้าไม่พบ — ใช้รูปต้นฉบับ", fg=C["warn"])
+
+        self.photos[angle] = Path(actual_path)
+        ok, info = _validate(actual_path)
         self._img_ok[angle] = ok
         border = C["slot_border_ok"] if ok else C["slot_border_fail"]
         bg     = C["slot_ok"]        if ok else C["slot_fail"]
         self._slots[angle].configure(highlightbackground=border, bg=bg)
 
-        # Status checkmark / warning
         self._slot_status[angle].configure(
             text="✓" if ok else f"⚠ {info}",
             fg=C["success"] if ok else C["warn"]
         )
 
-        # Thumbnail
         try:
-            img = Image.open(path)
+            img = Image.open(actual_path)
             img.thumbnail((SLOT_SIZE, SLOT_SIZE))
             photo = ImageTk.PhotoImage(img)
             self._thumbs[angle] = photo
@@ -365,9 +457,18 @@ class App(tk.Tk):
         self._info_fr.configure(bg=C["card"])
         self._info_lbl.configure(text="กรอกรหัสแล้วกด Enter", bg=C["card"],
                                  fg=C["sub"], font=("Segoe UI", 10))
+        self._crop_status.configure(text="")
         for angle, _ in ANGLES:
             self._clear(angle)
         self.sid_combo.focus_set()
+
+    def _on_close(self):
+        for f in self._temp_files:
+            try:
+                os.unlink(f)
+            except Exception:
+                pass
+        self.destroy()
 
 
 # ── Helpers ───────────────────────────────────────────────────────
