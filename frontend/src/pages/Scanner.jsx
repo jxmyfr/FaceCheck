@@ -812,8 +812,8 @@ export default function Scanner() {
           {/* Camera feed */}
           <div style={{ position: 'relative', aspectRatio: '4/3', background: '#000' }}>
             <Webcam
-              ref={cam} audio={false} screenshotFormat="image/jpeg"
-              videoConstraints={{ facingMode: { ideal: 'environment' } }}
+              ref={cam} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.85}
+              videoConstraints={{ facingMode: { ideal: 'environment' }, width: 640, height: 480 }}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               onUserMedia={() => setCamReady(true)}
             />

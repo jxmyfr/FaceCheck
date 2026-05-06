@@ -61,7 +61,7 @@ async def scan_attendance(
     if current_embedding is None:
         raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ")
 
-    # Nearest-neighbor across all face embedding slots
+    # Nearest-neighbor across all face embedding slots (vectorized)
     all_embs = (
         db.query(StudentFaceEmbedding, Student)
         .join(Student, Student.id == StudentFaceEmbedding.student_id)
@@ -71,17 +71,21 @@ async def scan_attendance(
     if not all_embs:
         raise HTTPException(status_code=404, detail="ยังไม่มีนักเรียนที่ลงทะเบียนใบหน้าไว้")
 
-    best_match = None
-    best_dist  = float("inf")
+    target_shape = current_embedding.shape
+    valid = [
+        (np.frombuffer(emb.embedding, dtype=np.float32), stu)
+        for emb, stu in all_embs
+        if np.frombuffer(emb.embedding, dtype=np.float32).shape == target_shape
+    ]
+    if not valid:
+        raise HTTPException(status_code=404, detail="ไม่สามารถระบุตัวตนได้ กรุณาลองใหม่")
 
-    for emb_record, student in all_embs:
-        stored_emb = np.frombuffer(emb_record.embedding, dtype=np.float32)
-        if stored_emb.shape != current_embedding.shape:
-            continue
-        is_match, dist = face_processor.compare_faces(current_embedding, stored_emb, threshold=THRESHOLD)
-        if is_match and dist < best_dist:
-            best_dist  = dist
-            best_match = student
+    emb_matrix   = np.stack([v[0] for v in valid])          # (N, 512)
+    students_arr = [v[1] for v in valid]
+    dists        = np.linalg.norm(emb_matrix - current_embedding[None, :], axis=1)
+    best_idx     = int(np.argmin(dists))
+    best_dist    = float(dists[best_idx])
+    best_match   = students_arr[best_idx] if best_dist <= THRESHOLD else None
 
     if not best_match:
         raise HTTPException(status_code=404, detail="ไม่สามารถระบุตัวตนได้ กรุณาลองใหม่")
