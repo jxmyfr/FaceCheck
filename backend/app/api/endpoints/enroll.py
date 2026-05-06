@@ -889,7 +889,6 @@ async def import_zip(
         if sid in multi_files:
             angle_map = multi_files[sid]
             pairs = []  # (angle, embedding, jpeg_bytes)
-            any_fail = False
             for angle in ANGLES_ORDER:
                 if angle not in angle_map:
                     continue
@@ -898,22 +897,20 @@ async def import_zip(
                 frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                 if frame is None:
                     faces_fail.append({"student_id": sid, "reason": f"อ่านรูป {angle} ไม่ได้"})
-                    any_fail = True
-                    break
+                    continue
                 try:
                     emb = face_processor.process_capture(frame)
                 except Exception:
                     faces_fail.append({"student_id": sid, "reason": f"ตรวจจับใบหน้าไม่พบ ({angle})"})
-                    any_fail = True
-                    break
+                    continue
                 _, jpeg_buf = cv2.imencode(".jpg", frame)
                 pairs.append((angle, emb, jpeg_buf.tobytes()))
-            if any_fail:
-                continue
             if not pairs:
-                faces_fail.append({"student_id": sid, "reason": "ไม่มีรูปมุมใดเลย"})
+                # all angles failed — ensure at least one fail entry exists
+                if not any(f["student_id"] == sid for f in faces_fail):
+                    faces_fail.append({"student_id": sid, "reason": "ไม่มีรูปมุมใดเลย"})
                 continue
-            # Clear existing embeddings and replace
+            # Save whatever angles passed (partial is fine)
             db.query(StudentFaceEmbedding).filter(
                 StudentFaceEmbedding.student_id == student.id
             ).delete()
@@ -928,7 +925,7 @@ async def import_zip(
             front_emb, front_img = pairs[0][1], pairs[0][2]
             student.face_embedding = front_emb.tobytes()
             student.face_image = front_img
-            faces_ok.append({"student_id": sid})
+            faces_ok.append({"student_id": sid, "angles": len(pairs)})
             continue
 
         # ── Single-angle mode (legacy) ────────────────────────────
@@ -951,6 +948,12 @@ async def import_zip(
         faces_ok.append({"student_id": sid})
 
     db.commit()
+
+    # Tag partial-save failures so user knows angles were still saved
+    ok_sids = {f["student_id"] for f in faces_ok}
+    for f in faces_fail:
+        if f["student_id"] in ok_sids:
+            f["reason"] += " (บันทึกมุมที่ผ่านแล้ว)"
 
     return {
         "created":     len(created),

@@ -586,7 +586,7 @@ function ExcelPanel({ onImported }) {
               </div>
               {result.faces_fail_list?.length > 0 && (
                 <details style={{ marginBottom: 8 }}>
-                  <summary style={{ fontSize: 11, fontWeight: 600, color: 'var(--fc-danger)', cursor: 'pointer' }}>ใบหน้าที่บันทึกไม่ได้ ({result.faces_fail_list.length})</summary>
+                  <summary style={{ fontSize: 11, fontWeight: 600, color: 'var(--fc-danger)', cursor: 'pointer' }}>มุมที่ตรวจจับไม่ได้ ({result.faces_fail_list.length})</summary>
                   <div style={{ maxHeight: 100, overflowY: 'auto', fontSize: 11, color: 'var(--fc-text-3)', marginTop: 4 }}>
                     {result.faces_fail_list.map(f => <div key={f.student_id} style={{ padding: '2px 8px' }}>· {f.student_id}: {f.reason}</div>)}
                   </div>
