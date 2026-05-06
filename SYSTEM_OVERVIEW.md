@@ -163,10 +163,30 @@ erDiagram
         float min_blur_score "ความชัดขั้นต่ำ"
     }
 
+    users {
+        int id PK
+        string email UK
+        string username UK
+        string hashed_password
+        string full_name
+        string role "admin | teacher"
+        bool is_active
+        string categories "กลุ่มสาระที่รับผิดชอบ (comma-separated)"
+        datetime created_at
+    }
+
+    teacher_subjects {
+        int id PK
+        int teacher_id FK
+        int subject_id FK
+    }
+
     students ||--o{ student_face_embeddings : "มีหลาย embedding"
     students ||--o{ attendance_logs : "มีหลาย log"
     subjects ||--o{ attendance_logs : "มีหลาย log"
     subjects ||--o{ subject_schedules : "มีหลาย คาบ"
+    users ||--o{ teacher_subjects : "สอน"
+    subjects ||--o{ teacher_subjects : "สอนโดย"
 ```
 
 ---
@@ -275,7 +295,55 @@ sequenceDiagram
     end
 ```
 
-### 5.4 ดูผลและ Dashboard
+### 5.4 QRCheckin — หน้า Mobile สำหรับนักเรียน
+
+เมื่อนักเรียนสแกน QR บนมือถือ จะได้รับ URL:
+```
+https://face-check-zeta.vercel.app/qr-checkin?token=<JWT>
+```
+
+`QRCheckin.jsx` เป็นหน้า standalone (ไม่ต้อง login) — รับ `token` จาก query string แล้วให้นักเรียนกรอกรหัสนักเรียน → ส่ง POST `/attendance/qr-checkin` → แสดงผล เช็คชื่อสำเร็จ / มาสาย / เช็คชื่อแล้ว / QR หมดอายุ
+
+---
+
+### 5.5 นำเข้าข้อมูลจำนวนมาก (Bulk Import via ZIP)
+
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant Tool as prepare_photos.py
+    participant ZipFile as ZIP File
+    participant BE as FastAPI
+
+    Admin->>Tool: เปิด GUI, โหลด Excel
+    loop ทุกนักเรียน
+        Tool->>Tool: เลือกรูป 3 มุม (front/left/right)
+        Tool->>Tool: Auto-crop ด้วย InsightFace buffalo_sc
+        Tool->>Tool: rename → {sid}_front.jpg, {sid}_left.jpg, {sid}_right.jpg
+    end
+    Admin->>ZipFile: รวม Excel + รูปทั้งหมดเป็น ZIP
+    Admin->>BE: POST /enroll/import-zip (multipart)
+    BE->>BE: อ่าน Excel → สร้างนักเรียน
+    loop ทุกรูป
+        BE->>BE: decode JPEG → process_capture (InsightFace)
+        BE->>BE: บันทึก StudentFaceEmbedding (แยกต่าง angle)
+    end
+    BE-->>Admin: { created, duplicates, faces_ok, faces_fail_list }
+```
+
+**Naming convention ใน ZIP:**
+| ไฟล์ | ความหมาย |
+|------|---------|
+| `{student_id}_front.jpg` | มุมตรง |
+| `{student_id}_left.jpg` | หันซ้าย |
+| `{student_id}_right.jpg` | หันขวา |
+| `{student_id}.jpg` | single-angle (legacy) |
+
+ถ้ามุมใดมุมหนึ่ง detect ใบหน้าไม่ได้ → บันทึกมุมที่ผ่าน, รายงาน fail เฉพาะมุมนั้น
+
+---
+
+### 5.6 ดูผลและ Dashboard
 
 ```mermaid
 sequenceDiagram
@@ -295,7 +363,7 @@ sequenceDiagram
     DB-->>BE: time series data
     BE-->>FE: Area chart data
 
-    ครู/ผู้ดูแล->>FE: drill-down → ม.ต้น → ม.5 → ห้อง 1
+    ครู/ผู้ดูแล->>FE: drill-down โรงเรียน → ม.ต้น/ม.ปลาย → ชั้น → ห้อง
     FE->>BE: GET /stats/by-grade?grade_level=ม.5&room=1
     BE->>DB: query filtered by grade + room
     DB-->>BE: per-student stats
@@ -377,28 +445,34 @@ sequenceDiagram
 | กลุ่ม | Endpoint | Method | ทำอะไร |
 |-------|----------|--------|--------|
 | **Auth** | `/auth/login` | POST | login รับ JWT |
-| | `/auth/register` | POST | สร้าง user ใหม่ (admin) |
-| | `/auth/users` | GET | ดูรายชื่อ users |
-| | `/auth/me/subjects` | GET | วิชาที่ครูสอน |
-| **Enrollment** | `/enroll/students` | GET/POST | จัดการนักเรียน |
-| | `/enroll/students/import` | POST | import Excel |
-| | `/enroll/update-face-multi` | POST | ลงทะเบียนหน้า 3 มุม |
+| | `/auth/register` | POST | สร้าง user ใหม่ (admin only) |
+| | `/auth/users` | GET | ดูรายชื่อ users ทั้งหมด |
+| | `/auth/users/{id}` | PATCH/DELETE | แก้ไข/ลบ user |
+| | `/auth/me/subjects` | GET | วิชาที่ครูคนนี้สอน |
+| **Enrollment** | `/enroll/students` | GET/POST | ดูรายชื่อ / เพิ่มนักเรียนเดี่ยว |
+| | `/enroll/students/{id}` | GET/PUT/DELETE | จัดการรายบุคคล |
+| | `/enroll/students/import` | POST | import Excel (รายชื่ออย่างเดียว) |
+| | `/enroll/import-zip` | POST | import ZIP (Excel + รูปใบหน้า) |
+| | `/enroll/students/bulk-delete` | POST | ลบหลายคนพร้อมกัน (admin) |
+| | `/enroll/students/export` | GET | export Excel (`?ids=` เลือกเฉพาะคน) |
+| | `/enroll/update-face-multi` | POST | ลงทะเบียนหน้า 3 มุม (real-time) |
 | | `/enroll/check-angle` | POST | ตรวจมุมหน้า real-time |
-| | `/enroll/students/export` | GET | export Excel |
+| | `/enroll/students/{id}/embeddings` | GET | ดู face embeddings ทุก slot |
+| | `/enroll/students/{id}/embeddings/{eid}` | DELETE | ลบ embedding slot |
 | **Attendance** | `/attendance/scan` | POST | สแกนใบหน้าเช็คชื่อ |
-| | `/attendance/qr-session` | POST | สร้าง QR token |
-| | `/attendance/qr-checkin` | POST | เช็คชื่อด้วย QR |
+| | `/attendance/qr-session` | POST | สร้าง QR token (JWT) |
+| | `/attendance/qr-checkin` | POST | เช็คชื่อด้วย QR (ไม่ต้อง auth) |
 | | `/attendance/logs` | GET | ดู log ตามวัน/วิชา |
 | | `/attendance/logs/{id}` | PATCH/DELETE | แก้ไข/ลบ log |
-| | `/attendance/subjects` | GET/POST | จัดการวิชา |
+| | `/attendance/subjects` | GET/POST/PUT/DELETE | จัดการวิชา + ตารางสอน |
 | **Stats** | `/stats/overview` | GET | KPI ภาพรวมโรงเรียน |
-| | `/stats/daily` | GET | ข้อมูล time series 30 วัน |
+| | `/stats/daily` | GET | time series 30 วัน |
 | | `/stats/by-grade` | GET | สถิติแยกตามชั้น/ห้อง |
 | | `/stats/subject-attendance` | GET | gradebook ต่อวิชา |
-| | `/stats/student/{id}` | GET | ข้อมูลนักเรียนรายบุคคล |
-| **Reports** | `/reports/export` | GET | export Excel รายงาน |
-| **Settings** | `/settings/semester` | GET/PUT | ตั้งค่าภาคเรียน + threshold |
-| **Audit** | `/audit/logs` | GET | ประวัติการแก้ไขข้อมูล |
+| | `/stats/student/{id}` | GET | ข้อมูลนักเรียนรายบุคคล + trend |
+| **Reports** | `/reports/export` | GET | export Excel รายงาน (2 sheets, กรองได้) |
+| **Settings** | `/settings/semester` | GET/PUT | ตั้งค่าภาคเรียน + threshold ทั้งหมด |
+| **Audit** | `/audit/logs` | GET | ประวัติการแก้ไขข้อมูลทุก action |
 
 ---
 
@@ -431,7 +505,7 @@ sequenceDiagram
 ### สำหรับครู
 
 - **Scanner**: สแกนใบหน้าเช็คชื่อ real-time, สร้าง QR, กรอกมือ
-- **รายชื่อนักเรียน**: ค้นหา, กรองชั้น/ห้อง/มีใบหน้า, export Excel
+- **รายชื่อนักเรียน**: ค้นหา, กรองชั้น/ห้อง/มีใบหน้า, multi-select → bulk delete / export Excel เฉพาะที่เลือก
 - **Dashboard**: KPI การเข้าเรียน, กราฟ trend 30 วัน (นับนักเรียนไม่ซ้ำ เฉพาะ present/late), drill-down ม.ต้น/ม.ปลาย→ชั้น→ห้อง→รายบุคคล — อัตราเข้าเรียนนับ distinct students ไม่เกิน 100%
 - **รายงาน**: ค้นหาตามวันที่/วิชา/ชั้น/ห้อง, export Excel 2 sheet, พิมพ์, Gradebook view
 - **แก้ไขสถานะ**: เปลี่ยน present/late/absent/excused พร้อมบันทึกเหตุผล
@@ -449,32 +523,96 @@ sequenceDiagram
 ```
 โครงสร้าง:
 facecheck/
-├── backend/          FastAPI + InsightFace
-│   ├── main.py       entry point, :8000
-│   ├── .env          SECRET_KEY, DATABASE_URL
-│   └── storage/      database.db, faces/
-└── frontend/         React + Vite
-    └── .env          VITE_API_URL=http://localhost:8000/api/v1
+├── backend/               FastAPI + InsightFace
+│   ├── main.py            entry point, :8000
+│   ├── Dockerfile         สำหรับ deploy บน cloud (Python 3.11-slim)
+│   ├── .env               SECRET_KEY, DATABASE_URL
+│   └── storage/           database.db (SQLite local), faces/
+├── frontend/              React + Vite
+│   ├── vercel.json        SPA rewrite rules + VITE_APP_URL
+│   └── .env               VITE_API_URL=http://127.0.0.1:8000/api/v1
+└── tools/
+    └── prepare_photos.py  GUI เตรียมรูปก่อน import-ZIP
 ```
+
+### Local Development
 
 ```bash
 # Backend
 cd backend
 pip install -r requirements.txt
 python main.py          # → http://localhost:8000
+# Swagger UI: http://localhost:8000/docs
 
 # Frontend
 cd frontend
 npm install
 npm run dev             # → http://localhost:5173
+```
 
-# Swagger UI (API docs อัตโนมัติ)
-http://localhost:8000/docs
+### Environment Variables
+
+| ไฟล์ | ตัวแปร | ค่าตัวอย่าง |
+|------|--------|------------|
+| `backend/.env` | `SECRET_KEY` | random hex 32 bytes |
+| `backend/.env` | `DATABASE_URL` | `postgresql://user:pass@host/db` (Supabase) |
+| `frontend/.env` | `VITE_API_URL` | `http://127.0.0.1:8000/api/v1` |
+| `frontend/.env.production` | `VITE_API_URL` | `https://your-backend/api/v1` |
+
+ถ้าไม่ตั้ง `DATABASE_URL` → ใช้ SQLite (`backend/storage/database.db`) อัตโนมัติ
+
+### Production Deployment (ปัจจุบัน)
+
+| ส่วน | Platform | URL |
+|------|----------|-----|
+| Frontend | Vercel | `https://face-check-zeta.vercel.app` |
+| Database | Supabase (PostgreSQL) | connection string ใน `DATABASE_URL` |
+| Backend | Docker-ready (Dockerfile อยู่ใน `backend/`) | deploy บน Render / Railway / VPS |
+
+```dockerfile
+# backend/Dockerfile (สรุป)
+FROM python:3.11-slim
+RUN apt-get install -y libgl1 libglib2.0-0 libgomp1  # dependencies ของ InsightFace
+WORKDIR /app
+COPY requirements.txt . && pip install -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ---
 
-## 11. ข้อจำกัดและแนวทางพัฒนาต่อ
+---
+
+## 11. เครื่องมือเสริม (Tools)
+
+### `tools/prepare_photos.py` — GUI เตรียมรูปก่อน Import
+
+โปรแกรม Tkinter แบบ standalone สำหรับเตรียมรูปใบหน้านักเรียนให้ตรงกับ naming convention ก่อนรวมเป็น ZIP
+
+**ติดตั้ง:**
+```bash
+pip install openpyxl pillow insightface onnxruntime
+python tools/prepare_photos.py
+```
+
+**วิธีใช้:**
+1. โหลด Excel รายชื่อนักเรียน (column: student_id, title, first_name, last_name, grade, room)
+2. กรอกรหัสนักเรียน → ค้นหาชื่อ
+3. เลือกรูป 3 มุม (มุมตรง / ซ้าย / ขวา) — แต่ละ slot คลิกเพื่อเปิดไฟล์
+4. ✂ **Auto-crop อัตโนมัติ** (checkbox): ตัดใบหน้าออกจากรูปเต็มตัวด้วย InsightFace buffalo_sc พร้อม padding หัว/คอ
+5. กด "บันทึก" หรือ Ctrl+Enter → สร้างไฟล์ `{sid}_front.jpg`, `{sid}_left.jpg`, `{sid}_right.jpg` ในโฟลเดอร์ที่เลือก
+
+**ฟีเจอร์:**
+- Validation รูปด้วย Pillow (ขนาด ≥ 80px, ไม่ว่างเปล่า)
+- Preview thumbnail ใน slot พร้อม status ✓/⚠
+- Session counter "บันทึกแล้ว N คน"
+- ถ้าไม่มี insightface → checkbox disabled + แสดง install hint
+- ลบ temp crop files อัตโนมัติเมื่อปิดโปรแกรม
+
+---
+
+## 12. ข้อจำกัดและแนวทางพัฒนาต่อ
 
 | ข้อจำกัด | สาเหตุ | แนวทาง |
 |---------|--------|--------|
