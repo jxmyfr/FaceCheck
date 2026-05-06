@@ -3,31 +3,119 @@
 
 ---
 
-## แนะนำธีมสไลด์
+## ธีมสไลด์ — Academic + Subtle Gradient
 
-### ทิศทางที่แนะนำ: **Dark Tech + Accent สีโรงเรียน**
-- พื้นหลัง: `#0F172A` (navy-dark) หรือ `#111827`
-- Primary accent: `#6366F1` (indigo) — tech, AI, modern
-- Secondary: `#10B981` (emerald) — success, present, เข้าเรียน
-- Danger: `#EF4444` — absent, error
-- ตัวอักษรหลัก: ขาว `#F8FAFC`
-- ตัวอักษรรอง: `#94A3B8`
+### ทิศทาง
+White-based, สะอาด, academic — มี gradient **เฉพาะ accent elements** ไม่ใช่ทั้ง slide
+อ้างอิง: Linear.app, Notion doc export, IEEE 2024 modernized
 
-### ทำไม Dark?
-- ระบบรัน on-premise ในห้อง → ดูบนจอใหญ่ → dark อ่านง่ายกว่า
-- ธีม AI/Biometric → dark เข้ากับ face scan aesthetic
-- สีเครื่องแบบนักเรียน (แดงเลือดหมู) ตัดกับ dark ได้ดี
+---
 
-### Font แนะนำ
-- หัวข้อ: **Kanit** (Google Fonts) — ภาษาไทยอ่านชัด, ดู modern
-- Body: **Sarabun** — อ่านง่ายบน slide ขนาดเล็ก
-- Code/Label: **JetBrains Mono** หรือ **IBM Plex Mono**
+### Color Palette
 
-### Layout หลัก
-- ทุก slide: ข้อความซ้าย ≤ 40% ของพื้นที่, ภาพ/ไดอะแกรมขวา ≥ 60%
-- หัวข้อ slide ≤ 6 คำ
-- Bullet ≤ 3 จุดต่อ slide (แต่ละจุด ≤ 10 คำ)
-- ใช้ icon แทนคำอธิบายได้เสมอ
+| ใช้ทำอะไร | สี | Hex |
+|-----------|-----|-----|
+| Slide background | Off-white | `#F9FAFB` |
+| Heading text | Near-black | `#111827` |
+| Body text | Dark gray | `#374151` |
+| Caption / sub | Medium gray | `#6B7280` |
+| Border / divider | Light gray | `#E5E7EB` |
+| Card background | White | `#FFFFFF` |
+| **Accent gradient start** | Indigo | `#4F46E5` |
+| **Accent gradient end** | Violet | `#7C3AED` |
+| Present / Success | Emerald | `#059669` |
+| Late / Warning | Amber | `#D97706` |
+| Absent / Error | Red | `#DC2626` |
+| QR / Info | Blue | `#2563EB` |
+
+**Gradient formula:** `linear-gradient(135deg, #4F46E5, #7C3AED)`
+ใช้กับ: badge ตัวเลข, heading underline, cover accent shape, icon highlight
+
+---
+
+### ใช้ Gradient ที่ไหน / ไม่ใช้ที่ไหน
+
+| ✅ ใช้ได้ | ❌ ไม่ใช้ |
+|---------|---------|
+| Badge ตัวเลข section (01, 02…) | พื้นหลัง slide ทั้งหมด |
+| ตัวเลขสถิติใหญ่ (512D, 99%…) | ข้อความ body |
+| Left-bar บาง 4px หน้า heading | Card background |
+| Cover — shape มุมบนขวา opacity 15% | Glassmorphism blur |
+| Divider line (gradient stroke) | ทุก element พร้อมกัน |
+
+---
+
+### Cards
+- Background: `#FFFFFF`
+- Border: `1px solid #E5E7EB`
+- Shadow: `0 1px 4px rgba(0,0,0,0.08)`
+- Radius: `12px`
+- ไม่มี blur / frosted glass
+
+---
+
+### Typography
+
+**Pairing หลัก (แนะนำ):**
+- Heading: **Kanit Bold** — geometric, strong, academic ชัดเจน
+- Body: **IBM Plex Sans Thai Regular** — technical, อ่านง่าย, clean
+
+**Pairing สำรอง (friendly กว่า):**
+- Heading: **Prompt SemiBold**
+- Body: **Anuphan Regular**
+
+**Code / ตัวเลข / label:**
+- **JetBrains Mono** — ใช้กับ API path, embedding dim, threshold values
+
+**ขนาด:**
+| ระดับ | ขนาด |
+|-------|------|
+| Slide title | 36–40pt |
+| Section heading | 28–32pt |
+| Body text | 18–20pt |
+| Caption / label | 13–14pt |
+| Code / mono | 14–16pt |
+
+> **ไม่ใช้:** THSarabun, Sarabun, Cordia, AngsanaNew, TH Niramit
+
+---
+
+### Layout Template
+
+```
+┌──────────────────────────────────────────────┐
+│▌ หัวข้อ slide (Kanit Bold 36pt)              │  ← ▌ = gradient bar 4px
+│                                              │
+│  • bullet 1          ┌──────────────────┐   │
+│  • bullet 2          │   ภาพ / diagram  │   │  ← 40% text / 60% visual
+│  • bullet 3          │                  │   │
+│                      └──────────────────┘   │
+│ ─────────────────────────── 07 / 19 ──────  │  ← footer: gradient line + page
+└──────────────────────────────────────────────┘
+```
+
+- ข้อความซ้าย ≤ 40% ของพื้นที่
+- ภาพ/ไดอะแกรมขวา ≥ 60%
+- หัวข้อ ≤ 6 คำ
+- Bullet ≤ 3 จุด, แต่ละจุด ≤ 10 คำ
+- ใช้ icon แทนคำอธิบายเสมอถ้าทำได้
+
+---
+
+### Cover Slide Layout
+```
+┌──────────────────────────────────────────────┐
+│                         ╱▓▓▓▓▓▓▓▓▓▓▓        │  ← gradient shape มุมขวาบน
+│                        ╱  (opacity 15%)      │    สี #4F46E5→#7C3AED
+│                                              │
+│  FaceCheck                                   │
+│  ─────────────────────                       │  ← gradient underline
+│  ระบบเช็คชื่อด้วยใบหน้าอัตโนมัติ            │
+│  สำหรับโรงเรียน                              │
+│                                              │
+│  [โลโก้โรงเรียน]  ชื่อ — ชั้น — ปี          │  ← footer bar สีเทาอ่อน
+└──────────────────────────────────────────────┘
+```
 
 ---
 
