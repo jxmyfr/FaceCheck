@@ -6,7 +6,7 @@ import zipfile
 import tempfile
 from openpyxl.styles import Font, PatternFill, Alignment
 from pathlib import Path
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, status, Body
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -621,19 +621,36 @@ def download_template(_: User = Depends(require_teacher_or_admin)):
     )
 
 
+@router.post("/students/bulk-delete", status_code=204)
+def bulk_delete_students(
+    student_ids: list[str] = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    if not student_ids:
+        return
+    db.query(Student).filter(Student.student_id.in_(student_ids)).delete(synchronize_session=False)
+    db.commit()
+
+
 @router.get("/students/export")
 def export_students(
     grade_level: str = None,
     room_number: str = None,
+    ids: str = None,          # comma-separated student_ids for selected export
     db: Session = Depends(get_db),
     _: User = Depends(require_teacher_or_admin),
 ):
     """Export รายชื่อนักเรียนเป็น Excel"""
     q = db.query(Student).order_by(Student.grade_level, Student.room_number, Student.student_id)
-    if grade_level:
-        q = q.filter(Student.grade_level == grade_level)
-    if room_number:
-        q = q.filter(Student.room_number == room_number)
+    if ids:
+        id_list = [i.strip() for i in ids.split(",") if i.strip()]
+        q = q.filter(Student.student_id.in_(id_list))
+    else:
+        if grade_level:
+            q = q.filter(Student.grade_level == grade_level)
+        if room_number:
+            q = q.filter(Student.room_number == room_number)
     students = q.all()
 
     wb = openpyxl.Workbook()

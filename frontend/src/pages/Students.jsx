@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
@@ -16,9 +16,13 @@ export default function Students() {
   const [search, setSearch]     = useState('')
   const [filterGrade, setFilterGrade] = useState('')
   const [filterRoom, setFilterRoom]   = useState('')
-  const [deleting, setDeleting]   = useState(null)
-  const [confirm, setConfirm]     = useState(null)
-  const [filterFace, setFilterFace] = useState('all') // 'all' | 'no_face'
+  const [filterFace, setFilterFace]   = useState('all')
+  const [deleting, setDeleting]     = useState(null)
+  const [confirm, setConfirm]       = useState(null)
+  const [selected, setSelected]     = useState(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const selectAllRef = useRef(null)
 
   const load = useCallback(async () => {
     try {
@@ -35,25 +39,8 @@ export default function Students() {
 
   useEffect(() => { load() }, [load])
 
-  const handleDelete = async (studentId) => {
-    setDeleting(studentId)
-    try {
-      await axios.delete(`${API}/students/${studentId}`)
-      setStudents(prev => prev.filter(s => s.student_id !== studentId))
-    } catch {
-      await alert('ลบไม่สำเร็จ กรุณาลองใหม่')
-    } finally {
-      setDeleting(null)
-      setConfirm(null)
-    }
-  }
-
-  const exportExcel = () => {
-    const params = new URLSearchParams()
-    if (filterGrade) params.append('grade_level', filterGrade)
-    if (filterRoom)  params.append('room_number', filterRoom)
-    window.open(`${API}/students/export?${params}`, '_blank')
-  }
+  // Clear selection when filters change
+  useEffect(() => { setSelected(new Set()) }, [filterGrade, filterRoom, filterFace, search])
 
   const grades = [...new Set(students.map(s => s.grade_level).filter(Boolean))].sort()
   const rooms  = [...new Set(
@@ -78,9 +65,88 @@ export default function Students() {
     return matchSearch && matchGrade && matchRoom && matchFace
   })
 
+  // Selection helpers
+  const allFilteredSelected = filtered.length > 0 && filtered.every(s => selected.has(s.student_id))
+  const someFilteredSelected = filtered.some(s => selected.has(s.student_id))
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someFilteredSelected && !allFilteredSelected
+    }
+  }, [someFilteredSelected, allFilteredSelected])
+
+  const toggleSelect = (sid, e) => {
+    e.stopPropagation()
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(sid) ? next.delete(sid) : next.add(sid)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelected(prev => {
+        const next = new Set(prev)
+        filtered.forEach(s => next.delete(s.student_id))
+        return next
+      })
+    } else {
+      setSelected(prev => {
+        const next = new Set(prev)
+        filtered.forEach(s => next.add(s.student_id))
+        return next
+      })
+    }
+  }
+
+  // Single delete
+  const handleDelete = async (studentId) => {
+    setDeleting(studentId)
+    try {
+      await axios.delete(`${API}/students/${studentId}`)
+      setStudents(prev => prev.filter(s => s.student_id !== studentId))
+      setSelected(prev => { const n = new Set(prev); n.delete(studentId); return n })
+    } catch {
+      await alert('ลบไม่สำเร็จ กรุณาลองใหม่')
+    } finally {
+      setDeleting(null)
+      setConfirm(null)
+    }
+  }
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true)
+    try {
+      const ids = [...selected]
+      await axios.post(`${API}/students/bulk-delete`, { student_ids: ids })
+      setStudents(prev => prev.filter(s => !selected.has(s.student_id)))
+      setSelected(new Set())
+      setBulkConfirm(false)
+    } catch {
+      await alert('ลบไม่สำเร็จ กรุณาลองใหม่')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  // Export
+  const exportExcel = () => {
+    const params = new URLSearchParams()
+    if (selected.size > 0) {
+      params.set('ids', [...selected].join(','))
+    } else {
+      if (filterGrade) params.append('grade_level', filterGrade)
+      if (filterRoom)  params.append('room_number', filterRoom)
+    }
+    window.open(`${API}/students/export?${params}`, '_blank')
+  }
+
   return (
     <main id="main-content" className="page">
       {dialog}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -90,10 +156,10 @@ export default function Students() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-ghost btn-sm" onClick={load}>รีเฟรช</button>
           <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:4,verticalAlign:'middle'}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4, verticalAlign: 'middle' }}>
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            ส่งออก Excel
+            {selected.size > 0 ? `ส่งออก ${selected.size} คน` : 'ส่งออก Excel'}
           </button>
           {user?.role === 'admin' && (
             <button className="btn btn-primary btn-sm" onClick={() => navigate('/enroll')}>+ ลงทะเบียนนักเรียน</button>
@@ -101,7 +167,7 @@ export default function Students() {
         </div>
       </div>
 
-      {/* No-face banner — admin only */}
+      {/* No-face banner */}
       {user?.role === 'admin' && noFaceCount > 0 && filterFace === 'all' && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -118,6 +184,41 @@ export default function Students() {
           >
             ดูรายการ
           </button>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: 'var(--fc-primary)', color: '#fff',
+          borderRadius: 10, padding: '10px 16px', marginBottom: 16,
+        }}>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>เลือกแล้ว {selected.size} คน</span>
+          <div style={{ flex: 1 }} />
+          <button
+            className="btn btn-sm"
+            onClick={() => setSelected(new Set())}
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none' }}
+          >
+            ยกเลิกการเลือก
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={exportExcel}
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none' }}
+          >
+            ส่งออก Excel
+          </button>
+          {user?.role === 'admin' && (
+            <button
+              className="btn btn-sm"
+              onClick={() => setBulkConfirm(true)}
+              style={{ background: 'var(--fc-danger)', color: '#fff', border: 'none' }}
+            >
+              ลบ {selected.size} คน
+            </button>
+          )}
         </div>
       )}
 
@@ -200,6 +301,16 @@ export default function Students() {
             <table className="tbl">
               <thead>
                 <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      aria-label="เลือกทั้งหมด"
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
                   <th>รหัสนักเรียน</th>
                   <th>ชื่อ</th>
                   <th>นามสกุล</th>
@@ -215,10 +326,20 @@ export default function Students() {
                     key={s.student_id}
                     style={{
                       cursor: 'pointer',
-                      background: !s.has_face ? 'rgba(251,191,36,0.06)' : undefined,
+                      background: selected.has(s.student_id)
+                        ? 'var(--fc-primary-light, rgba(99,102,241,0.08))'
+                        : !s.has_face ? 'rgba(251,191,36,0.06)' : undefined,
                     }}
                     onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
                   >
+                    <td style={{ textAlign: 'center' }} onClick={e => toggleSelect(s.student_id, e)}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(s.student_id)}
+                        onChange={() => {}}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </td>
                     <td style={{ fontWeight: 600, color: 'var(--fc-text)', fontFamily: 'var(--fc-font-mono)' }}>
                       {s.student_id}
                     </td>
@@ -255,14 +376,27 @@ export default function Students() {
               <div
                 key={s.student_id}
                 className="student-card-row"
-                style={{ background: !s.has_face ? 'rgba(251,191,36,0.06)' : undefined }}
+                style={{
+                  background: selected.has(s.student_id)
+                    ? 'var(--fc-primary-light, rgba(99,102,241,0.08))'
+                    : !s.has_face ? 'rgba(251,191,36,0.06)' : undefined,
+                }}
                 onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
               >
-                <div className="student-card-main">
-                  <div className="student-card-name">{s.first_name} {s.last_name}</div>
-                  <div className="student-card-id">{s.student_id}</div>
-                  <div className="student-card-meta">
-                    {s.grade_level ?? '—'} · ห้อง {s.room_number ?? '—'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(s.student_id)}
+                    onChange={() => {}}
+                    onClick={e => toggleSelect(s.student_id, e)}
+                    style={{ cursor: 'pointer', flexShrink: 0 }}
+                  />
+                  <div className="student-card-main">
+                    <div className="student-card-name">{s.first_name} {s.last_name}</div>
+                    <div className="student-card-id">{s.student_id}</div>
+                    <div className="student-card-meta">
+                      {s.grade_level ?? '—'} · ห้อง {s.room_number ?? '—'}
+                    </div>
                   </div>
                 </div>
                 <div className="student-card-right">
@@ -286,7 +420,7 @@ export default function Students() {
         </div>
       )}
 
-      {/* Confirm modal */}
+      {/* Single delete modal */}
       {confirm && (
         <div className="modal-overlay" onClick={() => setConfirm(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -305,6 +439,31 @@ export default function Students() {
                 onClick={() => handleDelete(confirm.student_id)}
               >
                 {deleting === confirm.student_id ? 'กำลังลบ…' : 'ลบ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk delete modal */}
+      {bulkConfirm && (
+        <div className="modal-overlay" onClick={() => !bulkDeleting && setBulkConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">ยืนยันการลบจำนวนมาก</div>
+            <p style={{ fontSize: 14, color: 'var(--fc-text-2)', marginBottom: 20 }}>
+              ลบนักเรียน <strong>{selected.size} คน</strong> ออกจากระบบ?
+              <br />
+              <span style={{ color: 'var(--fc-danger)', fontSize: 12 }}>ข้อมูลและใบหน้าทั้งหมดจะถูกลบถาวร ไม่สามารถกู้คืนได้</span>
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" disabled={bulkDeleting} onClick={() => setBulkConfirm(false)}>ยกเลิก</button>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--fc-danger)' }}
+                disabled={bulkDeleting}
+                onClick={handleBulkDelete}
+              >
+                {bulkDeleting ? 'กำลังลบ…' : `ลบ ${selected.size} คน`}
               </button>
             </div>
           </div>
