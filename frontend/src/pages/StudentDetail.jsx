@@ -171,15 +171,16 @@ function AreaChart({ data, valueKey = 'rate', color = 'var(--fc-primary)', heigh
 }
 
 // ── Student avatar (lazy loads primary face photo) ───────────────
-function StudentAvatar({ studentId, firstName, size = 80, onClick }) {
+function StudentAvatar({ studentId, firstName, hasFace = true, size = 80, onClick }) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
+    if (!hasFace) return
     let objectUrl = null
     axios.get(`${API_ENROLL}/students/${encodeURIComponent(studentId)}/face`, { responseType: 'blob' })
       .then(r => { objectUrl = URL.createObjectURL(r.data); setUrl(objectUrl) })
       .catch(() => {})
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [studentId])
+  }, [studentId, hasFace])
 
   const base = {
     width: size, height: size, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
@@ -596,6 +597,7 @@ export default function StudentDetail() {
           <StudentAvatar
             studentId={studentId}
             firstName={student.first_name ?? student.full_name}
+            hasFace={student.has_face}
             size={80}
             onClick={isAdmin ? () => setGalleryOpen(true) : undefined}
           />

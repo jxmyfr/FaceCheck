@@ -28,7 +28,11 @@ export default function Login() {
     if (!email || !password) return
     setError(''); setLoading(true)
     try { await login(email, password); navigate('/') }
-    catch (e) { setError(e.response?.data?.detail || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง') }
+    catch (e) {
+      setError(e.response?.data?.detail || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง')
+      setPassword('')
+      document.getElementById('login-password')?.focus()
+    }
     finally { setLoading(false) }
   }
 
