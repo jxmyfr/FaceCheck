@@ -568,11 +568,17 @@ export default function Sidebar() {
             </button>
           ) : (
             <>
-              <img src="/logo.png" alt="FaceCheck" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>FaceCheck</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>ระบบเช็คชื่อ</div>
-              </div>
+              <Link
+                to="/"
+                onClick={isMobile ? () => setMobileOpen(false) : undefined}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, textDecoration: 'none' }}
+              >
+                <img src="/logo.png" alt="FaceCheck" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>FaceCheck</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>ระบบเช็คชื่อ</div>
+                </div>
+              </Link>
               <button
                 onClick={isMobile ? () => setMobileOpen(false) : () => setCollapsed(true)}
                 aria-label={isMobile ? 'ปิดเมนู' : 'ย่อเมนู'}
