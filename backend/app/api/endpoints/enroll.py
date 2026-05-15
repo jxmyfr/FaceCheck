@@ -14,6 +14,7 @@ from app.models.database import get_db, Student, StudentFaceEmbedding, SubjectSc
 from app.models.user import User, TeacherSubject
 from app.services.face_proc import FaceProcessor
 from app.core.dependencies import require_teacher_or_admin, require_admin, get_current_user
+from app.api.endpoints.attendance import invalidate_embedding_cache
 
 router = APIRouter()
 face_processor = FaceProcessor()
@@ -73,7 +74,7 @@ async def register_student(
     db.commit()
     db.refresh(new_student)
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), frame)
-
+    invalidate_embedding_cache()
     return {"status": "success", "message": f"ลงทะเบียน {first_name} {last_name} สำเร็จ", "id": new_student.id}
 
 
@@ -106,7 +107,7 @@ async def update_face(
     student.face_image = jpeg_buf.tobytes()
     db.commit()
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), frame)
-
+    invalidate_embedding_cache()
     return {"status": "success", "message": f"อัปเดตใบหน้าของ {student.first_name} สำเร็จ"}
 
 
@@ -290,7 +291,7 @@ async def register_student_multi(
     db.commit()
     db.refresh(new_student)
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), best_frame)
-
+    invalidate_embedding_cache()
     return {
         "status":  "success",
         "message": f"ลงทะเบียน {first_name} {last_name} สำเร็จ (ใช้ {len(valid_pairs)}/{len(files)} รูป)",
@@ -402,7 +403,7 @@ async def update_face_multi(
     student.face_image     = jpeg_buf.tobytes()
     db.commit()
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), best_frame)
-
+    invalidate_embedding_cache()
     return {
         "status":  "success",
         "message": f"อัปเดตใบหน้าสำเร็จ ใช้ {len(valid_embeddings)}/{len(files)} รูป",
@@ -498,7 +499,7 @@ async def add_embedding(
     student.face_image     = jpeg_buf.tobytes()
     db.commit()
     db.refresh(new_emb)
-
+    invalidate_embedding_cache()
     return {
         "id":    new_emb.id,
         "label": new_emb.label,
@@ -560,6 +561,7 @@ async def add_embeddings_bulk(
         raise HTTPException(status_code=400, detail="ไม่มีรูปที่ผ่านการตรวจสอบ — ตรวจสอบว่าภาพมีใบหน้าที่ชัดเจน")
 
     db.commit()
+    invalidate_embedding_cache()
     return {
         "added": added,
         "total_slots": current_slots + added,
@@ -596,6 +598,7 @@ def delete_embedding(
         student.face_embedding = remaining.embedding
         student.face_image     = remaining.face_image
     db.commit()
+    invalidate_embedding_cache()
 
 
 @router.get("/template")

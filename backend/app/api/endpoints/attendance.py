@@ -17,6 +17,35 @@ from app.core.dependencies import require_teacher_or_admin, require_admin, get_c
 router = APIRouter()
 face_processor = FaceProcessor()
 
+# ── In-memory embedding cache ─────────────────────────────────────
+_EMB_CACHE: dict | None = None  # {'matrix': np.ndarray, 'students': list}
+
+def invalidate_embedding_cache():
+    global _EMB_CACHE
+    _EMB_CACHE = None
+
+def _ensure_emb_cache(db: Session):
+    global _EMB_CACHE
+    if _EMB_CACHE is not None:
+        return
+    rows = (
+        db.query(StudentFaceEmbedding, Student)
+        .join(Student, Student.id == StudentFaceEmbedding.student_id)
+        .all()
+    )
+    valid = [
+        (np.frombuffer(e.embedding, dtype=np.float32), s)
+        for e, s in rows
+        if len(e.embedding) == 512 * 4
+    ]
+    if not valid:
+        return
+    _EMB_CACHE = {
+        'matrix':   np.stack([v[0] for v in valid]),
+        'students': [v[1] for v in valid],
+    }
+
+
 
 @router.post("/scan")
 async def scan_attendance(
@@ -63,27 +92,13 @@ async def scan_attendance(
     if current_embedding is None:
         raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ")
 
-    # Nearest-neighbor across all face embedding slots (vectorized)
-    all_embs = (
-        db.query(StudentFaceEmbedding, Student)
-        .join(Student, Student.id == StudentFaceEmbedding.student_id)
-        .filter(Student.face_embedding != b"")
-        .all()
-    )
-    if not all_embs:
+    # Nearest-neighbor — use in-memory cache (built once, invalidated on enrollment changes)
+    _ensure_emb_cache(db)
+    if _EMB_CACHE is None:
         raise HTTPException(status_code=404, detail="ยังไม่มีนักเรียนที่ลงทะเบียนใบหน้าไว้")
 
-    target_shape = current_embedding.shape
-    valid = [
-        (np.frombuffer(emb.embedding, dtype=np.float32), stu)
-        for emb, stu in all_embs
-        if np.frombuffer(emb.embedding, dtype=np.float32).shape == target_shape
-    ]
-    if not valid:
-        raise HTTPException(status_code=404, detail="ไม่สามารถระบุตัวตนได้ กรุณาลองใหม่")
-
-    emb_matrix   = np.stack([v[0] for v in valid])          # (N, 512)
-    students_arr = [v[1] for v in valid]
+    emb_matrix   = _EMB_CACHE['matrix']    # (N, 512) — already stacked
+    students_arr = _EMB_CACHE['students']
     dists        = np.linalg.norm(emb_matrix - current_embedding[None, :], axis=1)
     best_idx     = int(np.argmin(dists))
     best_dist    = float(dists[best_idx])

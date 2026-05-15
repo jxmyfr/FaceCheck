@@ -481,7 +481,16 @@ export default function Scanner() {
     const scanUrl = `${API}/attendance/scan?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}`
 
     try {
-      const blob = await fetch(img).then(r => r.blob())
+      const blob = await new Promise(resolve => {
+        const el = new Image()
+        el.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 480; canvas.height = Math.round(480 * el.height / el.width)
+          canvas.getContext('2d').drawImage(el, 0, 0, canvas.width, canvas.height)
+          canvas.toBlob(resolve, 'image/jpeg', 0.75)
+        }
+        el.src = img
+      })
       const fd   = new FormData()
       fd.append('file', blob, 'scan.jpg')
       const res = await axios.post(scanUrl, fd)
