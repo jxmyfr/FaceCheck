@@ -39,6 +39,7 @@ const STATUS_CFG = {
   success_late:   { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
   already_checked:{ label: 'เช็คชื่อแล้ว',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
   error:          { label: 'ระบุตัวตนไม่ได้', color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
+  wrong_room:     { label: 'ไม่ใช่ห้องนี้',   color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
   // DB statuses (from polling)
   present:        { label: 'มาเรียน',         color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
   late:           { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
@@ -116,7 +117,13 @@ function ResultCard({ result, onDismiss, onCancel }) {
                   {result.room_number && ` ห้อง ${result.room_number}`}
                 </div>
 
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {result.status === 'wrong_room' && result.message && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#92400E', background: '#FEF3C7', borderRadius: 6, padding: '6px 10px' }}>
+                    {result.message}
+                  </div>
+                )}
+
+                {result.status !== 'wrong_room' && <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 12, color: 'var(--fc-text-3)' }}>
                     <span style={{ color: 'var(--fc-text-4)' }}>วิชา</span>{' '}
                     <strong style={{ color: 'var(--fc-text-2)' }}>{result.subject}</strong>
@@ -142,7 +149,7 @@ function ResultCard({ result, onDismiss, onCancel }) {
                       ความแม่นยำ {Math.round(result.confidence * 100)}%
                     </div>
                   )}
-                </div>
+                </div>}
               </>
             ) : (
               <div style={{ fontSize: 14, color: 'var(--fc-danger)', marginTop: 4 }}>
@@ -495,13 +502,25 @@ export default function Scanner() {
         setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 8000)
       }
     } catch (e) {
-      if (!isAuto) {
-        // Manual mode: show error
-        const detail = e.response?.data?.detail || 'ระบุตัวตนไม่สำเร็จ'
-        setErrMsg(detail)
-        setResult({ status: 'error', name: null, message: detail, photo: img })
+      const detail = e.response?.data?.detail
+      const isWrongRoom = e.response?.status === 403 && typeof detail === 'object' && detail?.error_code === 'wrong_room'
+      if (isWrongRoom) {
+        // Face recognized but wrong class — show warning + cooldown (both auto & manual)
+        const wr = detail
+        setErrMsg('')
+        setResult({ status: 'wrong_room', name: wr.name, student_id: wr.student_id, grade_level: wr.grade_level, room_number: wr.room_number, message: wr.message, photo: img })
+        if (isAuto) {
+          cooldownRef.current = true
+          setCooldown(true)
+          setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 8000)
+        }
+      } else if (!isAuto) {
+        // Manual mode: show generic error
+        const msg = typeof detail === 'string' ? detail : 'ระบุตัวตนไม่สำเร็จ'
+        setErrMsg(msg)
+        setResult({ status: 'error', name: null, message: msg, photo: img })
       }
-      // Auto mode: silently ignore (no face / quality fail / no match)
+      // Auto mode non-wrong_room: silently ignore (no face / quality fail / no match)
     }
   }, [subjectId, subjects])
 

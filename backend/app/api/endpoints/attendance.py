@@ -98,19 +98,25 @@ async def scan_attendance(
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
 
     # ── Room restriction (ทุก role รวม admin) ───────────────────
+    def _wrong_room_error(message: str):
+        full_name = " ".join(filter(None, [best_match.title, best_match.first_name, best_match.last_name]))
+        raise HTTPException(status_code=403, detail={
+            "error_code":  "wrong_room",
+            "message":     message,
+            "name":        full_name,
+            "student_id":  best_match.student_id,
+            "grade_level": best_match.grade_level,
+            "room_number": best_match.room_number,
+        })
+
     if sched and (sched.grade_level or sched.room_number):
-        # Specific schedule provided — check against it
         grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
         room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
         if not (grade_ok and room_ok):
             student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
             sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
-            raise HTTPException(
-                status_code=403,
-                detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้คาบนี้ (ห้องที่เรียน: {sched_loc})",
-            )
+            _wrong_room_error(f"ไม่ได้เรียนวิชานี้คาบนี้ ({student_loc} → ห้องที่เรียน: {sched_loc})")
     else:
-        # No specific schedule — check against ALL rooms of this subject
         subject_schedules = db.query(SubjectSchedule).filter(
             SubjectSchedule.subject_id == subject_id
         ).all()
@@ -123,10 +129,7 @@ async def scan_attendance(
             student_room = (best_match.grade_level, best_match.room_number)
             if student_room not in allowed_rooms:
                 student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้",
-                )
+                _wrong_room_error(f"ไม่ได้เรียนวิชานี้ ({student_loc})")
 
     # ── Auto late detection: > 15 min past schedule start ────────
     scan_status = "present"
