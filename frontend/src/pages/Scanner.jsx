@@ -420,7 +420,13 @@ export default function Scanner() {
           photo:        recentPhotosRef.current[l.log_id] ?? null,
         }))
         setLogs(prev => {
-          const alreadyChecked = prev.filter(l => l.status === 'already_checked')
+          const seen = new Set(serverLogs.map(l => l.student_id))
+          const alreadyChecked = prev
+            .filter(l => l.status === 'already_checked' && !seen.has(l.student_id))
+            .reduce((acc, l) => {
+              if (!acc.some(x => x.student_id === l.student_id)) acc.push(l)
+              return acc
+            }, [])
           return [...alreadyChecked, ...serverLogs]
         })
       } catch {}
