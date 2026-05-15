@@ -1,8 +1,13 @@
 # AI Logic: Detection, Embedding, Liveness, Quality
 import cv2
 import numpy as np
+import onnxruntime as ort
 from insightface.app import FaceAnalysis
 from typing import Optional, Tuple
+
+_AVAILABLE = ort.get_available_providers()
+_PROVIDERS = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if 'CUDAExecutionProvider' in _AVAILABLE else ['CPUExecutionProvider']
+print(f"[FaceProcessor] using providers: {_PROVIDERS}")
 
 
 class FaceProcessor:
@@ -12,7 +17,7 @@ class FaceProcessor:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(FaceProcessor, cls).__new__(cls)
-            cls._instance.app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
+            cls._instance.app = FaceAnalysis(name='buffalo_l', providers=_PROVIDERS)
             cls._instance.app.prepare(ctx_id=0, det_size=(320, 320))
         return cls._instance
 
