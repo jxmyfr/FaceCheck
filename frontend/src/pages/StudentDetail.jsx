@@ -58,10 +58,11 @@ const IcScan = () => (
 
 // ── Status chip ─────────────────────────────────────────────────
 const STATUS_MAP = {
-  present: { label: 'มาเรียน', color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
-  late:    { label: 'มาสาย',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)' },
-  absent:  { label: 'ขาดเรียน',color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)'  },
-  excused: { label: 'ลา',      color: '#7c3aed',                bg: 'rgba(124,58,237,0.1)'    },
+  present:         { label: 'มาเรียน',  color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
+  late:            { label: 'มาสาย',    color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)' },
+  absent:          { label: 'ขาดเรียน', color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)'  },
+  excused:         { label: 'ลา',       color: '#7c3aed',                bg: 'rgba(124,58,237,0.1)'    },
+  already_checked: { label: 'เช็คซ้ำ',  color: 'var(--fc-text-3)',       bg: 'var(--fc-muted)'         },
 }
 function StatusChip({ status, reason }) {
   const s = STATUS_MAP[status] ?? { label: status, color: 'var(--fc-text-3)', bg: 'var(--fc-muted)' }
@@ -259,6 +260,7 @@ export default function StudentDetail() {
   const [attendLog, setAttendLog]           = useState(null)
   const [attendLogUrl, setAttendLogUrl]     = useState(null)
   const [attendLogLoading, setAttendLogLoading] = useState(false)
+  const [statusFilter, setStatusFilter]     = useState('all')
 
   const load = async () => {
     try {
@@ -696,22 +698,51 @@ export default function StudentDetail() {
 
       {/* Attendance feed */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--fc-border)' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)' }}>ประวัติการเข้าเรียน</div>
-        </div>
-        {records.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '40px 0', fontSize: 13 }}>
-            ยังไม่มีบันทึกการเข้าเรียน
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--fc-border)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)', flexShrink: 0 }}>ประวัติการเข้าเรียน</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[
+              { key: 'all', label: 'ทั้งหมด' },
+              { key: 'present', label: 'มาเรียน' },
+              { key: 'late', label: 'มาสาย' },
+              { key: 'absent', label: 'ขาดเรียน' },
+              { key: 'excused', label: 'ลา' },
+              { key: 'already_checked', label: 'เช็คซ้ำ' },
+            ].map(f => {
+              const count = f.key === 'all' ? records.length : records.filter(r => r.status === f.key).length
+              if (f.key !== 'all' && count === 0) return null
+              const active = statusFilter === f.key
+              const s = STATUS_MAP[f.key]
+              return (
+                <button key={f.key} onClick={() => setStatusFilter(f.key)} style={{
+                  fontSize: 11, padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                  fontWeight: active ? 600 : 400,
+                  background: active ? (s?.bg ?? 'var(--fc-primary-light)') : 'var(--fc-muted)',
+                  color: active ? (s?.color ?? 'var(--fc-primary)') : 'var(--fc-text-3)',
+                  transition: 'all 0.15s',
+                }}>
+                  {f.label} {count}
+                </button>
+              )
+            })}
           </div>
-        ) : (
+        </div>
+        {(() => {
+          const filtered = statusFilter === 'all' ? records : records.filter(r => r.status === statusFilter)
+          if (filtered.length === 0) return (
+            <div style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '40px 0', fontSize: 13 }}>
+              ไม่มีบันทึกสถานะนี้
+            </div>
+          )
+          return (
           <div>
-            {records.map((r, i) => (
+            {filtered.map((r, i) => (
               <div key={i}
                 onClick={() => openAttendLog(r)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 14,
                   padding: '12px 20px',
-                  borderBottom: i < records.length - 1 ? '1px solid var(--fc-border)' : 'none',
+                  borderBottom: i < filtered.length - 1 ? '1px solid var(--fc-border)' : 'none',
                   cursor: 'pointer', transition: 'background 0.12s',
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--fc-muted)'}
@@ -753,7 +784,8 @@ export default function StudentDetail() {
               </div>
             ))}
           </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* ── Face view modal ─────────────────────────────────────── */}
