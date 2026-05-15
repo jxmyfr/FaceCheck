@@ -441,6 +441,7 @@ def list_logs(
         q = q.filter(Student.grade_level == grade_level)
     if room_number:
         q = q.filter(Student.room_number == room_number)
+    q = q.filter(AttendanceLog.status != "already_checked")
     rows = q.order_by(AttendanceLog.timestamp.desc()).all()
     return [
         {
