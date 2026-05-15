@@ -39,6 +39,11 @@ const STATUS_CFG = {
   success_late:   { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
   already_checked:{ label: 'เช็คชื่อแล้ว',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
   error:          { label: 'ระบุตัวตนไม่ได้', color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
+  // DB statuses (from polling)
+  present:        { label: 'มาเรียน',         color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
+  late:           { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
+  absent:         { label: 'ขาดเรียน',        color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
+  excused:        { label: 'ลา',              color: '#1D4ED8',                bg: '#DBEAFE',                 accent: '#2563EB' },
 }
 
 const getDisplayStatus = (result) => {
