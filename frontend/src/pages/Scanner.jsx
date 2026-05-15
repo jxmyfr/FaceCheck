@@ -379,24 +379,9 @@ export default function Scanner() {
   // Shared result state
   const [result, setResult]     = useState(null)
   const [errMsg, setErrMsg]     = useState('')
-  const [logs, setLogs]         = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('scanner-logs') || '[]')
-      // already_checked entries are session-only — hide on return visit
-      return saved.filter(l => l.status !== 'already_checked')
-    } catch { return [] }
-  })
+  const [logs, setLogs]         = useState([])
   const [logDetail, setLogDetail] = useState(null)
-
-  useEffect(() => {
-    try {
-      // don't persist already_checked — they're noise on return visits
-      const slim = logs
-        .filter(l => l.status !== 'already_checked')
-        .map(({ photo, ...rest }) => rest)
-      localStorage.setItem('scanner-logs', JSON.stringify(slim))
-    } catch {}
-  }, [logs])
+  const recentPhotosRef = useRef({})
 
   useEffect(() => {
     if (subjectId) localStorage.setItem('scanner-subject-id', subjectId)
@@ -405,6 +390,40 @@ export default function Scanner() {
   useEffect(() => {
     localStorage.setItem('scanner-mode', mode)
   }, [mode])
+
+  // ── Poll attendance logs every 3s for cross-device real-time sync ──
+  useEffect(() => {
+    if (!subjectId) { setLogs([]); return }
+    const fetchLogs = async () => {
+      try {
+        const res = await axios.get(`${API}/attendance/logs`, { params: { subject_id: subjectId } })
+        const serverLogs = res.data.map(l => ({
+          log_id:       l.log_id,
+          logId:        l.log_id,
+          student_id:   l.student_id,
+          name:         l.name,
+          grade_level:  l.grade_level,
+          room_number:  l.room_number,
+          subject:      l.subject_name,
+          subject_code: l.subject_code,
+          status:       l.status,
+          reason:       l.reason,
+          check_method: l.check_method,
+          scan_time:    l.timestamp.slice(0, 5),
+          scanDate:     l.date,
+          subject_id:   Number(subjectId),
+          photo:        recentPhotosRef.current[l.log_id] ?? null,
+        }))
+        setLogs(prev => {
+          const alreadyChecked = prev.filter(l => l.status === 'already_checked')
+          return [...alreadyChecked, ...serverLogs]
+        })
+      } catch {}
+    }
+    fetchLogs()
+    const timer = setInterval(fetchLogs, 3000)
+    return () => clearInterval(timer)
+  }, [subjectId])
 
   useEffect(() => {
     // Load subjects + detect current schedule in parallel
@@ -453,6 +472,7 @@ export default function Scanner() {
       const selSubj = subjects.find(s => s.id === Number(subjectId))
       const scanDate = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`
       const entry = { ...res.data, photo: img, logId: Date.now(), scanDate, scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
+      if (entry.log_id && img) recentPhotosRef.current[entry.log_id] = img
       setResult(entry)
       setErrMsg('')
       setLogs(prev => [entry, ...prev])
