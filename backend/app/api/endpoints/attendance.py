@@ -97,37 +97,36 @@ async def scan_attendance(
     if schedule_id:
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
 
-    # ── Room restriction (teacher only) ──────────────────────────
-    if current_user.role != "admin":
-        if sched and (sched.grade_level or sched.room_number):
-            # Specific schedule provided — check against it
-            grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
-            room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
-            if not (grade_ok and room_ok):
+    # ── Room restriction (ทุก role รวม admin) ───────────────────
+    if sched and (sched.grade_level or sched.room_number):
+        # Specific schedule provided — check against it
+        grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
+        room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
+        if not (grade_ok and room_ok):
+            student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
+            sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
+            raise HTTPException(
+                status_code=403,
+                detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้คาบนี้ (ห้องที่เรียน: {sched_loc})",
+            )
+    else:
+        # No specific schedule — check against ALL rooms of this subject
+        subject_schedules = db.query(SubjectSchedule).filter(
+            SubjectSchedule.subject_id == subject_id
+        ).all()
+        allowed_rooms = {
+            (sc.grade_level, sc.room_number)
+            for sc in subject_schedules
+            if sc.grade_level and sc.room_number
+        }
+        if allowed_rooms:
+            student_room = (best_match.grade_level, best_match.room_number)
+            if student_room not in allowed_rooms:
                 student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
-                sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
                 raise HTTPException(
                     status_code=403,
-                    detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้คาบนี้ (ห้องที่เรียน: {sched_loc})",
+                    detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้",
                 )
-        else:
-            # No specific schedule — check against ALL rooms of this subject
-            subject_schedules = db.query(SubjectSchedule).filter(
-                SubjectSchedule.subject_id == subject_id
-            ).all()
-            allowed_rooms = {
-                (sc.grade_level, sc.room_number)
-                for sc in subject_schedules
-                if sc.grade_level and sc.room_number
-            }
-            if allowed_rooms:
-                student_room = (best_match.grade_level, best_match.room_number)
-                if student_room not in allowed_rooms:
-                    student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
-                    raise HTTPException(
-                        status_code=403,
-                        detail=f"{best_match.first_name} ({student_loc}) ไม่ได้เรียนวิชานี้",
-                    )
 
     # ── Auto late detection: > 15 min past schedule start ────────
     scan_status = "present"
@@ -786,6 +785,38 @@ def qr_checkin(
     if not student:
         raise HTTPException(status_code=404, detail=f"ไม่พบนักเรียนรหัส {student_id_str}")
 
+    # ── Room restriction for QR checkin ─────────────────────────
+    qr_sched = None
+    if schedule_id:
+        qr_sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+    if qr_sched and (qr_sched.grade_level or qr_sched.room_number):
+        grade_ok = not qr_sched.grade_level or student.grade_level == qr_sched.grade_level
+        room_ok  = not qr_sched.room_number  or student.room_number  == qr_sched.room_number
+        if not (grade_ok and room_ok):
+            student_loc = f"ชั้น {student.grade_level or '?'} ห้อง {student.room_number or '?'}"
+            sched_loc   = f"ชั้น {qr_sched.grade_level or '?'} ห้อง {qr_sched.room_number or '?'}"
+            raise HTTPException(
+                status_code=403,
+                detail=f"นักเรียน ({student_loc}) ไม่ได้เรียนวิชานี้คาบนี้ (ห้องที่เรียน: {sched_loc})",
+            )
+    else:
+        qr_subject_schedules = db.query(SubjectSchedule).filter(
+            SubjectSchedule.subject_id == subject_id
+        ).all()
+        qr_allowed_rooms = {
+            (sc.grade_level, sc.room_number)
+            for sc in qr_subject_schedules
+            if sc.grade_level and sc.room_number
+        }
+        if qr_allowed_rooms:
+            student_room = (student.grade_level, student.room_number)
+            if student_room not in qr_allowed_rooms:
+                student_loc = f"ชั้น {student.grade_level or '?'} ห้อง {student.room_number or '?'}"
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"นักเรียน ({student_loc}) ไม่ได้เรียนวิชานี้",
+                )
+
     already = (
         db.query(AttendanceLog)
         .filter(
@@ -808,15 +839,13 @@ def qr_checkin(
 
     now = datetime.now(_BKK).replace(tzinfo=None)
     scan_status = "present"
-    if schedule_id:
-        sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
-        if sched and sched.time_start:
-            try:
-                sh, sm = map(int, sched.time_start.split(':'))
-                if now.hour * 60 + now.minute > sh * 60 + sm + 15:
-                    scan_status = "late"
-            except Exception:
-                pass
+    if qr_sched and qr_sched.time_start:
+        try:
+            sh, sm = map(int, qr_sched.time_start.split(':'))
+            if now.hour * 60 + now.minute > sh * 60 + sm + 15:
+                scan_status = "late"
+        except Exception:
+            pass
 
     log = AttendanceLog(student_id=student.id, subject_id=subject_id, status=scan_status, timestamp=now, check_method="qr")
     db.add(log)
