@@ -191,6 +191,92 @@ function ResultCard({ result, onDismiss, onCancel }) {
   )
 }
 
+// ── Batch result card (multi-face scan) ─────────────────────────
+function BatchResultCard({ result, onDismiss }) {
+  if (!result || result.status !== 'multi') return null
+  const { results, face_count } = result
+  const successCount   = results.filter(r => r.status === 'success').length
+  const alreadyCount   = results.filter(r => r.status === 'already_checked').length
+  const wrongRoomCount = results.filter(r => r.status === 'wrong_room').length
+
+  const getEntryCfg = (r) => {
+    if (r.status === 'success' && r.scan_status === 'late') return STATUS_CFG.success_late
+    return STATUS_CFG[r.status] ?? STATUS_CFG.error
+  }
+
+  const accentColor = successCount > 0 ? '#16A34A' : wrongRoomCount > 0 ? '#D97706' : '#D97706'
+
+  return (
+    <div style={{
+      background: 'var(--fc-surface)', borderRadius: 14,
+      border: '1px solid var(--fc-border)',
+      boxShadow: 'var(--fc-shadow-lg)', overflow: 'hidden',
+      animation: 'slideIn 0.25s ease-out',
+    }}>
+      <div style={{ height: 4, background: accentColor }} />
+      <div style={{ padding: '14px 18px' }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--fc-text)', marginBottom: 8 }}>
+          พบ {face_count} ใบหน้า · ระบุได้ {results.length} คน
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          {successCount > 0 && (
+            <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)', fontWeight: 600 }}>
+              เช็คชื่อ {successCount} คน
+            </span>
+          )}
+          {alreadyCount > 0 && (
+            <span className="chip" style={{ background: 'var(--fc-warning-light)', color: 'var(--fc-warning)' }}>
+              ซ้ำ {alreadyCount} คน
+            </span>
+          )}
+          {wrongRoomCount > 0 && (
+            <span className="chip" style={{ background: '#FEF3C7', color: '#92400E' }}>
+              ผิดห้อง {wrongRoomCount} คน
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {results.map((r, i) => {
+            const cfg = getEntryCfg(r)
+            return (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 8,
+                background: 'var(--fc-muted)',
+              }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.accent, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>
+                    {r.student_id}
+                    {r.grade_level && ` · ชั้น ${r.grade_level}`}
+                    {r.room_number && ` ห้อง ${r.room_number}`}
+                  </div>
+                </div>
+                <span className="chip" style={{ background: cfg.bg, color: cfg.color, fontSize: 11, flexShrink: 0 }}>
+                  {cfg.label}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <button
+          onClick={onDismiss}
+          style={{
+            marginTop: 12, width: '100%', padding: '7px', borderRadius: 8,
+            border: '1px solid var(--fc-border)', background: 'transparent',
+            fontSize: 12, color: 'var(--fc-text-4)', cursor: 'pointer',
+          }}
+        >
+          ปิด
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Log thumbnail (fetches from backend if no in-memory photo) ───
 function LogThumb({ photo, logId, status, studentId }) {
   const [src, setSrc] = useState(photo || null)
@@ -476,9 +562,8 @@ export default function Scanner() {
     const img = cam.current?.getScreenshot()
     if (!img) return
 
-    // ใช้ schedule_id เมื่อล็อคอยู่และไม่ได้ override
     const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    const scanUrl = `${API}/attendance/scan?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}`
+    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}`
 
     try {
       const blob = await new Promise(resolve => {
@@ -491,47 +576,67 @@ export default function Scanner() {
         }
         el.src = img
       })
-      const fd   = new FormData()
+      const fd  = new FormData()
       fd.append('file', blob, 'scan.jpg')
       const res = await axios.post(scanUrl, fd)
+      const { results, face_count, matched_count } = res.data
+
+      if (!results || results.length === 0) {
+        // No face detected or no match — auto silently ignores
+        if (!isAuto) {
+          const msg = 'ไม่พบใบหน้าหรือระบุตัวตนไม่ได้'
+          setErrMsg(msg)
+          setResult({ status: 'error', name: null, message: msg, photo: img })
+        }
+        return
+      }
+
       const _now = new Date()
       const scanTime = _now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-      const selSubj = subjects.find(s => s.id === Number(subjectId))
+      const selSubj  = subjects.find(s => s.id === Number(subjectId))
       const scanDate = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`
-      const entry = { ...res.data, photo: img, logId: Date.now(), scanDate, scan_time: scanTime, subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null }
-      if (entry.log_id && img) recentPhotosRef.current[entry.log_id] = img
-      setResult(entry)
-      setErrMsg('')
-      setLogs(prev => [entry, ...prev])
+
+      if (results.length === 1) {
+        // Single match — same UX as before
+        const r = results[0]
+        const entry = {
+          ...r, photo: img, logId: r.log_id || Date.now(),
+          scanDate, scan_time: scanTime,
+          subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null,
+        }
+        if (entry.log_id && img) recentPhotosRef.current[entry.log_id] = img
+        setResult(entry)
+        setErrMsg('')
+        setLogs(prev => [entry, ...prev])
+      } else {
+        // Multiple matches — batch summary
+        const entries = results.map((r, i) => ({
+          ...r, photo: img,
+          logId: r.log_id || (Date.now() + i),
+          scanDate, scan_time: scanTime,
+          subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null,
+        }))
+        entries.forEach(e => { if (e.log_id && img) recentPhotosRef.current[e.log_id] = img })
+        setResult({ status: 'multi', results: entries, face_count, matched_count, photo: img })
+        setErrMsg('')
+        setLogs(prev => [...entries, ...prev])
+      }
 
       if (isAuto) {
-        // cooldown after successful/already-checked: 8s
         cooldownRef.current = true
         setCooldown(true)
         setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 8000)
       }
     } catch (e) {
       const detail = e.response?.data?.detail
-      const isWrongRoom = e.response?.status === 403 && typeof detail === 'object' && detail?.error_code === 'wrong_room'
-      if (isWrongRoom) {
-        // Face recognized but wrong class — show warning + cooldown (both auto & manual)
-        const wr = detail
-        setErrMsg('')
-        setResult({ status: 'wrong_room', name: wr.name, student_id: wr.student_id, grade_level: wr.grade_level, room_number: wr.room_number, message: wr.message, photo: img })
-        if (isAuto) {
-          cooldownRef.current = true
-          setCooldown(true)
-          setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 8000)
-        }
-      } else if (!isAuto) {
-        // Manual mode: show generic error
+      if (!isAuto) {
         const msg = typeof detail === 'string' ? detail : 'ระบุตัวตนไม่สำเร็จ'
         setErrMsg(msg)
         setResult({ status: 'error', name: null, message: msg, photo: img })
       }
-      // Auto mode non-wrong_room: silently ignore (no face / quality fail / no match)
+      // Auto mode: silently ignore errors (quality fail, period-lock, etc.)
     }
-  }, [subjectId, subjects])
+  }, [subjectId, subjects, override, lockedSched])
 
   // ── Auto scan interval ─────────────────────────────────────────
   useEffect(() => {
@@ -565,7 +670,14 @@ export default function Scanner() {
   }
 
   const handleCancel = (logId) => {
-    setResult(null)
+    setResult(prev => {
+      if (!prev) return null
+      if (prev.status === 'multi') {
+        const filtered = prev.results.filter(r => r.log_id !== logId && r.logId !== logId)
+        return filtered.length > 0 ? { ...prev, results: filtered } : null
+      }
+      return null
+    })
     setErrMsg('')
     setLogs(prev => prev.filter(l => l.logId !== logId && l.log_id !== logId))
   }
@@ -1045,7 +1157,9 @@ export default function Scanner() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {/* Latest result */}
-          {result ? (
+          {result?.status === 'multi' ? (
+            <BatchResultCard result={result} onDismiss={dismissResult} />
+          ) : result ? (
             <ResultCard result={result} onDismiss={dismissResult} onCancel={handleCancel} />
           ) : (
             <div className="card" style={{
@@ -1163,7 +1277,14 @@ export default function Scanner() {
                                 try {
                                   await axios.delete(`${API}/attendance/logs/${log.log_id}`)
                                   setLogs(prev => prev.filter(l => l.logId !== log.logId))
-                                  if (result?.log_id === log.log_id) { setResult(null) }
+                                  setResult(prev => {
+                                    if (!prev) return null
+                                    if (prev.status === 'multi') {
+                                      const f = prev.results.filter(r => r.log_id !== log.log_id && r.logId !== log.logId)
+                                      return f.length > 0 ? { ...prev, results: f } : null
+                                    }
+                                    return prev?.log_id === log.log_id ? null : prev
+                                  })
                                   if (logDetail?.logId === log.logId) { setLogDetail(null) }
                                 } catch { await alert('ยกเลิกไม่สำเร็จ') }
                               }}

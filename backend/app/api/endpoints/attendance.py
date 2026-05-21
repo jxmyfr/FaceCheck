@@ -269,6 +269,216 @@ async def scan_attendance(
     }
 
 
+@router.post("/scan/multi")
+async def scan_multi(
+    subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
+    schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """สแกนใบหน้าหลายคนในภาพเดียว — คืน list ผลลัพธ์ทุกใบหน้าที่ระบุตัวตนได้"""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
+
+    if current_user.role == "teacher":
+        assigned = db.query(TeacherSubject).filter_by(
+            teacher_id=current_user.id, subject_id=subject_id
+        ).first()
+        if not assigned:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คชื่อวิชานี้")
+
+    setting        = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
+    THRESHOLD      = setting.face_threshold  if (setting and setting.face_threshold  is not None) else 0.65
+    MIN_DET_SCORE  = setting.min_det_score   if (setting and setting.min_det_score   is not None) else 0.65
+    MIN_FACE_RATIO = setting.min_face_ratio  if (setting and setting.min_face_ratio  is not None) else 0.08
+    MIN_BLUR_SCORE = setting.min_blur_score  if (setting and setting.min_blur_score  is not None) else 40.0
+
+    contents = await file.read()
+    nparr    = np.frombuffer(contents, np.uint8)
+    frame    = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="ไม่สามารถอ่านไฟล์ภาพได้")
+
+    embeddings = face_processor.process_capture_multi(
+        frame,
+        min_det_score=MIN_DET_SCORE,
+        min_face_ratio=MIN_FACE_RATIO,
+        min_blur_score=MIN_BLUR_SCORE,
+    )
+    if not embeddings:
+        return {"results": [], "face_count": 0, "matched_count": 0}
+
+    _ensure_emb_cache(db)
+    if _EMB_CACHE is None:
+        return {"results": [], "face_count": len(embeddings), "matched_count": 0}
+
+    sched = None
+    if schedule_id:
+        sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+
+    now = datetime.now(_BKK).replace(tzinfo=None)
+
+    if sched and sched.time_start and sched.time_end:
+        try:
+            sh, sm = map(int, sched.time_start.split(':'))
+            eh, em = map(int, sched.time_end.split(':'))
+            GRACE_MIN = 10
+            now_min   = now.hour * 60 + now.minute
+            if not (sh * 60 + sm - GRACE_MIN <= now_min <= eh * 60 + em + GRACE_MIN):
+                raise HTTPException(
+                    status_code=403,
+                    detail="ไม่อยู่ในช่วงเวลาเรียน — ไม่สามารถเช็คชื่อได้ขณะนี้",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    scan_status_base = "present"
+    if sched and sched.time_start:
+        try:
+            sh, sm = map(int, sched.time_start.split(':'))
+            if now.hour * 60 + now.minute > sh * 60 + sm + 15:
+                scan_status_base = "late"
+        except Exception:
+            pass
+
+    emb_matrix   = _EMB_CACHE['matrix']
+    students_arr = _EMB_CACHE['students']
+
+    # Best match per face; deduplicate by student PK (keep closest distance)
+    matched: dict = {}  # student.id -> (student, dist, embedding)
+    for emb in embeddings:
+        dists     = np.linalg.norm(emb_matrix - emb[None, :], axis=1)
+        best_idx  = int(np.argmin(dists))
+        best_dist = float(dists[best_idx])
+        if best_dist > THRESHOLD:
+            continue
+        student = students_arr[best_idx]
+        if student.id not in matched or best_dist < matched[student.id][1]:
+            matched[student.id] = (student, best_dist, emb)
+
+    # Pre-load allowed rooms (avoid repeated queries inside loop)
+    allowed_rooms = None
+    if not (sched and (sched.grade_level or sched.room_number)):
+        subj_scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
+        rs = {(sc.grade_level, sc.room_number) for sc in subj_scheds if sc.grade_level and sc.room_number}
+        allowed_rooms = rs if rs else None
+
+    _, jpeg_scan = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    _, jpeg_full = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    jpeg_scan_bytes = jpeg_scan.tobytes()
+    jpeg_full_bytes = jpeg_full.tobytes()
+
+    today_str  = str(now.date())
+    today_label = now.strftime("%d/%m")
+    MAX_AUTO_EMBEDDINGS = 50
+    results = []
+
+    for student_id_pk, (student, best_dist, scan_emb) in matched.items():
+        student_info = {
+            "student_id":   student.student_id,
+            "name":         " ".join(filter(None, [student.title, student.first_name, student.last_name])),
+            "grade_level":  student.grade_level,
+            "room_number":  student.room_number,
+            "subject_code": subject.subject_code,
+            "subject":      subject.subject_name,
+            "timestamp":    now.strftime("%H:%M:%S"),
+            "confidence":   round(float(1 - (best_dist ** 2) / 2), 3),
+        }
+
+        # Room restriction
+        wrong_room = False
+        wrong_room_msg = ""
+        if sched and (sched.grade_level or sched.room_number):
+            grade_ok = not sched.grade_level or student.grade_level == sched.grade_level
+            room_ok  = not sched.room_number  or student.room_number  == sched.room_number
+            if not (grade_ok and room_ok):
+                wrong_room = True
+                sl = f"ชั้น {student.grade_level or '?'} ห้อง {student.room_number or '?'}"
+                rl = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
+                wrong_room_msg = f"ไม่ได้เรียนวิชานี้คาบนี้ ({sl} → ห้องที่เรียน: {rl})"
+        elif allowed_rooms:
+            student_room = (student.grade_level, student.room_number)
+            if student_room not in allowed_rooms:
+                wrong_room = True
+                sl = f"ชั้น {student.grade_level or '?'} ห้อง {student.room_number or '?'}"
+                wrong_room_msg = f"ไม่ได้เรียนวิชานี้ ({sl})"
+
+        if wrong_room:
+            results.append({**student_info, "log_id": None, "status": "wrong_room", "message": wrong_room_msg})
+            continue
+
+        # Already checked today?
+        already_checked = (
+            db.query(AttendanceLog)
+            .filter(
+                AttendanceLog.student_id == student_id_pk,
+                AttendanceLog.subject_id == subject_id,
+                func.date(AttendanceLog.timestamp) == today_str,
+                AttendanceLog.status.in_(["present", "late"]),
+            )
+            .first()
+        )
+
+        if already_checked:
+            checked_at_str = already_checked.timestamp.strftime("%H:%M")
+            dup_log = AttendanceLog(
+                student_id=student_id_pk, subject_id=subject_id,
+                status="already_checked", scan_image=jpeg_scan_bytes,
+                timestamp=now, check_method="face",
+            )
+            db.add(dup_log)
+            results.append({
+                **student_info,
+                "log_id":     already_checked.id,
+                "status":     "already_checked",
+                "message":    f"{student.first_name} เช็คชื่อวิชานี้ไปแล้ววันนี้",
+                "checked_at": checked_at_str,
+            })
+            continue
+
+        # New check-in
+        new_log = AttendanceLog(
+            student_id=student_id_pk, subject_id=subject_id,
+            status=scan_status_base, scan_image=jpeg_scan_bytes,
+            timestamp=now, check_method="face",
+        )
+        db.add(new_log)
+        db.flush()
+        log_id = new_log.id
+
+        # Auto-learn
+        already_learned = db.query(StudentFaceEmbedding).filter(
+            StudentFaceEmbedding.student_id == student_id_pk,
+            StudentFaceEmbedding.label.like(f"สแกน {today_label}%"),
+        ).first()
+        if not already_learned:
+            emb_count = db.query(StudentFaceEmbedding).filter(
+                StudentFaceEmbedding.student_id == student_id_pk
+            ).count()
+            if emb_count < MAX_AUTO_EMBEDDINGS:
+                db.add(StudentFaceEmbedding(
+                    student_id=student_id_pk,
+                    embedding=scan_emb.tobytes(),
+                    face_image=jpeg_full_bytes,
+                    label=f"สแกน {now.strftime('%d/%m %H:%M')}",
+                ))
+
+        results.append({
+            **student_info,
+            "log_id":      log_id,
+            "status":      "success",
+            "scan_status": scan_status_base,
+            "message":     "มาสาย" if scan_status_base == "late" else "เช็คชื่อสำเร็จ",
+        })
+
+    db.commit()
+    return {"results": results, "face_count": len(embeddings), "matched_count": len(matched)}
+
+
 @router.get("/subjects")
 def list_subjects(
     db: Session = Depends(get_db),

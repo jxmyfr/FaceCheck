@@ -28,7 +28,7 @@ class FaceProcessor:
         min_face_ratio: float = 0.08,
         min_blur_score: float = 40.0,
     ) -> Optional[np.ndarray]:
-        """Detection → Quality → Liveness → Embedding"""
+        """Detection → Quality → Liveness → Embedding (single largest face)"""
         faces = self.app.get(frame)
         if not faces:
             return None
@@ -44,6 +44,28 @@ class FaceProcessor:
             raise ValueError(reason)
 
         return face.normed_embedding
+
+    def process_capture_multi(
+        self,
+        frame: np.ndarray,
+        min_det_score: float = 0.65,
+        min_face_ratio: float = 0.08,
+        min_blur_score: float = 40.0,
+    ) -> list:
+        """Detect all faces, run quality+liveness on each, return list of valid embeddings."""
+        faces = self.app.get(frame)
+        if not faces:
+            return []
+        valid = []
+        for face in faces:
+            ok, _ = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
+            if not ok:
+                continue
+            ok, _ = self._check_liveness(face, frame)
+            if not ok:
+                continue
+            valid.append(face.normed_embedding)
+        return valid
 
     def _check_quality(
         self,
