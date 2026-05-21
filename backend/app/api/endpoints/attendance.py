@@ -18,7 +18,19 @@ router = APIRouter()
 face_processor = FaceProcessor()
 
 # ── In-memory embedding cache ─────────────────────────────────────
-_EMB_CACHE: dict | None = None  # {'matrix': np.ndarray, 'students': list}
+_EMB_CACHE: dict | None = None  # {'matrix': np.ndarray, 'students': list[_CachedStudent]}
+
+class _CachedStudent:
+    """Plain-Python snapshot of Student columns — session-independent."""
+    __slots__ = ('id', 'student_id', 'title', 'first_name', 'last_name', 'grade_level', 'room_number')
+    def __init__(self, s: Student):
+        self.id          = s.id
+        self.student_id  = s.student_id
+        self.title       = s.title
+        self.first_name  = s.first_name
+        self.last_name   = s.last_name
+        self.grade_level = s.grade_level
+        self.room_number = s.room_number
 
 def invalidate_embedding_cache():
     global _EMB_CACHE
@@ -34,7 +46,7 @@ def _ensure_emb_cache(db: Session):
         .all()
     )
     valid = [
-        (np.frombuffer(e.embedding, dtype=np.float32), s)
+        (np.frombuffer(e.embedding, dtype=np.float32), _CachedStudent(s))
         for e, s in rows
         if len(e.embedding) == 512 * 4
     ]
@@ -146,6 +158,25 @@ async def scan_attendance(
                 student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
                 _wrong_room_error(f"ไม่ได้เรียนวิชานี้ ({student_loc})")
 
+    now = datetime.now(_BKK).replace(tzinfo=None)
+
+    # ── Period-Lock: ห้ามสแกนนอกช่วงเวลาเรียน (±10 นาที grace) ──
+    if sched and sched.time_start and sched.time_end:
+        try:
+            sh, sm = map(int, sched.time_start.split(':'))
+            eh, em = map(int, sched.time_end.split(':'))
+            GRACE_MIN = 10
+            now_min   = now.hour * 60 + now.minute
+            if not (sh * 60 + sm - GRACE_MIN <= now_min <= eh * 60 + em + GRACE_MIN):
+                raise HTTPException(
+                    status_code=403,
+                    detail="ไม่อยู่ในช่วงเวลาเรียน — ไม่สามารถเช็คชื่อได้ขณะนี้",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
     # ── Auto late detection: > 15 min past schedule start ────────
     scan_status = "present"
     if sched and sched.time_start:
@@ -163,12 +194,11 @@ async def scan_attendance(
         .filter(
             AttendanceLog.student_id == best_match.id,
             AttendanceLog.subject_id == subject_id,
-            func.date(AttendanceLog.timestamp) == str(datetime.now(_BKK).date()),
+            func.date(AttendanceLog.timestamp) == str(now.date()),
             AttendanceLog.status.in_(["present", "late"]),
         )
         .first()
     )
-    now = datetime.now(_BKK).replace(tzinfo=None)
     student_info = {
         "student_id":  best_match.student_id,
         "name":        " ".join(filter(None, [best_match.title, best_match.first_name, best_match.last_name])),
@@ -181,6 +211,7 @@ async def scan_attendance(
     }
 
     if already_checked:
+        checked_at_str = already_checked.timestamp.strftime("%H:%M")
         _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         dup_log = AttendanceLog(
             student_id=best_match.id, subject_id=subject_id, status="already_checked",
@@ -194,7 +225,7 @@ async def scan_attendance(
             "log_id":  dup_log.id,
             "status":  "already_checked",
             "message": f"{best_match.first_name} เช็คชื่อวิชานี้ไปแล้ววันนี้",
-            "checked_at": already_checked.timestamp.strftime("%H:%M"),
+            "checked_at": checked_at_str,
         }
 
     _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
