@@ -33,7 +33,7 @@ async def register_student(
     room_number: str = Form(default=""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     if db.query(Student).filter(Student.student_id == student_id).first():
         raise HTTPException(status_code=409, detail=f"รหัสนักเรียน {student_id} มีในระบบแล้ว")
@@ -83,7 +83,7 @@ async def update_face(
     student_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
@@ -181,7 +181,7 @@ def update_student(
     grade_level: str = Form(default=""),
     room_number: str = Form(default=""),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
@@ -235,7 +235,7 @@ async def register_student_multi(
     room_number: str = Form(default=""),
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     """ลงทะเบียนนักเรียนใหม่โดยใช้หลายรูป — average embedding"""
     if db.query(Student).filter(Student.student_id == student_id).first():
@@ -365,7 +365,7 @@ async def update_face_multi(
     student_id: str,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     """อัปเดตใบหน้าโดยใช้หลายรูป — average embedding เพื่อความแม่นยำสูงขึ้น"""
     student = db.query(Student).filter(Student.student_id == student_id).first()
@@ -461,7 +461,7 @@ async def add_embedding(
     label: str = Form(default=""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
@@ -514,7 +514,7 @@ async def add_embeddings_bulk(
     student_id: str,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     """เพิ่มหลายมุมใบหน้าพร้อมกัน — แต่ละไฟล์ = 1 slot"""
     student = db.query(Student).filter(Student.student_id == student_id).first()
@@ -576,7 +576,7 @@ def delete_embedding(
     student_id: str,
     emb_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
@@ -698,7 +698,7 @@ def export_students(
 async def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     if not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="รองรับเฉพาะไฟล์ .xlsx เท่านั้น")
@@ -834,7 +834,7 @@ def _import_students_from_ws(ws, db):
 async def import_zip(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     if not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="รองรับเฉพาะไฟล์ .zip เท่านั้น")

@@ -707,11 +707,15 @@ def delete_schedule(schedule_id: int, db: Session = Depends(get_db), _: User = D
 def get_log_image(
     log_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log or not log.scan_image:
         raise HTTPException(status_code=404, detail="ไม่พบรูปภาพการสแกน")
+    if current_user.role == "teacher":
+        ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
+        if log.subject_id not in ts:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ดูบันทึกนี้")
     return Response(content=log.scan_image, media_type="image/jpeg")
 
 
@@ -724,13 +728,20 @@ def list_logs(
     grade_level: Optional[str] = Query(default=None),
     room_number: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
     q = (
         db.query(AttendanceLog, Student, Subject)
         .join(Student, Student.id == AttendanceLog.student_id)
         .join(Subject, Subject.id == AttendanceLog.subject_id)
     )
+    if current_user.role == "teacher":
+        ts_rows = db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()
+        teacher_subject_ids = [r.subject_id for r in ts_rows]
+        if teacher_subject_ids:
+            q = q.filter(AttendanceLog.subject_id.in_(teacher_subject_ids))
+        else:
+            return []
     if date_from and date_to:
         q = q.filter(
             func.date(AttendanceLog.timestamp) >= date_from,
@@ -781,6 +792,10 @@ def update_log_status(
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+    if current_user.role == "teacher":
+        ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
+        if log.subject_id not in ts:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์แก้ไขบันทึกนี้")
     old_status = log.status
     log.status = status
     log.reason = reason if status == "excused" else None
@@ -811,6 +826,10 @@ def delete_log(
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+    if current_user.role == "teacher":
+        ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
+        if log.subject_id not in ts:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ลบบันทึกนี้")
     db.add(AttendanceAuditLog(
         log_id=log.id,
         action="delete",

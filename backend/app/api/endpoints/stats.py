@@ -6,9 +6,9 @@ from datetime import date, datetime, timedelta, timezone
 
 _BKK = timezone(timedelta(hours=7))
 
-from app.models.database import get_db, AttendanceLog, Student, Subject, SemesterSetting
+from app.models.database import get_db, AttendanceLog, Student, Subject, SemesterSetting, SubjectSchedule
 from app.models.user import User, TeacherSubject
-from app.core.dependencies import require_teacher_or_admin
+from app.core.dependencies import require_teacher_or_admin, require_admin
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ router = APIRouter()
 @router.get("/overview")
 def get_overview(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     total_students = db.query(func.count(Student.id)).scalar()
     total_subjects = db.query(func.count(Subject.id)).scalar()
@@ -98,7 +98,7 @@ def get_daily_stats(
 def get_top_students(
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     rows = (
         db.query(
@@ -171,7 +171,7 @@ def get_attendance_logs(
 @router.get("/by-grade")
 def get_stats_by_grade(
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     today = str(datetime.now(_BKK).date())
     rows = (
@@ -204,7 +204,7 @@ def get_stats_by_grade(
 def get_stats_by_room(
     grade_level: str = Query(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     today = str(datetime.now(_BKK).date())
     rows = (
@@ -241,8 +241,9 @@ def get_students_detail(
     room_number: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
+    from sqlalchemy import or_, and_
     query = (
         db.query(
             Student.student_id,
@@ -255,6 +256,21 @@ def get_students_detail(
         .outerjoin(AttendanceLog, AttendanceLog.student_id == Student.id)
         .group_by(Student.id)
     )
+    if current_user.role == "teacher":
+        schedules = (
+            db.query(SubjectSchedule)
+            .join(TeacherSubject, TeacherSubject.subject_id == SubjectSchedule.subject_id)
+            .filter(TeacherSubject.teacher_id == current_user.id)
+            .all()
+        )
+        rooms = {(sc.grade_level, sc.room_number) for sc in schedules if sc.grade_level and sc.room_number}
+        if rooms:
+            query = query.filter(or_(*[
+                and_(Student.grade_level == g, Student.room_number == r)
+                for g, r in rooms
+            ]))
+        else:
+            return []
     if grade_level:
         query = query.filter(Student.grade_level == grade_level)
     if room_number:
@@ -374,7 +390,7 @@ def get_student_attendance(
 @router.get("/semester-stats")
 def get_semester_stats(
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     """อัตราการเข้าเรียนรายวันตลอดภาคเรียน (สำหรับ Dashboard overview chart)"""
     semester = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
@@ -581,7 +597,7 @@ def get_room_students(
 @router.get("/summary")
 def get_summary(
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    _: User = Depends(require_admin),
 ):
     today   = str(datetime.now(_BKK).date())
     total   = db.query(func.count(Student.id)).scalar()
