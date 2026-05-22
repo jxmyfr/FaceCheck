@@ -644,10 +644,25 @@ def export_students(
     room_number: str = None,
     ids: str = None,          # comma-separated student_ids for selected export
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_teacher_or_admin),
 ):
     """Export รายชื่อนักเรียนเป็น Excel"""
+    from sqlalchemy import or_, and_
     q = db.query(Student).order_by(Student.grade_level, Student.room_number, Student.student_id)
+
+    if current_user.role == "teacher":
+        schedules = (
+            db.query(SubjectSchedule)
+            .join(TeacherSubject, TeacherSubject.subject_id == SubjectSchedule.subject_id)
+            .filter(TeacherSubject.teacher_id == current_user.id)
+            .all()
+        )
+        rooms = {(sc.grade_level, sc.room_number) for sc in schedules if sc.grade_level and sc.room_number}
+        if not rooms:
+            q = q.filter(Student.id == -1)  # return empty
+        else:
+            q = q.filter(or_(*[and_(Student.grade_level == g, Student.room_number == r) for g, r in rooms]))
+
     if ids:
         id_list = [i.strip() for i in ids.split(",") if i.strip()]
         q = q.filter(Student.student_id.in_(id_list))
