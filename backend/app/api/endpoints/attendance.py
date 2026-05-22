@@ -124,6 +124,24 @@ async def scan_attendance(
     if schedule_id:
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
 
+    # ── Day-of-week guard ─────────────────────────────────────────
+    _DAY_MAP = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+    _today_day = _DAY_MAP[datetime.now(_BKK).weekday()]
+    _all_subj_scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
+    _today_scheds = [sc for sc in _all_subj_scheds if sc.day_of_week == _today_day]
+    if sched:
+        if sched.day_of_week and sched.day_of_week != _today_day:
+            raise HTTPException(
+                status_code=403,
+                detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คชื่อได้",
+            )
+    elif _all_subj_scheds and not _today_scheds:
+        _days_str = ' '.join(sorted({sc.day_of_week for sc in _all_subj_scheds if sc.day_of_week}))
+        raise HTTPException(
+            status_code=403,
+            detail=f"วิชานี้ไม่มีตารางสอนวันนี้ ({_today_day}) — มีตารางวัน {_days_str}",
+        )
+
     # ── Room restriction (ทุก role รวม admin) ───────────────────
     def _wrong_room_error(message: str):
         full_name = " ".join(filter(None, [best_match.title, best_match.first_name, best_match.last_name]))
@@ -144,12 +162,9 @@ async def scan_attendance(
             sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
             _wrong_room_error(f"ไม่ได้เรียนวิชานี้คาบนี้ ({student_loc} → ห้องที่เรียน: {sched_loc})")
     else:
-        subject_schedules = db.query(SubjectSchedule).filter(
-            SubjectSchedule.subject_id == subject_id
-        ).all()
         allowed_rooms = {
             (sc.grade_level, sc.room_number)
-            for sc in subject_schedules
+            for sc in _all_subj_scheds
             if sc.grade_level and sc.room_number
         }
         if allowed_rooms:
@@ -178,19 +193,12 @@ async def scan_attendance(
             pass
 
     # ── Auto late detection: > 15 min past schedule start ────────
-    # Fall back to today's schedules when no specific schedule is locked
     _sched_late = sched
-    if _sched_late is None:
-        _DAY = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
-        _day_scheds = db.query(SubjectSchedule).filter(
-            SubjectSchedule.subject_id == subject_id,
-            SubjectSchedule.day_of_week == _DAY[now.weekday()],
-        ).all()
-        if _day_scheds:
-            def _sm(sc):
-                try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
-                except: return 0
-            _sched_late = max(_day_scheds, key=_sm)
+    if _sched_late is None and _today_scheds:
+        def _sm(sc):
+            try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
+            except: return 0
+        _sched_late = max(_today_scheds, key=_sm)
     scan_status = "present"
     if _sched_late and _sched_late.time_start:
         try:
@@ -331,6 +339,24 @@ async def scan_multi(
 
     now = datetime.now(_BKK).replace(tzinfo=None)
 
+    # ── Day-of-week guard ─────────────────────────────────────────
+    _DAY_MAP = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+    _today_day = _DAY_MAP[now.weekday()]
+    _all_subj_scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
+    _today_scheds = [sc for sc in _all_subj_scheds if sc.day_of_week == _today_day]
+    if sched:
+        if sched.day_of_week and sched.day_of_week != _today_day:
+            raise HTTPException(
+                status_code=403,
+                detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คชื่อได้",
+            )
+    elif _all_subj_scheds and not _today_scheds:
+        _days_str = ' '.join(sorted({sc.day_of_week for sc in _all_subj_scheds if sc.day_of_week}))
+        raise HTTPException(
+            status_code=403,
+            detail=f"วิชานี้ไม่มีตารางสอนวันนี้ ({_today_day}) — มีตารางวัน {_days_str}",
+        )
+
     if sched and sched.time_start and sched.time_end:
         try:
             sh, sm = map(int, sched.time_start.split(':'))
@@ -348,17 +374,11 @@ async def scan_multi(
             pass
 
     _sched_late = sched
-    if _sched_late is None:
-        _DAY = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
-        _day_scheds = db.query(SubjectSchedule).filter(
-            SubjectSchedule.subject_id == subject_id,
-            SubjectSchedule.day_of_week == _DAY[now.weekday()],
-        ).all()
-        if _day_scheds:
-            def _sm(sc):
-                try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
-                except: return 0
-            _sched_late = max(_day_scheds, key=_sm)
+    if _sched_late is None and _today_scheds:
+        def _sm(sc):
+            try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
+            except: return 0
+        _sched_late = max(_today_scheds, key=_sm)
     scan_status_base = "present"
     if _sched_late and _sched_late.time_start:
         try:
@@ -383,11 +403,10 @@ async def scan_multi(
         if student.id not in matched or best_dist < matched[student.id][1]:
             matched[student.id] = (student, best_dist, emb)
 
-    # Pre-load allowed rooms (avoid repeated queries inside loop)
+    # Pre-load allowed rooms (reuse _all_subj_scheds already loaded for day guard)
     allowed_rooms = None
     if not (sched and (sched.grade_level or sched.room_number)):
-        subj_scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
-        rs = {(sc.grade_level, sc.room_number) for sc in subj_scheds if sc.grade_level and sc.room_number}
+        rs = {(sc.grade_level, sc.room_number) for sc in _all_subj_scheds if sc.grade_level and sc.room_number}
         allowed_rooms = rs if rs else None
 
     _, jpeg_scan = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
