@@ -790,7 +790,7 @@ export default function Scanner() {
   const _todayDayTH = _DAY_TH[new Date().getDay()]
   const _selSubjObj = subjects.find(s => s.id === Number(subjectId))
   const _subjectHasToday = _selSubjObj?.days?.includes(_todayDayTH) ?? false
-  const isOutsideHours = !timeOverride && schedMatches !== null && schedMatches.length === 0 && _subjectHasToday
+  const isOutsideHours = !timeOverride && schedMatches !== null && schedMatches.length === 0
 
   const canScan = camReady && !!subjectId && !isOutsideHours
   const isAdmin = user?.role === 'admin'
