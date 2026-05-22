@@ -966,9 +966,19 @@ export default function Scanner() {
             </button>
           </div>
         ) : timeOverride ? (
-          <div style={{ marginBottom: 12, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>
-            ⚠ สแกนนอกเวลาเรียน
-            <button onClick={() => setTimeOverride(false)} style={{ fontSize: 12, color: 'var(--fc-text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <div style={{
+            marginBottom: 12, padding: '8px 14px', borderRadius: 8,
+            background: '#FFFBEB', border: '1px solid #FCD34D',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: 12, color: '#92400E', flex: 1, fontWeight: 500 }}>
+              ⚠ กำลังสแกนนอกเวลาเรียน
+            </span>
+            <button onClick={() => setTimeOverride(false)} style={{
+              fontSize: 11, color: '#92400E', background: 'transparent',
+              border: '1px solid #FCD34D', borderRadius: 5,
+              cursor: 'pointer', padding: '3px 10px',
+            }}>
               ยกเลิก
             </button>
           </div>
