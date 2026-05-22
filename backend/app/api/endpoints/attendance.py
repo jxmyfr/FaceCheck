@@ -178,13 +178,24 @@ async def scan_attendance(
             pass
 
     # ── Auto late detection: > 15 min past schedule start ────────
+    # Fall back to today's schedules when no specific schedule is locked
+    _sched_late = sched
+    if _sched_late is None:
+        _DAY = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+        _day_scheds = db.query(SubjectSchedule).filter(
+            SubjectSchedule.subject_id == subject_id,
+            SubjectSchedule.day_of_week == _DAY[now.weekday()],
+        ).all()
+        if _day_scheds:
+            def _sm(sc):
+                try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
+                except: return 0
+            _sched_late = max(_day_scheds, key=_sm)
     scan_status = "present"
-    if sched and sched.time_start:
+    if _sched_late and _sched_late.time_start:
         try:
-            sh, sm = map(int, sched.time_start.split(':'))
-            late_threshold_min = sh * 60 + sm + 15
-            scan_min = now.hour * 60 + now.minute
-            if scan_min > late_threshold_min:
+            sh, sm = map(int, _sched_late.time_start.split(':'))
+            if now.hour * 60 + now.minute > sh * 60 + sm + 15:
                 scan_status = "late"
         except Exception:
             pass
@@ -336,10 +347,22 @@ async def scan_multi(
         except Exception:
             pass
 
+    _sched_late = sched
+    if _sched_late is None:
+        _DAY = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+        _day_scheds = db.query(SubjectSchedule).filter(
+            SubjectSchedule.subject_id == subject_id,
+            SubjectSchedule.day_of_week == _DAY[now.weekday()],
+        ).all()
+        if _day_scheds:
+            def _sm(sc):
+                try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
+                except: return 0
+            _sched_late = max(_day_scheds, key=_sm)
     scan_status_base = "present"
-    if sched and sched.time_start:
+    if _sched_late and _sched_late.time_start:
         try:
-            sh, sm = map(int, sched.time_start.split(':'))
+            sh, sm = map(int, _sched_late.time_start.split(':'))
             if now.hour * 60 + now.minute > sh * 60 + sm + 15:
                 scan_status_base = "late"
         except Exception:
