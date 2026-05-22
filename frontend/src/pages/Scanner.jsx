@@ -458,6 +458,7 @@ export default function Scanner() {
   const [schedMatches, setSchedMatches] = useState(null) // null=loading, []=none, [...]
   const [lockedSched, setLockedSched]   = useState(null) // { schedule_id, subject_id, ... }
   const [override, setOverride]         = useState(false) // ครูเลือกเอง
+  const [timeOverride, setTimeOverride] = useState(false) // สแกนนอกเวลาเรียน
 
   // Auto state
   const [autoActive, setAutoActive] = useState(false)
@@ -483,6 +484,7 @@ export default function Scanner() {
 
   useEffect(() => {
     if (subjectId) localStorage.setItem('scanner-subject-id', subjectId)
+    setTimeOverride(false)
   }, [subjectId])
 
   useEffect(() => {
@@ -767,9 +769,16 @@ export default function Scanner() {
     setCooldown(false)
     cooldownRef.current = false
     setLookupId('')
+    setTimeOverride(false)
   }
 
-  const canScan = camReady && !!subjectId
+  const _DAY_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+  const _todayDayTH = _DAY_TH[new Date().getDay()]
+  const _selSubjObj = subjects.find(s => s.id === Number(subjectId))
+  const _subjectHasToday = _selSubjObj?.days?.includes(_todayDayTH) ?? false
+  const isOutsideHours = !timeOverride && schedMatches !== null && schedMatches.length === 0 && _subjectHasToday
+
+  const canScan = camReady && !!subjectId && !isOutsideHours
   const isAdmin = user?.role === 'admin'
   const subjectIdSet = new Set(subjects.map(s => s.id))
   const displayedLogs = isAdmin ? logs : logs.filter(l => l.subject_id && subjectIdSet.has(l.subject_id))
@@ -896,9 +905,38 @@ export default function Scanner() {
               )}
             </div>
             {schedMatches !== null && schedMatches.length === 0 && (
-              <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>
-                ไม่พบคาบเรียนที่ตรงกับเวลานี้
-              </div>
+              isOutsideHours ? (
+                <div style={{
+                  marginTop: 8, padding: '10px 12px', borderRadius: 8,
+                  background: '#FEF3C7', border: '1px solid #FDE68A',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <span style={{ fontSize: 12, color: '#92400E', flex: 1 }}>
+                    ⚠ ไม่มีคาบเรียนที่ตรงกับเวลานี้ — ปิดการสแกนไว้
+                  </span>
+                  <button
+                    onClick={() => setTimeOverride(true)}
+                    style={{
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                      padding: '5px 10px', borderRadius: 6,
+                      border: '1px solid #92400E', background: 'transparent', color: '#92400E',
+                    }}
+                  >
+                    สแกนนอกเวลา
+                  </button>
+                </div>
+              ) : timeOverride ? (
+                <div style={{ marginTop: 4, fontSize: 11, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ⚠ สแกนนอกเวลาเรียน
+                  <button onClick={() => setTimeOverride(false)} style={{ fontSize: 11, color: 'var(--fc-text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    ยกเลิก
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>
+                  ไม่พบคาบเรียนที่ตรงกับเวลานี้
+                </div>
+              )
             )}
           </div>
         )}
