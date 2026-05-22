@@ -282,16 +282,18 @@ function LogThumb({ photo, logId, status, studentId }) {
   const [src, setSrc] = useState(photo || null)
   useEffect(() => {
     if (src) return
+    let objectUrl = null
     if (status === 'already_checked' && studentId) {
       // already_checked shares the original log_id — use registered face instead
       axios.get(`${API}/enroll/students/${studentId}/face`, { responseType: 'blob' })
-        .then(r => setSrc(URL.createObjectURL(r.data)))
+        .then(r => { objectUrl = URL.createObjectURL(r.data); setSrc(objectUrl) })
         .catch(() => {})
     } else if (logId) {
       axios.get(`${API}/attendance/logs/${logId}/image`, { responseType: 'blob' })
-        .then(r => setSrc(URL.createObjectURL(r.data)))
+        .then(r => { objectUrl = URL.createObjectURL(r.data); setSrc(objectUrl) })
         .catch(() => {})
     }
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [logId, studentId])
   if (!src) return null
   return (
@@ -1455,9 +1457,11 @@ function LogDetailModal({ log, cfg, onClose, onCancel }) {
 
   useEffect(() => {
     if (photo || !log.log_id) return
+    let objectUrl = null
     axios.get(`${API}/attendance/logs/${log.log_id}/image`, { responseType: 'blob' })
-      .then(r => setPhoto(URL.createObjectURL(r.data)))
+      .then(r => { objectUrl = URL.createObjectURL(r.data); setPhoto(objectUrl) })
       .catch(() => {})
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [log.log_id])
 
   return (

@@ -198,7 +198,9 @@ async def scan_attendance(
         def _sm(sc):
             try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
             except: return 0
-        _sched_late = max(_today_scheds, key=_sm)
+        _now_min = now.hour * 60 + now.minute
+        _started = [sc for sc in _today_scheds if _sm(sc) <= _now_min]
+        _sched_late = max(_started, key=_sm) if _started else min(_today_scheds, key=_sm)
     scan_status = "present"
     if _sched_late and _sched_late.time_start:
         try:
@@ -378,7 +380,9 @@ async def scan_multi(
         def _sm(sc):
             try: h, m = map(int, (sc.time_start or '').split(':')); return h * 60 + m
             except: return 0
-        _sched_late = max(_today_scheds, key=_sm)
+        _now_min = now.hour * 60 + now.minute
+        _started = [sc for sc in _today_scheds if _sm(sc) <= _now_min]
+        _sched_late = max(_started, key=_sm) if _started else min(_today_scheds, key=_sm)
     scan_status_base = "present"
     if _sched_late and _sched_late.time_start:
         try:
@@ -920,7 +924,7 @@ def mark_absent(
     room_number: Optional[str] = None
     if schedule_id:
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
-        if sched:
+        if sched and sched.subject_id == subject_id:
             grade_level = sched.grade_level
             room_number = sched.room_number
 
