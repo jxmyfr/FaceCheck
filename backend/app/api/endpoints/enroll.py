@@ -207,6 +207,7 @@ def delete_student(
 
     db.delete(student)
     db.commit()
+    invalidate_embedding_cache()
 
     face_file = FACES_DIR / f"{student_id}.jpg"
     if face_file.exists():
@@ -634,6 +635,7 @@ def bulk_delete_students(
         return
     db.query(Student).filter(Student.student_id.in_(student_ids)).delete(synchronize_session=False)
     db.commit()
+    invalidate_embedding_cache()
 
 
 @router.get("/students/export")

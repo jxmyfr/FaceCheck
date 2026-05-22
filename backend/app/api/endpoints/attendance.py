@@ -1087,10 +1087,31 @@ def qr_checkin(
     if not student:
         raise HTTPException(status_code=404, detail=f"ไม่พบนักเรียนรหัส {student_id_str}")
 
-    # ── Room restriction for QR checkin ─────────────────────────
+    # ── Day-of-week guard for QR checkin ─────────────────────────
     qr_sched = None
     if schedule_id:
         qr_sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+
+    _QR_DAY = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+    _qr_today = _QR_DAY[datetime.now(_BKK).weekday()]
+    if qr_sched:
+        if qr_sched.day_of_week and qr_sched.day_of_week != _qr_today:
+            raise HTTPException(
+                status_code=403,
+                detail=f"QR Code นี้เป็นของวัน{qr_sched.day_of_week} ไม่ใช่วันนี้ ({_qr_today})",
+            )
+    else:
+        _qr_all_scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
+        if _qr_all_scheds:
+            _qr_today_scheds = [sc for sc in _qr_all_scheds if sc.day_of_week == _qr_today]
+            if not _qr_today_scheds:
+                _qr_days = ' '.join(sorted({sc.day_of_week for sc in _qr_all_scheds if sc.day_of_week}))
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"วิชานี้ไม่มีตารางสอนวันนี้ ({_qr_today}) — มีตารางวัน {_qr_days}",
+                )
+
+    # ── Room restriction for QR checkin ─────────────────────────
     if qr_sched and (qr_sched.grade_level or qr_sched.room_number):
         grade_ok = not qr_sched.grade_level or student.grade_level == qr_sched.grade_level
         room_ok  = not qr_sched.room_number  or student.room_number  == qr_sched.room_number

@@ -558,6 +558,18 @@ export default function Scanner() {
     })
   }, [])
 
+  // ── Poll current-schedule every 60s (keeps isOutsideHours accurate) ──
+  useEffect(() => {
+    const timer = setInterval(() => {
+      axios.get(`${API}/attendance/current-schedule`).then(r => {
+        const matches = r.data?.matches ?? []
+        setSchedMatches(matches)
+        if (matches.length > 0) setTimeOverride(false)
+      }).catch(() => {})
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [])
+
   // ── Scan logic (shared) ────────────────────────────────────────
   const doScan = useCallback(async (isAuto = false) => {
     if (!subjectId) return
