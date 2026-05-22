@@ -820,7 +820,7 @@ export default function Scanner() {
       </div>
 
       {/* Subject + Mode */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: schedMatches !== null && schedMatches.length === 0 ? 8 : 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
 
         {/* Period-lock banner (1 match, not overriding) */}
         {lockedSched && !override ? (
@@ -918,40 +918,6 @@ export default function Scanner() {
                 </button>
               )}
             </div>
-            {schedMatches !== null && schedMatches.length === 0 && (
-              isOutsideHours ? (
-                <div style={{
-                  marginTop: 8, padding: '10px 12px', borderRadius: 8,
-                  background: '#FEF3C7', border: '1px solid #FDE68A',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}>
-                  <span style={{ fontSize: 12, color: '#92400E', flex: 1 }}>
-                    ⚠ ไม่มีคาบเรียนที่ตรงกับเวลานี้ — ปิดการสแกนไว้
-                  </span>
-                  <button
-                    onClick={() => setTimeOverride(true)}
-                    style={{
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
-                      padding: '5px 10px', borderRadius: 6,
-                      border: '1px solid #92400E', background: 'transparent', color: '#92400E',
-                    }}
-                  >
-                    สแกนนอกเวลา
-                  </button>
-                </div>
-              ) : timeOverride ? (
-                <div style={{ marginTop: 4, fontSize: 11, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  ⚠ สแกนนอกเวลาเรียน
-                  <button onClick={() => setTimeOverride(false)} style={{ fontSize: 11, color: 'var(--fc-text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    ยกเลิก
-                  </button>
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>
-                  ไม่พบคาบเรียนที่ตรงกับเวลานี้
-                </div>
-              )
-            )}
           </div>
         )}
 
@@ -976,6 +942,38 @@ export default function Scanner() {
           ))}
         </div>
       </div>
+
+      {/* Outside-hours banner — full width, below toolbar */}
+      {schedMatches !== null && schedMatches.length === 0 && (
+        isOutsideHours ? (
+          <div style={{
+            marginBottom: 16, padding: '12px 16px', borderRadius: 10,
+            background: '#FEF3C7', border: '1px solid #FDE68A',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <span style={{ fontSize: 13, color: '#92400E', flex: 1 }}>
+              ⚠ ไม่มีคาบเรียนที่ตรงกับเวลานี้ — ปิดการสแกนไว้
+            </span>
+            <button
+              onClick={() => setTimeOverride(true)}
+              style={{
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                padding: '6px 14px', borderRadius: 7,
+                border: '1px solid #92400E', background: 'transparent', color: '#92400E',
+              }}
+            >
+              สแกนนอกเวลา
+            </button>
+          </div>
+        ) : timeOverride ? (
+          <div style={{ marginBottom: 12, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>
+            ⚠ สแกนนอกเวลาเรียน
+            <button onClick={() => setTimeOverride(false)} style={{ fontSize: 12, color: 'var(--fc-text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              ยกเลิก
+            </button>
+          </div>
+        ) : null
+      )}
 
       {/* Main layout */}
       <div className="scanner-grid">
