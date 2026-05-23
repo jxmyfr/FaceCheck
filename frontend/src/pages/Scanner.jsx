@@ -328,6 +328,14 @@ const IcUnlock = () => (
   </svg>
 )
 
+const IcSwitchCamera = () => (
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 7h-3a2 2 0 0 1-2-2V2"/><path d="M9 2H5a2 2 0 0 0-2 2v4"/>
+    <path d="M4 17v3a2 2 0 0 0 2 2h3"/><path d="M15 22h3a2 2 0 0 0 2-2v-3"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+)
+
 // ── Camera settings panel (admin only) ──────────────────────────
 const IcSliders = () => (
   <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -492,6 +500,9 @@ export default function Scanner() {
 
   // Dev mode (admin only)
   const [devMode, setDevMode]   = useState(false)
+
+  // Camera facing mode
+  const [scanFacingMode, setScanFacingMode] = useState('environment')
 
   // Shared result state
   const [result, setResult]     = useState(null)
@@ -1107,10 +1118,24 @@ export default function Scanner() {
           <div style={{ position: 'relative', aspectRatio: '4/3', background: '#000' }}>
             <Webcam
               ref={cam} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.85}
-              videoConstraints={{ facingMode: { ideal: 'environment' }, width: 640, height: 480 }}
+              videoConstraints={{ facingMode: scanFacingMode, width: 640, height: 480 }}
+              mirrored={scanFacingMode === 'user'}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               onUserMedia={() => setCamReady(true)}
             />
+
+            {/* Switch camera button */}
+            <button
+              onClick={() => setScanFacingMode(f => f === 'environment' ? 'user' : 'environment')}
+              style={{
+                position: 'absolute', top: 10, right: 10,
+                background: 'rgba(0,0,0,0.45)', color: '#fff',
+                border: 'none', borderRadius: 8, padding: '6px 10px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+              }}
+            >
+              <IcSwitchCamera /> {scanFacingMode === 'environment' ? 'กล้องหน้า' : 'กล้องหลัง'}
+            </button>
 
             {/* Face guide oval */}
             <div style={{
