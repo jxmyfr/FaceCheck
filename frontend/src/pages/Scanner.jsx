@@ -952,6 +952,7 @@ export default function Scanner() {
                         })
                       })
                       const sortedGrades = [...gradeMap.keys()].sort()
+                      const gradeLabel = g => g ? `ชั้นมัธยมศึกษาปีที่ ${g.replace(/^ม\./, '')}` : g
 
                       const makeOption = (s, grade) => {
                         const isToday = s.days?.includes(todayDay)
@@ -970,7 +971,7 @@ export default function Scanner() {
                       return (
                         <>
                           {sortedGrades.map(grade => (
-                            <optgroup key={grade} label={`ชั้น ${grade}`}>
+                            <optgroup key={grade} label={gradeLabel(grade)}>
                               {gradeMap.get(grade).map(s => makeOption(s, grade))}
                             </optgroup>
                           ))}
