@@ -906,6 +906,50 @@ def delete_log(
     db.commit()
 
 
+@router.delete("/logs/bulk", status_code=200)
+def bulk_delete_logs(
+    ids: str = Query(..., description="comma-separated log IDs"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """ลบบันทึกการเช็คชื่อหลายรายการพร้อมกัน"""
+    try:
+        id_list = [int(i.strip()) for i in ids.split(',') if i.strip()]
+    except ValueError:
+        raise HTTPException(status_code=422, detail="รูปแบบ ids ไม่ถูกต้อง")
+    if not id_list:
+        raise HTTPException(status_code=422, detail="ต้องระบุอย่างน้อย 1 ID")
+
+    teacher_subjects = None
+    if current_user.role == "teacher":
+        teacher_subjects = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
+
+    deleted = 0
+    for log_id in id_list:
+        log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
+        if not log:
+            continue
+        if teacher_subjects is not None and log.subject_id not in teacher_subjects:
+            continue
+        db.add(AttendanceAuditLog(
+            log_id=log.id,
+            action="delete",
+            changed_by_id=current_user.id,
+            changed_by_name=current_user.full_name,
+            old_status=log.status,
+            student_id_str=log.student.student_id,
+            student_name=f"{log.student.first_name} {log.student.last_name}",
+            subject_code=log.subject.subject_code,
+            subject_name=log.subject.subject_name,
+            log_date=log.timestamp.date(),
+        ))
+        db.delete(log)
+        deleted += 1
+
+    db.commit()
+    return {"deleted": deleted}
+
+
 @router.post("/manual", status_code=201)
 def manual_attendance(
     subject_id:     int = Query(..., description="ID ของรายวิชา"),

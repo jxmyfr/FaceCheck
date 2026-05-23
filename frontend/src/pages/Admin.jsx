@@ -215,6 +215,8 @@ export default function Admin() {
   const [showDupScans, setShowDupScans] = useState(false)
   const [logPage, setLogPage] = useState(1)
   const LOG_PAGE_SIZE = 25
+  const [selectedLogs, setSelectedLogs] = useState(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const [showUser, setShowUser]     = useState(false)
   const [newUser, setNewUser]       = useState({email:'',username:'',password:'',full_name:'',role:'teacher',categories:[]})
@@ -395,7 +397,7 @@ export default function Admin() {
   }
 
   const loadLogs = async (date = logDate, subject = logSubject) => {
-    setLogLoading(true); setLogPage(1)
+    setLogLoading(true); setLogPage(1); setSelectedLogs(new Set())
     try {
       const params = new URLSearchParams({ log_date: date })
       if (subject) params.append('subject_id', subject)
@@ -425,8 +427,23 @@ export default function Admin() {
     try {
       await axios.delete(`${API}/attendance/logs/${logId}`)
       setLogs(prev => prev.filter(l => l.log_id !== logId))
+      setSelectedLogs(prev => { const n = new Set(prev); n.delete(logId); return n })
       flash('ยกเลิกการเช็คชื่อสำเร็จ')
     } catch (e) { flash(e.response?.data?.detail || 'เกิดข้อผิดพลาด', 'error') }
+  }
+
+  const bulkDeleteLogs = async () => {
+    if (selectedLogs.size === 0) return
+    if (!await confirm(`ยืนยันการยกเลิกการเช็คชื่อ ${selectedLogs.size} รายการ?`, { title: 'ยกเลิกหลายรายการ', danger: true })) return
+    setBulkDeleting(true)
+    try {
+      const ids = [...selectedLogs].join(',')
+      const res = await axios.delete(`${API}/attendance/logs/bulk?ids=${ids}`)
+      setLogs(prev => prev.filter(l => !selectedLogs.has(l.log_id)))
+      setSelectedLogs(new Set())
+      flash(`ยกเลิกสำเร็จ ${res.data.deleted} รายการ`)
+    } catch (e) { flash(e.response?.data?.detail || 'เกิดข้อผิดพลาด', 'error') }
+    finally { setBulkDeleting(false) }
   }
 
   const updateLogStatus = async (logId, status, reason = '') => {
@@ -894,11 +911,43 @@ export default function Admin() {
               }
               return pages
             }
+            const allPageSelected = paged.length > 0 && paged.every(l => selectedLogs.has(l.log_id))
+            const somePageSelected = paged.some(l => selectedLogs.has(l.log_id))
             return (
               <>
+                {/* Bulk action bar */}
+                {selectedLogs.size > 0 && (
+                  <div style={{
+                    display:'flex', alignItems:'center', gap:12, marginBottom:10,
+                    padding:'10px 14px', borderRadius:8,
+                    background:'var(--fc-primary-light)', border:'1px solid var(--fc-primary)',
+                  }}>
+                    <span style={{fontSize:13,color:'var(--fc-primary)',fontWeight:600,flex:1}}>
+                      เลือก {selectedLogs.size} รายการ
+                    </span>
+                    <button className="btn btn-sm" onClick={()=>setSelectedLogs(new Set())}
+                      style={{fontSize:12,color:'var(--fc-primary)',background:'transparent',border:'1px solid var(--fc-primary)'}}>
+                      ยกเลิกการเลือก
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={bulkDeleteLogs} disabled={bulkDeleting}>
+                      {bulkDeleting ? 'กำลังลบ…' : `ยกเลิกการเช็คชื่อ ${selectedLogs.size} รายการ`}
+                    </button>
+                  </div>
+                )}
                 <div style={{overflowX:'auto'}}>
                   <table className="tbl">
                     <thead><tr>
+                      <th style={{width:36,paddingRight:0}} onClick={e=>e.stopPropagation()}>
+                        <input type="checkbox"
+                          checked={allPageSelected}
+                          ref={el => { if (el) el.indeterminate = somePageSelected && !allPageSelected }}
+                          onChange={e => {
+                            if (e.target.checked) setSelectedLogs(prev => { const n = new Set(prev); paged.forEach(l => n.add(l.log_id)); return n })
+                            else setSelectedLogs(prev => { const n = new Set(prev); paged.forEach(l => n.delete(l.log_id)); return n })
+                          }}
+                          style={{cursor:'pointer'}}
+                        />
+                      </th>
                       <th>เวลา</th>
                       <th>รหัสนักเรียน</th>
                       <th>ชื่อ-นามสกุล</th>
@@ -911,8 +960,23 @@ export default function Admin() {
                       {paged.map(log=>(
                         <tr key={log.log_id}
                           onClick={()=>openLogDetail(log)}
-                          style={{cursor:'pointer',opacity: log.status==='already_checked' ? 0.75 : 1}}
+                          style={{
+                            cursor:'pointer',
+                            opacity: log.status==='already_checked' ? 0.75 : 1,
+                            background: selectedLogs.has(log.log_id) ? 'var(--fc-primary-light)' : undefined,
+                          }}
                         >
+                          <td style={{paddingRight:0}} onClick={e=>e.stopPropagation()}>
+                            <input type="checkbox"
+                              checked={selectedLogs.has(log.log_id)}
+                              onChange={e => setSelectedLogs(prev => {
+                                const n = new Set(prev)
+                                e.target.checked ? n.add(log.log_id) : n.delete(log.log_id)
+                                return n
+                              })}
+                              style={{cursor:'pointer'}}
+                            />
+                          </td>
                           <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12,color:'var(--fc-text-3)',whiteSpace:'nowrap'}}>
                             {log.timestamp}
                           </td>
