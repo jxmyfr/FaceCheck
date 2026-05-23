@@ -55,6 +55,13 @@ const IcScan = () => (
     <circle cx="12" cy="13" r="4"/>
   </svg>
 )
+const IcSwitchCamera = () => (
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 7h-3a2 2 0 0 1-2-2V2"/><path d="M9 2H5a2 2 0 0 0-2 2v4"/><path d="M4 17v3a2 2 0 0 0 2 2h3"/>
+    <path d="M15 22h3a2 2 0 0 0 2-2v-3"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+)
 
 // ── Status chip ─────────────────────────────────────────────────
 const STATUS_MAP = {
@@ -211,6 +218,7 @@ export default function StudentDetail() {
   const camRef = useRef(null)
   const fileRef = useRef(null)
   const slotCamRef = useRef(null)
+  const [facingMode, setFacingMode] = useState('environment')
 
   const [detail, setDetail]   = useState(null)
   const [loading, setLoading] = useState(true)
@@ -868,11 +876,23 @@ export default function StudentDetail() {
                 ) : (
                   <div style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 12, position: 'relative' }}>
                     <Webcam ref={slotCamRef} audio={false} screenshotFormat="image/jpeg"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      videoConstraints={{ facingMode }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
                       onUserMedia={() => setSlotCamReady(true)} />
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                       <div style={{ width: 140, height: 170, borderRadius: '50%', border: '2px dashed rgba(255,255,255,0.5)' }} />
                     </div>
+                    <button
+                      onClick={() => setFacingMode(f => f === 'environment' ? 'user' : 'environment')}
+                      style={{
+                        position: 'absolute', top: 8, left: 8,
+                        background: 'rgba(0,0,0,0.45)', color: '#fff',
+                        border: 'none', borderRadius: 8, padding: '6px 10px',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                      }}
+                    >
+                      <IcSwitchCamera /> สลับกล้อง
+                    </button>
                   </div>
                 )}
                 {!slotCapture && (
@@ -1051,11 +1071,23 @@ export default function StudentDetail() {
                 ) : (
                   <div style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--fc-muted)', aspectRatio: '4/3', marginBottom: 12, position: 'relative' }}>
                     <Webcam ref={camRef} audio={false} screenshotFormat="image/jpeg"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      videoConstraints={{ facingMode }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
                       onUserMedia={() => setCamReady(true)} />
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                       <div style={{ width: 140, height: 170, borderRadius: '50%', border: '2px dashed rgba(255,255,255,0.5)' }} />
                     </div>
+                    <button
+                      onClick={() => setFacingMode(f => f === 'environment' ? 'user' : 'environment')}
+                      style={{
+                        position: 'absolute', top: 8, left: 8,
+                        background: 'rgba(0,0,0,0.45)', color: '#fff',
+                        border: 'none', borderRadius: 8, padding: '6px 10px',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                      }}
+                    >
+                      <IcSwitchCamera /> สลับกล้อง
+                    </button>
                   </div>
                 )}
                 {!camCapture && (
