@@ -503,6 +503,7 @@ export default function Scanner() {
 
   // Camera facing mode
   const [scanFacingMode, setScanFacingMode] = useState('environment')
+  const [scanMirrored, setScanMirrored]     = useState(false)
 
   // Shared result state
   const [result, setResult]     = useState(null)
@@ -1119,23 +1120,41 @@ export default function Scanner() {
             <Webcam
               ref={cam} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.85}
               videoConstraints={{ facingMode: scanFacingMode, width: 640, height: 480 }}
-              mirrored={scanFacingMode === 'user'}
+              mirrored={scanMirrored}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               onUserMedia={() => setCamReady(true)}
             />
 
-            {/* Switch camera button */}
-            <button
-              onClick={() => setScanFacingMode(f => f === 'environment' ? 'user' : 'environment')}
-              style={{
-                position: 'absolute', top: 10, right: 10,
-                background: 'rgba(0,0,0,0.45)', color: '#fff',
-                border: 'none', borderRadius: 8, padding: '6px 10px',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
-              }}
-            >
-              <IcSwitchCamera /> {scanFacingMode === 'environment' ? 'กล้องหน้า' : 'กล้องหลัง'}
-            </button>
+            {/* Camera controls overlay */}
+            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+              {/* Mirror toggle */}
+              <button
+                onClick={() => setScanMirrored(m => !m)}
+                title={scanMirrored ? 'ปิดสะท้อนภาพ' : 'เปิดสะท้อนภาพ'}
+                style={{
+                  background: scanMirrored ? 'rgba(99,102,241,0.85)' : 'rgba(0,0,0,0.45)', color: '#fff',
+                  border: 'none', borderRadius: 8, padding: '6px 10px',
+                  cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                }}
+              >
+                ↔
+              </button>
+              {/* Switch camera */}
+              <button
+                onClick={() => {
+                  const next = scanFacingMode === 'environment' ? 'user' : 'environment'
+                  setScanFacingMode(next)
+                  setScanMirrored(next === 'user')
+                }}
+                style={{
+                  background: 'rgba(0,0,0,0.45)', color: '#fff',
+                  border: 'none', borderRadius: 8, padding: '6px 10px',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                }}
+              >
+                <IcSwitchCamera /> {scanFacingMode === 'environment' ? 'กล้องหน้า' : 'กล้องหลัง'}
+              </button>
+            </div>
 
             {/* Face guide oval */}
             <div style={{
