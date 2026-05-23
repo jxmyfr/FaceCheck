@@ -125,10 +125,14 @@ function ResultCard({ result, onDismiss, onCancel }) {
                 )}
 
                 {result.status === 'dev_mode' && result.dev_info && (
-                  <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: '#EDE9FE', fontFamily: 'var(--fc-font-mono)', fontSize: 11, color: '#4C1D95', lineHeight: 1.7 }}>
-                    <div>distance: <strong>{result.dev_info.distance}</strong></div>
-                    <div>threshold: <strong>{result.dev_info.threshold}</strong></div>
+                  <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: '#EDE9FE', fontFamily: 'var(--fc-font-mono)', fontSize: 11, color: '#4C1D95', lineHeight: 1.8 }}>
+                    <div>distance: <strong>{result.dev_info.distance}</strong> / threshold: <strong>{result.dev_info.threshold}</strong></div>
                     <div>matched: <strong>{result.dev_info.matched ? 'true ✓' : 'false ✗'}</strong></div>
+                    <div style={{ marginTop: 4, borderTop: '1px solid #C4B5FD', paddingTop: 4 }}>
+                      detect: <strong>{result.dev_info.detect_ms} ms</strong>
+                      {' · '}match: <strong>{result.dev_info.match_ms} ms</strong>
+                      {' · '}total: <strong>{result.dev_info.total_ms} ms</strong>
+                    </div>
                   </div>
                 )}
 

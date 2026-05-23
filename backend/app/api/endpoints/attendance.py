@@ -1,4 +1,5 @@
 import cv2
+import time
 import numpy as np
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from fastapi.responses import Response
@@ -351,6 +352,7 @@ async def scan_multi(
     if frame is None:
         raise HTTPException(status_code=400, detail="ไม่สามารถอ่านไฟล์ภาพได้")
 
+    _t_detect_start = time.perf_counter()
     embeddings = face_processor.process_capture_multi(
         frame,
         min_det_score=MIN_DET_SCORE,
@@ -358,6 +360,8 @@ async def scan_multi(
         min_blur_score=MIN_BLUR_SCORE,
         skip_checks=dev_mode,
     )
+    _t_detect_ms = round((time.perf_counter() - _t_detect_start) * 1000, 1)
+
     if not embeddings:
         return {"results": [], "face_count": 0, "matched_count": 0}
 
@@ -427,6 +431,7 @@ async def scan_multi(
 
     # Best match per face; deduplicate by student PK (keep closest distance)
     matched: dict = {}  # student.id -> (student, dist, embedding)
+    _t_match_start = time.perf_counter()
     for emb in embeddings:
         dists     = np.linalg.norm(emb_matrix - emb[None, :], axis=1)
         best_idx  = int(np.argmin(dists))
@@ -436,6 +441,7 @@ async def scan_multi(
         student = students_arr[best_idx]
         if student.id not in matched or best_dist < matched[student.id][1]:
             matched[student.id] = (student, best_dist, emb)
+    _t_match_ms = round((time.perf_counter() - _t_match_start) * 1000, 1)
 
     # Pre-load allowed rooms (reuse _all_subj_scheds already loaded for day guard)
     allowed_rooms = None
@@ -473,9 +479,12 @@ async def scan_multi(
                 "status": "dev_mode",
                 "message": "ทดสอบสำเร็จ (ไม่บันทึก log)",
                 "dev_info": {
-                    "distance":  round(best_dist, 4),
-                    "threshold": round(THRESHOLD, 4),
-                    "matched":   best_dist <= THRESHOLD,
+                    "distance":   round(best_dist, 4),
+                    "threshold":  round(THRESHOLD, 4),
+                    "matched":    best_dist <= THRESHOLD,
+                    "detect_ms":  _t_detect_ms,
+                    "match_ms":   _t_match_ms,
+                    "total_ms":   round(_t_detect_ms + _t_match_ms, 1),
                 },
             })
             continue
