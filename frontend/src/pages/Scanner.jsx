@@ -684,7 +684,7 @@ export default function Scanner() {
       }
       // Auto mode: silently ignore errors (quality fail, period-lock, etc.)
     }
-  }, [subjectId, subjects, override, lockedSched])
+  }, [subjectId, subjects, override, lockedSched, devMode])
 
   // ── Auto scan interval ─────────────────────────────────────────
   useEffect(() => {
