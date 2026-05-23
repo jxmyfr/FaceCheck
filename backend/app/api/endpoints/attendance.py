@@ -63,10 +63,14 @@ def _ensure_emb_cache(db: Session):
 async def scan_attendance(
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
+    dev_mode:    bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
+    if dev_mode and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="dev_mode ใช้ได้เฉพาะ admin")
+
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
@@ -98,6 +102,7 @@ async def scan_attendance(
             min_det_score=MIN_DET_SCORE,
             min_face_ratio=MIN_FACE_RATIO,
             min_blur_score=MIN_BLUR_SCORE,
+            skip_checks=dev_mode,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -135,7 +140,7 @@ async def scan_attendance(
                 status_code=403,
                 detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คชื่อได้",
             )
-    elif _all_subj_scheds and not _today_scheds:
+    elif not dev_mode and _all_subj_scheds and not _today_scheds:
         _days_str = ' '.join(sorted({sc.day_of_week for sc in _all_subj_scheds if sc.day_of_week}))
         raise HTTPException(
             status_code=403,
@@ -154,29 +159,30 @@ async def scan_attendance(
             "room_number": best_match.room_number,
         })
 
-    if sched and (sched.grade_level or sched.room_number):
-        grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
-        room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
-        if not (grade_ok and room_ok):
-            student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
-            sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
-            _wrong_room_error(f"ไม่ได้เรียนวิชานี้คาบนี้ ({student_loc} → ห้องที่เรียน: {sched_loc})")
-    else:
-        allowed_rooms = {
-            (sc.grade_level, sc.room_number)
-            for sc in _all_subj_scheds
-            if sc.grade_level and sc.room_number
-        }
-        if allowed_rooms:
-            student_room = (best_match.grade_level, best_match.room_number)
-            if student_room not in allowed_rooms:
+    if not dev_mode:
+        if sched and (sched.grade_level or sched.room_number):
+            grade_ok = not sched.grade_level or best_match.grade_level == sched.grade_level
+            room_ok  = not sched.room_number  or best_match.room_number  == sched.room_number
+            if not (grade_ok and room_ok):
                 student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
-                _wrong_room_error(f"ไม่ได้เรียนวิชานี้ ({student_loc})")
+                sched_loc   = f"ชั้น {sched.grade_level or '?'} ห้อง {sched.room_number or '?'}"
+                _wrong_room_error(f"ไม่ได้เรียนวิชานี้คาบนี้ ({student_loc} → ห้องที่เรียน: {sched_loc})")
+        else:
+            allowed_rooms = {
+                (sc.grade_level, sc.room_number)
+                for sc in _all_subj_scheds
+                if sc.grade_level and sc.room_number
+            }
+            if allowed_rooms:
+                student_room = (best_match.grade_level, best_match.room_number)
+                if student_room not in allowed_rooms:
+                    student_loc = f"ชั้น {best_match.grade_level or '?'} ห้อง {best_match.room_number or '?'}"
+                    _wrong_room_error(f"ไม่ได้เรียนวิชานี้ ({student_loc})")
 
     now = datetime.now(_BKK).replace(tzinfo=None)
 
     # ── Period-Lock: ห้ามสแกนนอกช่วงเวลาเรียน (±10 นาที grace) ──
-    if sched and sched.time_start and sched.time_end:
+    if not dev_mode and sched and sched.time_start and sched.time_end:
         try:
             sh, sm = map(int, sched.time_start.split(':'))
             eh, em = map(int, sched.time_end.split(':'))
@@ -209,6 +215,25 @@ async def scan_attendance(
                 scan_status = "late"
         except Exception:
             pass
+
+    # ── Dev mode: return result without writing to DB ────────────
+    if dev_mode:
+        return {
+            "student_id":  best_match.student_id,
+            "name":        " ".join(filter(None, [best_match.title, best_match.first_name, best_match.last_name])),
+            "grade_level": best_match.grade_level,
+            "room_number": best_match.room_number,
+            "subject_code": subject.subject_code,
+            "subject":     subject.subject_name,
+            "timestamp":   now.strftime("%H:%M:%S"),
+            "status":      "dev_mode",
+            "message":     "ทดสอบสำเร็จ (ไม่บันทึก log)",
+            "dev_info": {
+                "distance":  round(best_dist, 4),
+                "threshold": round(THRESHOLD, 4),
+                "matched":   best_dist <= THRESHOLD,
+            },
+        }
 
     already_checked = (
         db.query(AttendanceLog)
@@ -294,11 +319,15 @@ async def scan_attendance(
 async def scan_multi(
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
+    dev_mode:    bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
     """สแกนใบหน้าหลายคนในภาพเดียว — คืน list ผลลัพธ์ทุกใบหน้าที่ระบุตัวตนได้"""
+    if dev_mode and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="dev_mode ใช้ได้เฉพาะ admin")
+
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
@@ -327,6 +356,7 @@ async def scan_multi(
         min_det_score=MIN_DET_SCORE,
         min_face_ratio=MIN_FACE_RATIO,
         min_blur_score=MIN_BLUR_SCORE,
+        skip_checks=dev_mode,
     )
     if not embeddings:
         return {"results": [], "face_count": 0, "matched_count": 0}
@@ -347,19 +377,19 @@ async def scan_multi(
     _all_subj_scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
     _today_scheds = [sc for sc in _all_subj_scheds if sc.day_of_week == _today_day]
     if sched:
-        if sched.day_of_week and sched.day_of_week != _today_day:
+        if not dev_mode and sched.day_of_week and sched.day_of_week != _today_day:
             raise HTTPException(
                 status_code=403,
                 detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คชื่อได้",
             )
-    elif _all_subj_scheds and not _today_scheds:
+    elif not dev_mode and _all_subj_scheds and not _today_scheds:
         _days_str = ' '.join(sorted({sc.day_of_week for sc in _all_subj_scheds if sc.day_of_week}))
         raise HTTPException(
             status_code=403,
             detail=f"วิชานี้ไม่มีตารางสอนวันนี้ ({_today_day}) — มีตารางวัน {_days_str}",
         )
 
-    if sched and sched.time_start and sched.time_end:
+    if not dev_mode and sched and sched.time_start and sched.time_end:
         try:
             sh, sm = map(int, sched.time_start.split(':'))
             eh, em = map(int, sched.time_end.split(':'))
@@ -434,6 +464,21 @@ async def scan_multi(
             "timestamp":    now.strftime("%H:%M:%S"),
             "confidence":   round(float(1 - (best_dist ** 2) / 2), 3),
         }
+
+        # Dev mode: return result without DB write
+        if dev_mode:
+            results.append({
+                **student_info,
+                "log_id": None,
+                "status": "dev_mode",
+                "message": "ทดสอบสำเร็จ (ไม่บันทึก log)",
+                "dev_info": {
+                    "distance":  round(best_dist, 4),
+                    "threshold": round(THRESHOLD, 4),
+                    "matched":   best_dist <= THRESHOLD,
+                },
+            })
+            continue
 
         # Room restriction
         wrong_room = False

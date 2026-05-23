@@ -27,6 +27,7 @@ class FaceProcessor:
         min_det_score: float = 0.65,
         min_face_ratio: float = 0.08,
         min_blur_score: float = 40.0,
+        skip_checks: bool = False,
     ) -> Optional[np.ndarray]:
         """Detection → Quality → Liveness → Embedding (single largest face)"""
         faces = self.app.get(frame)
@@ -35,13 +36,14 @@ class FaceProcessor:
 
         face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
 
-        ok, reason = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
-        if not ok:
-            raise ValueError(reason)
+        if not skip_checks:
+            ok, reason = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
+            if not ok:
+                raise ValueError(reason)
 
-        ok, reason = self._check_liveness(face, frame)
-        if not ok:
-            raise ValueError(reason)
+            ok, reason = self._check_liveness(face, frame)
+            if not ok:
+                raise ValueError(reason)
 
         return face.normed_embedding
 
@@ -51,6 +53,7 @@ class FaceProcessor:
         min_det_score: float = 0.65,
         min_face_ratio: float = 0.08,
         min_blur_score: float = 40.0,
+        skip_checks: bool = False,
     ) -> list:
         """Detect all faces, run quality+liveness on each, return list of valid embeddings."""
         faces = self.app.get(frame)
@@ -58,12 +61,13 @@ class FaceProcessor:
             return []
         valid = []
         for face in faces:
-            ok, _ = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
-            if not ok:
-                continue
-            ok, _ = self._check_liveness(face, frame)
-            if not ok:
-                continue
+            if not skip_checks:
+                ok, _ = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
+                if not ok:
+                    continue
+                ok, _ = self._check_liveness(face, frame)
+                if not ok:
+                    continue
             valid.append(face.normed_embedding)
         return valid
 

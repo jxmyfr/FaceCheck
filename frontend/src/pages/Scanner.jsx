@@ -40,6 +40,7 @@ const STATUS_CFG = {
   already_checked:{ label: 'เช็คชื่อแล้ว',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
   error:          { label: 'ระบุตัวตนไม่ได้', color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
   wrong_room:     { label: 'ไม่ใช่ห้องนี้',   color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
+  dev_mode:       { label: '[DEV] ทดสอบ',     color: '#6D28D9',                bg: '#EDE9FE',                 accent: '#7C3AED' },
   // DB statuses (from polling)
   present:        { label: 'มาเรียน',         color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
   late:           { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
@@ -120,6 +121,14 @@ function ResultCard({ result, onDismiss, onCancel }) {
                 {result.status === 'wrong_room' && result.message && (
                   <div style={{ marginTop: 8, fontSize: 12, color: '#92400E', background: '#FEF3C7', borderRadius: 6, padding: '6px 10px' }}>
                     {result.message}
+                  </div>
+                )}
+
+                {result.status === 'dev_mode' && result.dev_info && (
+                  <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: '#EDE9FE', fontFamily: 'var(--fc-font-mono)', fontSize: 11, color: '#4C1D95', lineHeight: 1.7 }}>
+                    <div>distance: <strong>{result.dev_info.distance}</strong></div>
+                    <div>threshold: <strong>{result.dev_info.threshold}</strong></div>
+                    <div>matched: <strong>{result.dev_info.matched ? 'true ✓' : 'false ✗'}</strong></div>
                   </div>
                 )}
 
@@ -477,6 +486,9 @@ export default function Scanner() {
   const [lookupStatus, setLookupStatus] = useState('present')
   const [lookupLoading, setLookupLoading] = useState(false)
 
+  // Dev mode (admin only)
+  const [devMode, setDevMode]   = useState(false)
+
   // Shared result state
   const [result, setResult]     = useState(null)
   const [errMsg, setErrMsg]     = useState('')
@@ -579,7 +591,7 @@ export default function Scanner() {
     if (!img) return
 
     const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}`
+    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}${devMode ? '&dev_mode=true' : ''}`
 
     try {
       const blob = await new Promise(resolve => {
@@ -623,7 +635,7 @@ export default function Scanner() {
         if (entry.log_id && img) recentPhotosRef.current[entry.log_id] = img
         setResult(entry)
         setErrMsg('')
-        setLogs(prev => [entry, ...prev])
+        if (r.status !== 'dev_mode') setLogs(prev => [entry, ...prev])
       } else {
         // Multiple matches — batch summary
         const entries = results.map((r, i) => ({
@@ -635,7 +647,8 @@ export default function Scanner() {
         entries.forEach(e => { if (e.log_id && img) recentPhotosRef.current[e.log_id] = img })
         setResult({ status: 'multi', results: entries, face_count, matched_count, photo: img })
         setErrMsg('')
-        setLogs(prev => [...entries, ...prev])
+        const realEntries = entries.filter(e => e.status !== 'dev_mode')
+        if (realEntries.length > 0) setLogs(prev => [...realEntries, ...prev])
       }
 
       if (isAuto) {
@@ -792,7 +805,7 @@ export default function Scanner() {
   const _subjectHasToday = _selSubjObj?.days?.includes(_todayDayTH) ?? false
   const isOutsideHours = !timeOverride && schedMatches !== null && schedMatches.length === 0
 
-  const canScan = camReady && !!subjectId && !isOutsideHours
+  const canScan = camReady && !!subjectId && (!isOutsideHours || devMode)
   const isAdmin = user?.role === 'admin'
   const subjectIdSet = new Set(subjects.map(s => s.id))
   const displayedLogs = isAdmin ? logs : logs.filter(l => l.subject_id && subjectIdSet.has(l.subject_id))
@@ -947,6 +960,24 @@ export default function Scanner() {
             </button>
           ))}
         </div>
+
+        {/* Dev mode toggle (admin only) */}
+        {isAdmin && (
+          <button
+            onClick={() => setDevMode(d => !d)}
+            title="Developer test mode — ไม่บันทึก log"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: devMode ? 700 : 400,
+              background: devMode ? '#7C3AED' : 'var(--fc-muted)',
+              color: devMode ? '#fff' : 'var(--fc-text-3)',
+              flexShrink: 0, transition: 'all 0.15s',
+            }}
+          >
+            ⚗ DEV
+          </button>
+        )}
       </div>
 
       {/* Outside-hours banner — full width, below toolbar */}
@@ -989,6 +1020,26 @@ export default function Scanner() {
             </button>
           </div>
         ) : null
+      )}
+
+      {/* Dev mode banner */}
+      {devMode && (
+        <div style={{
+          marginBottom: 12, padding: '10px 16px', borderRadius: 10,
+          background: '#EDE9FE', border: '1px solid #C4B5FD',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 13, color: '#4C1D95', flex: 1, fontWeight: 600 }}>
+            ⚗ Developer Mode — ผลสแกนจะไม่ถูกบันทึกลงระบบ
+          </span>
+          <button onClick={() => setDevMode(false)} style={{
+            fontSize: 11, color: '#6D28D9', background: 'transparent',
+            border: '1px solid #C4B5FD', borderRadius: 5,
+            cursor: 'pointer', padding: '3px 10px',
+          }}>
+            ปิด
+          </button>
+        </div>
       )}
 
       {/* Main layout */}
