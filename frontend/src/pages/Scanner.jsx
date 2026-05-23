@@ -956,14 +956,9 @@ export default function Scanner() {
 
                       const makeOption = (s, grade) => {
                         const isToday = s.days?.includes(todayDay)
-                        const rooms = (s.grade_rooms ?? [])
-                          .filter(gr => grade ? gr.grade_level === grade : true)
-                          .map(gr => `ห้อง ${gr.room_number}`)
-                          .filter(Boolean)
-                        const roomLabel = rooms.length ? ` · ${rooms.join(', ')}` : ''
                         return (
                           <option key={`${s.id}-${grade}`} value={s.id}>
-                            {isToday ? '★ ' : ''}{s.subject_code} {s.subject_name}{roomLabel}
+                            {isToday ? '★ ' : ''}{s.subject_code} {s.subject_name}
                           </option>
                         )
                       }
