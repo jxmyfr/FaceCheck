@@ -487,6 +487,7 @@ export default function Scanner() {
   const [autoActive, setAutoActive] = useState(false)
   const [scanning, setScanning]     = useState(false)
   const [cooldown, setCooldown]     = useState(false)
+  const [faceDetected, setFaceDetected] = useState(null) // null=unknown, true=face in frame, false=no face
   const cooldownRef = useRef(false)
   const scanningRef = useRef(false)
 
@@ -624,6 +625,8 @@ export default function Scanner() {
       fd.append('file', blob, 'scan.jpg')
       const res = await axios.post(scanUrl, fd)
       const { results, face_count, matched_count } = res.data
+
+      if (isAuto) setFaceDetected(face_count > 0)
 
       if (!results || results.length === 0) {
         // No face detected or no match — auto silently ignores
@@ -807,6 +810,7 @@ export default function Scanner() {
   const switchMode = (m) => {
     setMode(m)
     setAutoActive(false)
+    setFaceDetected(null)
     setResult(null)
     setErrMsg('')
     setCooldown(false)
@@ -1157,52 +1161,60 @@ export default function Scanner() {
             </div>
 
             {/* Face guide oval */}
-            <div style={{
-              position: 'absolute', inset: 0, display: 'flex',
-              alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-            }}>
-              <div style={{
-                width: 160, height: 200, borderRadius: '50%',
-                border: `2px dashed ${
-                  mode === 'auto' && autoActive && !cooldown
-                    ? 'rgba(255,255,255,0.7)'
-                    : 'rgba(255,255,255,0.35)'
-                }`,
-                transition: 'border-color 0.3s',
-              }} />
-            </div>
-
-            {/* Auto scanning pulse indicator */}
-            {mode === 'auto' && autoActive && !cooldown && (
-              <div style={{
-                position: 'absolute', top: 12, left: 12,
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: 'rgba(0,0,0,0.5)', borderRadius: 20,
-                padding: '5px 10px',
-              }}>
+            {(() => {
+              let ovalColor = 'rgba(255,255,255,0.35)'
+              if (mode === 'auto' && autoActive) {
+                if (cooldown)            ovalColor = 'rgba(96,165,250,0.85)'   // blue = cooldown
+                else if (scanning)       ovalColor = 'rgba(251,191,36,0.9)'    // yellow = scanning
+                else if (faceDetected)   ovalColor = 'rgba(74,222,128,0.9)'    // green = face detected
+                else if (faceDetected === false) ovalColor = 'rgba(251,113,133,0.7)' // red = no face
+                else                     ovalColor = 'rgba(255,255,255,0.5)'   // white = idle
+              }
+              return (
                 <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: scanning ? '#FBBF24' : '#4ADE80',
-                  animation: 'pulse 1.2s ease-in-out infinite',
-                }} />
-                <span style={{ fontSize: 11, color: '#fff', fontWeight: 500 }}>
-                  {scanning ? 'กำลังสแกน...' : 'กำลังรอใบหน้า'}
-                </span>
-              </div>
-            )}
+                  position: 'absolute', inset: 0, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+                }}>
+                  <div style={{
+                    width: 160, height: 200, borderRadius: '50%',
+                    border: `2px dashed ${ovalColor}`,
+                    transition: 'border-color 0.3s',
+                  }} />
+                </div>
+              )
+            })()}
 
-            {/* Cooldown overlay */}
-            {mode === 'auto' && cooldown && (
-              <div style={{
-                position: 'absolute', top: 12, left: 12,
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: 'rgba(0,0,0,0.5)', borderRadius: 20,
-                padding: '5px 10px',
-              }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#60A5FA' }} />
-                <span style={{ fontSize: 11, color: '#fff', fontWeight: 500 }}>รอก่อน...</span>
-              </div>
-            )}
+            {/* Auto scan status indicator */}
+            {mode === 'auto' && autoActive && (() => {
+              let dot, label
+              if (cooldown) {
+                dot = { background: '#60A5FA' }
+                label = 'เช็คชื่อสำเร็จ — รอสักครู่'
+              } else if (scanning) {
+                dot = { background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }
+                label = 'กำลังระบุตัวตน...'
+              } else if (faceDetected === true) {
+                dot = { background: '#4ADE80', animation: 'pulse 1.2s ease-in-out infinite' }
+                label = 'พบใบหน้า — กำลังสแกน...'
+              } else if (faceDetected === false) {
+                dot = { background: '#F87171' }
+                label = 'ไม่พบใบหน้า — หันหน้าเข้าหากล้อง'
+              } else {
+                dot = { background: 'rgba(255,255,255,0.6)' }
+                label = 'กำลังตรวจสอบ...'
+              }
+              return (
+                <div style={{
+                  position: 'absolute', top: 12, left: 12,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(0,0,0,0.55)', borderRadius: 20,
+                  padding: '6px 12px', maxWidth: 'calc(100% - 24px)',
+                }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, ...dot }} />
+                  <span style={{ fontSize: 11, color: '#fff', fontWeight: 500 }}>{label}</span>
+                </div>
+              )
+            })()}
 
             {/* Manual loading overlay */}
             {mode === 'manual' && manualLoading && (
@@ -1222,7 +1234,7 @@ export default function Scanner() {
                 className={`btn btn-lg btn-full ${autoActive ? 'btn-danger' : 'btn-primary'}`}
                 onClick={() => {
                   setAutoActive(v => !v)
-                  if (autoActive) { setCooldown(false); cooldownRef.current = false }
+                  if (autoActive) { setCooldown(false); cooldownRef.current = false; setFaceDetected(null) }
                   setResult(null)
                 }}
                 disabled={!canScan}
