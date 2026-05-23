@@ -579,11 +579,26 @@ export default function Scanner() {
         setLockedSched(matches[0])
         setSubjectId(String(matches[0].subject_id))
       } else if (matches.length === 0) {
-        // ไม่มีคาบ — fallback เลือกตามวันปัจจุบัน
+        // ไม่มีคาบ — auto-select วิชาวันนี้
         const DAY_MAP = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
         const todayDay = DAY_MAP[new Date().getDay()]
-        const todayMatch = subjectList.find(s => s.days?.includes(todayDay))
-        setSubjectId(String((todayMatch ?? subjectList[0]).id))
+        const todaySubjects = subjectList.filter(s => s.days?.includes(todayDay))
+        const savedId = localStorage.getItem('scanner-subject-id')
+        const savedIsToday = todaySubjects.some(s => String(s.id) === savedId)
+
+        if (todaySubjects.length === 1) {
+          // วิชาวันนี้มีแค่วิชาเดียว → auto-select เลย
+          setSubjectId(String(todaySubjects[0].id))
+        } else if (todaySubjects.length > 1 && !savedIsToday) {
+          // หลายวิชาวันนี้ แต่ที่บันทึกไว้ไม่ใช่วิชาวันนี้ → เลือกวิชาแรกของวันนี้
+          setSubjectId(String(todaySubjects[0].id))
+        } else if (todaySubjects.length === 0) {
+          // ไม่มีวิชาวันนี้เลย → fallback วิชาแรก
+          setSubjectId(savedId && subjectList.some(s => String(s.id) === savedId)
+            ? savedId
+            : String(subjectList[0].id))
+        }
+        // savedIsToday && หลายวิชา → คง localStorage ไว้ (user เลือกเองจากวันก่อน)
       }
       // matches.length > 1: ให้ครูเลือกเอง (schedMatches จะถูก render ให้เลือก)
     })
