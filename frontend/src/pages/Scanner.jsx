@@ -1164,11 +1164,10 @@ export default function Scanner() {
             {(() => {
               let ovalColor = 'rgba(255,255,255,0.35)'
               if (mode === 'auto' && autoActive) {
-                if (cooldown)            ovalColor = 'rgba(96,165,250,0.85)'   // blue = cooldown
-                else if (scanning)       ovalColor = 'rgba(251,191,36,0.9)'    // yellow = scanning
-                else if (faceDetected)   ovalColor = 'rgba(74,222,128,0.9)'    // green = face detected
-                else if (faceDetected === false) ovalColor = 'rgba(251,113,133,0.7)' // red = no face
-                else                     ovalColor = 'rgba(255,255,255,0.5)'   // white = idle
+                if (cooldown)                    ovalColor = 'rgba(96,165,250,0.85)'   // blue = cooldown
+                else if (faceDetected === true)  ovalColor = 'rgba(74,222,128,0.9)'    // green = face detected
+                else if (faceDetected === false)  ovalColor = 'rgba(251,113,133,0.7)'  // red = no face
+                else                             ovalColor = 'rgba(251,191,36,0.7)'    // yellow = checking
               }
               return (
                 <div style={{
@@ -1190,17 +1189,14 @@ export default function Scanner() {
               if (cooldown) {
                 dot = { background: '#60A5FA' }
                 label = 'เช็คชื่อสำเร็จ — รอสักครู่'
-              } else if (scanning) {
-                dot = { background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }
-                label = 'กำลังระบุตัวตน...'
               } else if (faceDetected === true) {
                 dot = { background: '#4ADE80', animation: 'pulse 1.2s ease-in-out infinite' }
-                label = 'พบใบหน้า — กำลังสแกน...'
+                label = 'พบใบหน้า — กำลังระบุตัวตน...'
               } else if (faceDetected === false) {
                 dot = { background: '#F87171' }
                 label = 'ไม่พบใบหน้า — หันหน้าเข้าหากล้อง'
               } else {
-                dot = { background: 'rgba(255,255,255,0.6)' }
+                dot = { background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }
                 label = 'กำลังตรวจสอบ...'
               }
               return (
