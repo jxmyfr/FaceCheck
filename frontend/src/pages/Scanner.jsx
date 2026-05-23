@@ -676,13 +676,22 @@ export default function Scanner() {
         setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 8000)
       }
     } catch (e) {
-      const detail = e.response?.data?.detail
-      if (!isAuto) {
-        const msg = typeof detail === 'string' ? detail : 'ระบุตัวตนไม่สำเร็จ'
+      const httpStatus = e.response?.status
+      const detail     = e.response?.data?.detail
+      const msg        = typeof detail === 'string' ? detail : 'ระบุตัวตนไม่สำเร็จ'
+      if (isAuto && httpStatus === 403) {
+        // Hard block (no schedule, wrong day, outside hours) — show + stop auto
+        setErrMsg(msg)
+        setResult({ status: 'error', name: null, message: msg, photo: img })
+        setAutoActive(false)
+        setFaceDetected(null)
+        cooldownRef.current = false
+        setCooldown(false)
+      } else if (!isAuto) {
         setErrMsg(msg)
         setResult({ status: 'error', name: null, message: msg, photo: img })
       }
-      // Auto mode: silently ignore errors (quality fail, period-lock, etc.)
+      // Auto + non-403 (quality fail, blur, liveness): silent — user just needs to reposition
     }
   }, [subjectId, subjects, override, lockedSched, devMode])
 
