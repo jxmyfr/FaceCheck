@@ -500,7 +500,9 @@ export default function Scanner() {
   const [lookupLoading, setLookupLoading] = useState(false)
 
   // Dev mode (admin only)
-  const [devMode, setDevMode]   = useState(false)
+  const [devMode, setDevMode]         = useState(false)
+  // Substitute teacher mode
+  const [substituteMode, setSubstituteMode] = useState(false)
 
   // Camera facing mode
   const [scanFacingMode, setScanFacingMode] = useState('environment')
@@ -583,7 +585,7 @@ export default function Scanner() {
   useEffect(() => {
     // Load subjects + detect current schedule in parallel
     Promise.all([
-      axios.get(`${API}/attendance/subjects`).then(r => r.data).catch(() => []),
+      axios.get(`${API}/attendance/subjects${substituteMode ? '?substitute=true' : ''}`).then(r => r.data).catch(() => []),
       axios.get(`${API}/attendance/current-schedule`).then(r => r.data).catch(() => null),
     ]).then(([subjectList, schedData]) => {
       setSubjects(subjectList)
@@ -620,7 +622,7 @@ export default function Scanner() {
       }
       // matches.length > 1: ให้ครูเลือกเอง (schedMatches จะถูก render ให้เลือก)
     })
-  }, [])
+  }, [substituteMode])
 
   // ── Poll current-schedule every 60s (keeps isOutsideHours accurate) ──
   useEffect(() => {
@@ -641,7 +643,7 @@ export default function Scanner() {
     if (!img) return
 
     const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}${devMode ? '&dev_mode=true' : ''}`
+    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}${devMode ? '&dev_mode=true' : ''}${substituteMode ? '&substitute=true' : ''}`
 
     try {
       const blob = await new Promise(resolve => {
@@ -1051,6 +1053,24 @@ export default function Scanner() {
           ))}
         </div>
 
+        {/* Substitute teacher toggle (teacher only) */}
+        {user?.role === 'teacher' && (
+          <button
+            onClick={() => { setSubstituteMode(s => !s); setSubjectId('') }}
+            title="สอนแทน — สแกนวิชาที่ไม่ใช่ของตัวเอง"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: substituteMode ? 700 : 400,
+              background: substituteMode ? '#0284C7' : 'var(--fc-muted)',
+              color: substituteMode ? '#fff' : 'var(--fc-text-3)',
+              flexShrink: 0, transition: 'all 0.15s',
+            }}
+          >
+            👨‍🏫 สอนแทน
+          </button>
+        )}
+
         {/* Dev mode toggle (admin only) */}
         {isAdmin && (
           <button
@@ -1110,6 +1130,26 @@ export default function Scanner() {
             </button>
           </div>
         ) : null
+      )}
+
+      {/* Substitute mode banner */}
+      {substituteMode && (
+        <div style={{
+          marginBottom: 12, padding: '10px 16px', borderRadius: 10,
+          background: '#E0F2FE', border: '1px solid #7DD3FC',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 13, color: '#075985', flex: 1, fontWeight: 600 }}>
+            👨‍🏫 โหมดสอนแทน — กำลังสแกนวิชาที่ไม่ใช่ของตัวเอง
+          </span>
+          <button onClick={() => { setSubstituteMode(false); setSubjectId('') }} style={{
+            fontSize: 11, color: '#0284C7', background: 'transparent',
+            border: '1px solid #7DD3FC', borderRadius: 5,
+            cursor: 'pointer', padding: '3px 10px',
+          }}>
+            ปิด
+          </button>
+        </div>
       )}
 
       {/* Dev mode banner */}

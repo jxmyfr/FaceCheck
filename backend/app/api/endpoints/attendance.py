@@ -65,6 +65,7 @@ async def scan_attendance(
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
     dev_mode:    bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
+    substitute:  bool          = Query(default=False, description="สอนแทน — ครูสแกนวิชาที่ไม่ใช่ของตัวเอง"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
@@ -76,8 +77,8 @@ async def scan_attendance(
     if not subject:
         raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
 
-    # Teacher เช็คชื่อได้เฉพาะวิชาที่ตัวเองสอน
-    if current_user.role == "teacher":
+    # Teacher เช็คชื่อได้เฉพาะวิชาที่ตัวเองสอน (เว้นแต่สอนแทน)
+    if current_user.role == "teacher" and not substitute:
         assigned = db.query(TeacherSubject).filter_by(
             teacher_id=current_user.id, subject_id=subject_id
         ).first()
@@ -321,6 +322,7 @@ async def scan_multi(
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
     dev_mode:    bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
+    substitute:  bool          = Query(default=False, description="สอนแทน — ครูสแกนวิชาที่ไม่ใช่ของตัวเอง"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
@@ -333,7 +335,7 @@ async def scan_multi(
     if not subject:
         raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
 
-    if current_user.role == "teacher":
+    if current_user.role == "teacher" and not substitute:
         assigned = db.query(TeacherSubject).filter_by(
             teacher_id=current_user.id, subject_id=subject_id
         ).first()
@@ -581,11 +583,12 @@ async def scan_multi(
 
 @router.get("/subjects")
 def list_subjects(
+    substitute: bool = Query(default=False, description="สอนแทน — แสดงวิชาทั้งหมด"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    # Teacher เห็นเฉพาะวิชาที่ตัวเองสอน, Admin เห็นทั้งหมด
-    if current_user.role == "teacher":
+    # Teacher เห็นเฉพาะวิชาที่ตัวเองสอน (ถ้าไม่ได้ substitute), Admin เห็นทั้งหมด
+    if current_user.role == "teacher" and not substitute:
         rows = (
             db.query(Subject)
             .join(TeacherSubject, TeacherSubject.subject_id == Subject.id)
