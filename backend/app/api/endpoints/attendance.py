@@ -549,6 +549,11 @@ def list_subjects(
             "subject_name": s.subject_name,
             "teacher_name": s.teacher_name,
             "days": list({sc.day_of_week for sc in s.schedules}),
+            "grade_rooms": [
+                {"grade_level": sc.grade_level, "room_number": sc.room_number}
+                for sc in s.schedules
+                if sc.grade_level and sc.room_number
+            ],
         }
         for s in rows
     ]

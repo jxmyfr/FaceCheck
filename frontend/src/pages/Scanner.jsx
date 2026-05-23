@@ -899,9 +899,15 @@ export default function Scanner() {
                       const todayDay = DAY_MAP[new Date().getDay()]
                       return subjects.map(s => {
                         const isToday = s.days?.includes(todayDay)
+                        const uniqueRooms = [...new Map(
+                          (s.grade_rooms ?? []).map(gr => [`${gr.grade_level}|${gr.room_number}`, gr])
+                        ).values()]
+                        const gradeLabel = uniqueRooms.length
+                          ? ' · ' + uniqueRooms.map(gr => `ชั้น ${gr.grade_level} ห้อง ${gr.room_number}`).join(', ')
+                          : ''
                         return (
                           <option key={s.id} value={s.id}>
-                            {isToday ? '★ ' : ''}{s.subject_code}  {s.subject_name}
+                            {isToday ? '★ ' : ''}{s.subject_code}  {s.subject_name}{gradeLabel}
                           </option>
                         )
                       })
