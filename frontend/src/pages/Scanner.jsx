@@ -522,6 +522,24 @@ export default function Scanner() {
     localStorage.setItem('scanner-mode', mode)
   }, [mode])
 
+  // ── Poll roster every 5s ──────────────────────────────────────────
+  useEffect(() => {
+    if (!subjectId) { setRoster(null); return }
+    const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
+    const fetchRoster = async () => {
+      try {
+        const res = await axios.get(
+          `${API}/attendance/subjects/${subjectId}/roster`,
+          activeSchedId ? { params: { schedule_id: activeSchedId } } : {},
+        )
+        setRoster(res.data)
+      } catch {}
+    }
+    fetchRoster()
+    const timer = setInterval(fetchRoster, 5000)
+    return () => clearInterval(timer)
+  }, [subjectId, override, lockedSched])
+
   // ── Poll attendance logs every 3s for cross-device real-time sync ──
   useEffect(() => {
     if (!subjectId) { setLogs([]); return }
@@ -785,6 +803,10 @@ export default function Scanner() {
   // Mark absent
   const [markingAbsent, setMarkingAbsent] = useState(false)
   const [absentResult, setAbsentResult]   = useState(null) // { marked_absent, total_students }
+
+  // Roster panel
+  const [roster, setRoster]           = useState(null) // { total, checked_in, pending, unenrolled, pending_students }
+  const [rosterOpen, setRosterOpen]   = useState(false)
 
   const handleMarkAbsent = async () => {
     if (!subjectId || markingAbsent) return
@@ -1520,6 +1542,72 @@ export default function Scanner() {
                   })
                 })()}
               </div>
+            </div>
+          )}
+
+          {/* Roster panel */}
+          {roster && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              {/* Header — always visible */}
+              <button
+                onClick={() => setRosterOpen(o => !o)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', textAlign: 'left',
+                  borderBottom: rosterOpen ? '1px solid var(--fc-border)' : 'none',
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-2)', flex: 1 }}>
+                  รายชื่อในชั้นเรียน
+                </span>
+                {/* Stats pills */}
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)', fontWeight: 600 }}>
+                  ✓ {roster.checked_in}
+                </span>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: roster.pending > 0 ? '#FEF3C7' : 'var(--fc-muted)', color: roster.pending > 0 ? '#92400E' : 'var(--fc-text-4)', fontWeight: 600 }}>
+                  รอ {roster.pending}
+                </span>
+                {roster.unenrolled > 0 && (
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#FEE2E2', color: '#991B1B', fontWeight: 600 }}>
+                    ไม่มีใบหน้า {roster.unenrolled}
+                  </span>
+                )}
+                <span style={{ fontSize: 10, color: 'var(--fc-text-4)', marginLeft: 2 }}>{rosterOpen ? '▲' : '▼'}</span>
+              </button>
+
+              {/* Pending list */}
+              {rosterOpen && (
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {roster.pending_students.length === 0 ? (
+                    <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--fc-success-dark)', textAlign: 'center', fontWeight: 600 }}>
+                      ✓ นักเรียนทุกคนเช็คชื่อครบแล้ว
+                    </div>
+                  ) : (
+                    roster.pending_students.map(s => (
+                      <div key={s.student_id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 16px', borderBottom: '1px solid var(--fc-border)',
+                        fontSize: 12,
+                      }}>
+                        <span style={{
+                          width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                          background: s.has_face ? 'var(--fc-muted)' : '#FEE2E2',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10,
+                        }}>
+                          {s.has_face ? '👤' : '!'}
+                        </span>
+                        <span style={{ flex: 1, color: 'var(--fc-text)' }}>{s.name}</span>
+                        <span style={{ color: 'var(--fc-text-4)', fontSize: 11 }}>{s.student_id}</span>
+                        {!s.has_face && (
+                          <span style={{ fontSize: 10, color: '#991B1B', background: '#FEE2E2', padding: '1px 6px', borderRadius: 10 }}>ไม่มีใบหน้า</span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           )}
 

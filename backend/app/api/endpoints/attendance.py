@@ -1082,6 +1082,64 @@ def mark_absent(
     return {"marked_absent": count, "total_students": len(students)}
 
 
+@router.get("/subjects/{subject_id}/roster")
+def get_roster(
+    subject_id:  int,
+    schedule_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """Roster ชั้นเรียน: ใครเช็คชื่อแล้ว / ยังไม่เช็ค / ยังไม่ได้ลงทะเบียนใบหน้า"""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
+
+    grade_level: Optional[str] = None
+    room_number: Optional[str] = None
+    if schedule_id:
+        sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+        if sched and sched.subject_id == subject_id:
+            grade_level = sched.grade_level
+            room_number = sched.room_number
+
+    student_q = db.query(Student)
+    if grade_level:
+        student_q = student_q.filter(Student.grade_level == grade_level)
+    if room_number:
+        student_q = student_q.filter(Student.room_number == room_number)
+    students = student_q.order_by(Student.first_name).all()
+
+    today_str = str(datetime.now(_BKK).date())
+    checked_ids = {
+        row[0]
+        for row in db.query(AttendanceLog.student_id).filter(
+            AttendanceLog.subject_id == subject_id,
+            func.date(AttendanceLog.timestamp) == today_str,
+        ).all()
+    }
+
+    enrolled_ids = {
+        row[0]
+        for row in db.query(StudentFaceEmbedding.student_id).all()
+    }
+
+    pending = [s for s in students if s.id not in checked_ids]
+    return {
+        "total":       len(students),
+        "checked_in":  len(students) - len(pending),
+        "pending":     len(pending),
+        "unenrolled":  sum(1 for s in students if s.id not in enrolled_ids),
+        "pending_students": [
+            {
+                "student_id": s.student_id,
+                "name": f"{s.title or ''}{s.first_name} {s.last_name}".strip(),
+                "has_face": s.id in enrolled_ids,
+            }
+            for s in pending
+        ],
+    }
+
+
 @router.delete("/subjects/{subject_id}", status_code=204)
 def delete_subject(
     subject_id: int,
