@@ -1042,19 +1042,32 @@ def mark_absent(
         if not assigned:
             raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์จัดการวิชานี้")
 
-    grade_level: Optional[str] = None
-    room_number: Optional[str] = None
+    from sqlalchemy import or_, and_ as sa_and
+
     if schedule_id:
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
-        if sched and sched.subject_id == subject_id:
-            grade_level = sched.grade_level
-            room_number = sched.room_number
+        grade_rooms = [(sched.grade_level, sched.room_number)] if sched and sched.subject_id == subject_id else []
+    else:
+        scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
+        seen = set()
+        grade_rooms = []
+        for sc in scheds:
+            key = (sc.grade_level, sc.room_number)
+            if key not in seen:
+                seen.add(key)
+                grade_rooms.append(key)
 
     student_q = db.query(Student)
-    if grade_level:
-        student_q = student_q.filter(Student.grade_level == grade_level)
-    if room_number:
-        student_q = student_q.filter(Student.room_number == room_number)
+    if grade_rooms:
+        conditions = [
+            sa_and(
+                Student.grade_level == gr[0] if gr[0] else True,
+                Student.room_number  == gr[1] if gr[1] else True,
+            )
+            for gr in grade_rooms
+        ]
+        student_q = student_q.filter(or_(*conditions))
+
     students = student_q.all()
 
     today_str = str(datetime.now(_BKK).date())
@@ -1094,19 +1107,35 @@ def get_roster(
     if not subject:
         raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
 
-    grade_level: Optional[str] = None
-    room_number: Optional[str] = None
+    from sqlalchemy import or_, and_ as sa_and
+
     if schedule_id:
         sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
-        if sched and sched.subject_id == subject_id:
-            grade_level = sched.grade_level
-            room_number = sched.room_number
+        grade_rooms = [(sched.grade_level, sched.room_number)] if sched and sched.subject_id == subject_id else []
+    else:
+        scheds = db.query(SubjectSchedule).filter(SubjectSchedule.subject_id == subject_id).all()
+        seen = set()
+        grade_rooms = []
+        for sc in scheds:
+            key = (sc.grade_level, sc.room_number)
+            if key not in seen:
+                seen.add(key)
+                grade_rooms.append(key)
 
     student_q = db.query(Student)
-    if grade_level:
-        student_q = student_q.filter(Student.grade_level == grade_level)
-    if room_number:
-        student_q = student_q.filter(Student.room_number == room_number)
+    if grade_rooms:
+        conditions = [
+            sa_and(
+                Student.grade_level == gr[0] if gr[0] else True,
+                Student.room_number  == gr[1] if gr[1] else True,
+            )
+            for gr in grade_rooms
+        ]
+        student_q = student_q.filter(or_(*conditions))
+    else:
+        # Subject has no schedules at all → return empty roster
+        return {"total": 0, "checked_in": 0, "pending": 0, "unenrolled": 0, "pending_students": []}
+
     students = student_q.order_by(Student.first_name).all()
 
     today_str = str(datetime.now(_BKK).date())
