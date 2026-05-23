@@ -939,20 +939,48 @@ export default function Scanner() {
                   : (() => {
                       const DAY_MAP = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
                       const todayDay = DAY_MAP[new Date().getDay()]
-                      return subjects.map(s => {
+
+                      // Group subjects by grade level
+                      const gradeMap = new Map()
+                      const noGrade  = []
+                      subjects.forEach(s => {
+                        const grades = [...new Set((s.grade_rooms ?? []).map(gr => gr.grade_level).filter(Boolean))]
+                        if (grades.length === 0) { noGrade.push(s); return }
+                        grades.forEach(g => {
+                          if (!gradeMap.has(g)) gradeMap.set(g, [])
+                          gradeMap.get(g).push(s)
+                        })
+                      })
+                      const sortedGrades = [...gradeMap.keys()].sort()
+
+                      const makeOption = (s, grade) => {
                         const isToday = s.days?.includes(todayDay)
-                        const uniqueRooms = [...new Map(
-                          (s.grade_rooms ?? []).map(gr => [`${gr.grade_level}|${gr.room_number}`, gr])
-                        ).values()]
-                        const gradeLabel = uniqueRooms.length
-                          ? ' · ' + uniqueRooms.map(gr => `ชั้น ${gr.grade_level} ห้อง ${gr.room_number}`).join(', ')
-                          : ''
+                        const rooms = (s.grade_rooms ?? [])
+                          .filter(gr => grade ? gr.grade_level === grade : true)
+                          .map(gr => `ห้อง ${gr.room_number}`)
+                          .filter(Boolean)
+                        const roomLabel = rooms.length ? ` · ${rooms.join(', ')}` : ''
                         return (
-                          <option key={s.id} value={s.id}>
-                            {isToday ? '★ ' : ''}{s.subject_code}  {s.subject_name}{gradeLabel}
+                          <option key={`${s.id}-${grade}`} value={s.id}>
+                            {isToday ? '★ ' : ''}{s.subject_code} {s.subject_name}{roomLabel}
                           </option>
                         )
-                      })
+                      }
+
+                      return (
+                        <>
+                          {sortedGrades.map(grade => (
+                            <optgroup key={grade} label={`ชั้น ${grade}`}>
+                              {gradeMap.get(grade).map(s => makeOption(s, grade))}
+                            </optgroup>
+                          ))}
+                          {noGrade.length > 0 && (
+                            <optgroup label="ไม่ระบุชั้น">
+                              {noGrade.map(s => makeOption(s, null))}
+                            </optgroup>
+                          )}
+                        </>
+                      )
                     })()
                 }
               </select>
