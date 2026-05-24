@@ -28,6 +28,13 @@ export function useDialog() {
     })
   }, [])
 
+  const prompt = useCallback((message, { title = 'กรอกข้อมูล', placeholder = '', required = false } = {}) => {
+    return new Promise(resolve => {
+      resolveRef.current = resolve
+      setState({ type: 'prompt', message, title, placeholder, required, inputValue: '' })
+    })
+  }, [])
+
   const close = (result) => {
     setState(null)
     resolveRef.current?.(result)
@@ -42,7 +49,7 @@ export function useDialog() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16,
       }}
-      onClick={e => { if (e.target === e.currentTarget) close(false) }}
+      onClick={e => { if (e.target === e.currentTarget) close(state.type === 'prompt' ? null : false) }}
     >
       <div style={{
         background: '#ffffff',
@@ -56,14 +63,38 @@ export function useDialog() {
         <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--fc-text)', marginBottom: 10 }}>
           {state.title}
         </div>
-        <div style={{ fontSize: 13, color: 'var(--fc-text-3)', lineHeight: 1.6, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, color: 'var(--fc-text-3)', lineHeight: 1.6, marginBottom: state.type === 'prompt' ? 12 : 20 }}>
           {state.message}
         </div>
+        {state.type === 'prompt' && (
+          <input
+            autoFocus
+            type="text"
+            placeholder={state.placeholder}
+            defaultValue=""
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '8px 12px', borderRadius: 8, marginBottom: 16,
+              border: '1px solid var(--fc-border)',
+              fontSize: 13, color: 'var(--fc-text)',
+              outline: 'none',
+            }}
+            onChange={e => setState(s => ({ ...s, inputValue: e.target.value }))}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                const val = state.inputValue?.trim()
+                if (state.required && !val) return
+                close(val || null)
+              }
+              if (e.key === 'Escape') close(null)
+            }}
+          />
+        )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          {state.type === 'confirm' && (
+          {(state.type === 'confirm' || state.type === 'prompt') && (
             <button
               className="btn btn-ghost btn-sm"
-              onClick={() => close(false)}
+              onClick={() => close(state.type === 'prompt' ? null : false)}
             >
               ยกเลิก
             </button>
@@ -74,15 +105,22 @@ export function useDialog() {
               ? { background: 'var(--fc-danger)', color: '#fff', border: 'none' }
               : { background: 'var(--fc-primary)', color: '#fff', border: 'none' }
             }
-            onClick={() => close(state.type === 'confirm' ? true : undefined)}
-            autoFocus
+            onClick={() => {
+              if (state.type === 'prompt') {
+                const val = state.inputValue?.trim()
+                if (state.required && !val) return
+                close(val || null)
+              } else {
+                close(state.type === 'confirm' ? true : undefined)
+              }
+            }}
           >
-            {state.type === 'confirm' ? 'ยืนยัน' : 'ตกลง'}
+            {state.type === 'confirm' ? 'ยืนยัน' : state.type === 'prompt' ? 'ตกลง' : 'ตกลง'}
           </button>
         </div>
       </div>
     </div>
   ) : null
 
-  return { dialog, confirm, alert }
+  return { dialog, confirm, alert, prompt }
 }

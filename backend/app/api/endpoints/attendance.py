@@ -321,8 +321,9 @@ async def scan_attendance(
 async def scan_multi(
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
-    dev_mode:    bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
-    substitute:  bool          = Query(default=False, description="สอนแทน — ครูสแกนวิชาที่ไม่ใช่ของตัวเอง"),
+    dev_mode:        bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
+    substitute:      bool          = Query(default=False, description="สอนแทน — ครูสแกนวิชาที่ไม่ใช่ของตัวเอง"),
+    override_reason: Optional[str] = Query(default=None,  description="เหตุผลสแกนนอกเวลาเรียน"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
@@ -547,6 +548,7 @@ async def scan_multi(
             student_id=student_id_pk, subject_id=subject_id,
             status=scan_status_base, scan_image=jpeg_scan_bytes,
             timestamp=now, check_method="face",
+            reason=override_reason or None,
         )
         db.add(new_log)
         db.flush()

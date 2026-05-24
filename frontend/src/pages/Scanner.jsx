@@ -32,6 +32,25 @@ const IcSearch = () => (
     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
   </svg>
 )
+const IcSubstitute = () => (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+)
+const IcTerminal = () => (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+  </svg>
+)
+const IcAlertTriangle = () => (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+)
 
 // ── Status config ────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -469,7 +488,7 @@ function CameraSettings() {
 }
 
 export default function Scanner() {
-  const { dialog, alert, confirm } = useDialog()
+  const { dialog, alert, confirm, prompt } = useDialog()
   const { user } = useAuth()
   const cam = useRef(null)
   const [subjects, setSubjects]   = useState([])
@@ -481,7 +500,8 @@ export default function Scanner() {
   const [schedMatches, setSchedMatches] = useState(null) // null=loading, []=none, [...]
   const [lockedSched, setLockedSched]   = useState(null) // { schedule_id, subject_id, ... }
   const [override, setOverride]         = useState(false) // ครูเลือกเอง
-  const [timeOverride, setTimeOverride] = useState(false) // สแกนนอกเวลาเรียน
+  const [timeOverride, setTimeOverride]       = useState(false) // สแกนนอกเวลาเรียน
+  const [overrideReason, setOverrideReason]   = useState('')
 
   // Auto state
   const [autoActive, setAutoActive] = useState(false)
@@ -643,7 +663,7 @@ export default function Scanner() {
     if (!img) return
 
     const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}${devMode ? '&dev_mode=true' : ''}${substituteMode ? '&substitute=true' : ''}`
+    const scanUrl = `${API}/attendance/scan/multi?subject_id=${subjectId}${activeSchedId ? `&schedule_id=${activeSchedId}` : ''}${devMode ? '&dev_mode=true' : ''}${substituteMode ? '&substitute=true' : ''}${overrideReason ? `&override_reason=${encodeURIComponent(overrideReason)}` : ''}`
 
     try {
       const blob = await new Promise(resolve => {
@@ -728,7 +748,7 @@ export default function Scanner() {
       }
       // Auto + non-403 (quality fail, blur, liveness): silent — user just needs to reposition
     }
-  }, [subjectId, subjects, override, lockedSched, devMode])
+  }, [subjectId, subjects, override, lockedSched, devMode, substituteMode, overrideReason])
 
   // ── Auto scan interval ─────────────────────────────────────────
   useEffect(() => {
@@ -809,6 +829,17 @@ export default function Scanner() {
   // Roster panel
   const [roster, setRoster]           = useState(null) // { total, checked_in, pending, unenrolled, pending_students }
   const [rosterOpen, setRosterOpen]   = useState(false)
+
+  const handleRequestTimeOverride = async () => {
+    const reason = await prompt('ระบุเหตุผลที่ต้องการสแกนนอกเวลาเรียน เช่น ชดเชยคาบ, กิจกรรมพิเศษ', {
+      title: 'สแกนนอกเวลาเรียน',
+      placeholder: 'เหตุผล...',
+      required: true,
+    })
+    if (!reason) return
+    setOverrideReason(reason)
+    setTimeOverride(true)
+  }
 
   const handleMarkAbsent = async () => {
     if (!subjectId || markingAbsent) return
@@ -1067,7 +1098,7 @@ export default function Scanner() {
               flexShrink: 0, transition: 'all 0.15s',
             }}
           >
-            👨‍🏫 สอนแทน
+            <IcSubstitute /> สอนแทน
           </button>
         )}
 
@@ -1085,7 +1116,7 @@ export default function Scanner() {
               flexShrink: 0, transition: 'all 0.15s',
             }}
           >
-            ⚗ DEV
+            <IcTerminal /> DEV
           </button>
         )}
       </div>
@@ -1098,11 +1129,11 @@ export default function Scanner() {
             background: '#FEF3C7', border: '1px solid #FDE68A',
             display: 'flex', alignItems: 'center', gap: 12,
           }}>
-            <span style={{ fontSize: 13, color: '#92400E', flex: 1 }}>
-              ⚠ ไม่มีคาบเรียนที่ตรงกับเวลานี้ — ปิดการสแกนไว้
+            <span style={{ fontSize: 13, color: '#92400E', flex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <IcAlertTriangle /> ไม่มีคาบเรียนที่ตรงกับเวลานี้ — ปิดการสแกนไว้
             </span>
             <button
-              onClick={() => setTimeOverride(true)}
+              onClick={handleRequestTimeOverride}
               style={{
                 fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
                 padding: '6px 14px', borderRadius: 7,
@@ -1118,10 +1149,10 @@ export default function Scanner() {
             background: '#FFFBEB', border: '1px solid #FCD34D',
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <span style={{ fontSize: 12, color: '#92400E', flex: 1, fontWeight: 500 }}>
-              ⚠ กำลังสแกนนอกเวลาเรียน
+            <span style={{ fontSize: 12, color: '#92400E', flex: 1, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <IcAlertTriangle /> กำลังสแกนนอกเวลาเรียน
             </span>
-            <button onClick={() => setTimeOverride(false)} style={{
+            <button onClick={() => { setTimeOverride(false); setOverrideReason('') }} style={{
               fontSize: 11, color: '#92400E', background: 'transparent',
               border: '1px solid #FCD34D', borderRadius: 5,
               cursor: 'pointer', padding: '3px 10px',
@@ -1139,8 +1170,8 @@ export default function Scanner() {
           background: '#E0F2FE', border: '1px solid #7DD3FC',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ fontSize: 13, color: '#075985', flex: 1, fontWeight: 600 }}>
-            👨‍🏫 โหมดสอนแทน — กำลังสแกนวิชาที่ไม่ใช่ของตัวเอง
+          <span style={{ fontSize: 13, color: '#075985', flex: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <IcSubstitute /> โหมดสอนแทน — กำลังสแกนวิชาที่ไม่ใช่ของตัวเอง
           </span>
           <button onClick={() => { setSubstituteMode(false); setSubjectId('') }} style={{
             fontSize: 11, color: '#0284C7', background: 'transparent',
@@ -1159,8 +1190,8 @@ export default function Scanner() {
           background: '#EDE9FE', border: '1px solid #C4B5FD',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ fontSize: 13, color: '#4C1D95', flex: 1, fontWeight: 600 }}>
-            ⚗ Developer Mode — ผลสแกนจะไม่ถูกบันทึกลงระบบ
+          <span style={{ fontSize: 13, color: '#4C1D95', flex: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <IcTerminal /> Developer Mode — ผลสแกนจะไม่ถูกบันทึกลงระบบ
           </span>
           <button onClick={() => setDevMode(false)} style={{
             fontSize: 11, color: '#6D28D9', background: 'transparent',
@@ -1450,8 +1481,11 @@ export default function Scanner() {
               justifyContent: 'center', minHeight: 160, gap: 10,
               color: 'var(--fc-text-4)',
             }}>
-              <div style={{ fontSize: 32, opacity: 0.2 }}>
-                {mode === 'auto' ? '⚡' : '📷'}
+              <div style={{ opacity: 0.2 }}>
+                {mode === 'auto'
+                  ? <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  : <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                }
               </div>
               <div style={{ fontSize: 13, textAlign: 'center', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                 {mode === 'auto'
@@ -1636,7 +1670,10 @@ export default function Scanner() {
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: 10,
                         }}>
-                          {s.has_face ? '👤' : '!'}
+                          {s.has_face
+                            ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            : '!'
+                          }
                         </span>
                         <span style={{ flex: 1, color: 'var(--fc-text)' }}>{s.name}</span>
                         <span style={{ color: 'var(--fc-text-4)', fontSize: 11 }}>{s.student_id}</span>
@@ -1703,7 +1740,7 @@ export default function Scanner() {
                     borderRadius: 8, padding: '8px 12px', marginBottom: 16,
                     fontWeight: 500,
                   }}>
-                    ⚠️ QR นี้ใช้ได้ <strong>1 ครั้ง / 1 คน</strong> — หลังนักเรียนสแกนแล้วให้กด "สร้าง QR ใหม่"
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IcAlertTriangle /> QR นี้ใช้ได้ <strong>1 ครั้ง / 1 คน</strong> — หลังนักเรียนสแกนแล้วให้กด "สร้าง QR ใหม่"</span>
                   </div>
                 </>
               ) : (
