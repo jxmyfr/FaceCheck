@@ -277,7 +277,6 @@ async def register_student_multi(
         last_name=last_name,
         grade_level=grade_level or None,
         room_number=room_number or None,
-        face_embedding=avg_emb.tobytes(),
         face_image=best_jpeg,
     )
     db.add(new_student)
@@ -402,8 +401,7 @@ async def update_face_multi(
     avg_emb = avg_emb / np.linalg.norm(avg_emb)
 
     _, jpeg_buf = cv2.imencode('.jpg', best_frame)
-    student.face_embedding = avg_emb.tobytes()
-    student.face_image     = jpeg_buf.tobytes()
+    student.face_image = jpeg_buf.tobytes()
     db.commit()
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), best_frame)
     invalidate_embedding_cache()
@@ -497,9 +495,8 @@ async def add_embedding(
     )
     db.add(new_emb)
 
-    # Update primary embedding on Student to the latest one
-    student.face_embedding = embedding.tobytes()
-    student.face_image     = jpeg_buf.tobytes()
+    # Update primary face image on Student to the latest one
+    student.face_image = jpeg_buf.tobytes()
     db.commit()
     db.refresh(new_emb)
     invalidate_embedding_cache()
@@ -555,7 +552,6 @@ async def add_embeddings_bulk(
             face_image=jpeg_buf.tobytes(),
             label=auto_label,
         ))
-        student.face_embedding = embedding.tobytes()
         student.face_image = jpeg_buf.tobytes()
         added += 1
         results.append({"filename": f.filename, "ok": True, "label": auto_label})
@@ -598,8 +594,7 @@ def delete_embedding(
         StudentFaceEmbedding.student_id == student.id
     ).order_by(StudentFaceEmbedding.id).first()
     if remaining:
-        student.face_embedding = remaining.embedding
-        student.face_image     = remaining.face_image
+        student.face_image = remaining.face_image
     db.commit()
     invalidate_embedding_cache()
 
@@ -650,7 +645,7 @@ def export_students(
 ):
     """Export รายชื่อนักเรียนเป็น Excel"""
     from sqlalchemy import or_, and_
-    q = db.query(Student).order_by(Student.grade_level, Student.room_number, Student.student_id)
+    q = db.query(Student).options(selectinload(Student.face_embeddings)).order_by(Student.grade_level, Student.room_number, Student.student_id)
 
     if current_user.role == "teacher":
         schedules = (
@@ -696,7 +691,7 @@ def export_students(
         ws.cell(row=row_num, column=4, value=s.last_name)
         ws.cell(row=row_num, column=5, value=s.grade_level or "")
         ws.cell(row=row_num, column=6, value=s.room_number or "")
-        ws.cell(row=row_num, column=7, value="มี" if len(s.face_embedding) > 0 else "ไม่มี")
+        ws.cell(row=row_num, column=7, value="มี" if len(s.face_embeddings) > 0 else "ไม่มี")
 
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 18
@@ -777,7 +772,6 @@ async def import_excel(
             last_name=ln,
             grade_level=grade or None,
             room_number=room or None,
-            face_embedding=b"",
         ))
         created.append({"student_id": sid, "name": f"{fn} {ln}"})
 
@@ -838,7 +832,6 @@ def _import_students_from_ws(ws, db):
             last_name=ln,
             grade_level=grade or None,
             room_number=room or None,
-            face_embedding=b"",
         ))
         created.append({"student_id": sid, "name": f"{fn} {ln}"})
         sid_list.append(sid)
@@ -945,7 +938,6 @@ async def import_zip(
                 ))
             # primary embedding = front (or first available)
             front_emb, front_img = pairs[0][1], pairs[0][2]
-            student.face_embedding = front_emb.tobytes()
             student.face_image = front_img
             faces_ok.append({"student_id": sid, "angles": len(pairs)})
             continue
@@ -965,7 +957,6 @@ async def import_zip(
             faces_fail.append({"student_id": sid, "reason": "ตรวจจับใบหน้าไม่พบ"})
             continue
         _, jpeg_buf = cv2.imencode(".jpg", frame)
-        student.face_embedding = embedding.tobytes()
         student.face_image = jpeg_buf.tobytes()
         faces_ok.append({"student_id": sid})
 

@@ -701,11 +701,11 @@ def get_current_schedule(
         subj_list = (
             db.query(Subject)
             .join(TeacherSubject, TeacherSubject.subject_id == Subject.id)
-            .filter(TeacherSubject.teacher_id == current_user.id)
+            .filter(TeacherSubject.teacher_id == current_user.id, Subject.is_archived == False)
             .all()
         )
     else:
-        subj_list = db.query(Subject).all()
+        subj_list = db.query(Subject).filter(Subject.is_archived == False).all()
 
     matches = []
     for s in subj_list:
@@ -983,7 +983,6 @@ def delete_log(
         subject_name=log.subject.subject_name,
         log_date=log.timestamp.date(),
     ))
-    db.commit()
     db.delete(log)
     db.commit()
 
@@ -1279,11 +1278,11 @@ def get_today_schedules(
         subj_list = (
             db.query(Subject)
             .join(TeacherSubject, TeacherSubject.subject_id == Subject.id)
-            .filter(TeacherSubject.teacher_id == current_user.id)
+            .filter(TeacherSubject.teacher_id == current_user.id, Subject.is_archived == False)
             .all()
         )
     else:
-        subj_list = db.query(Subject).all()
+        subj_list = db.query(Subject).filter(Subject.is_archived == False).all()
 
     results = []
     for s in subj_list:
