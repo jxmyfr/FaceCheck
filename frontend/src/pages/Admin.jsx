@@ -192,12 +192,18 @@ export default function Admin() {
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditTotal, setAuditTotal]   = useState(0)
   const [auditOffset, setAuditOffset] = useState(0)
+  const [auditFilter, setAuditFilter] = useState({ date_from: '', date_to: '', action: '', student_id: '' })
   const AUDIT_LIMIT = 50
 
-  const loadAuditLogs = async (offset = 0) => {
+  const loadAuditLogs = async (offset = 0, filter = auditFilter) => {
     setAuditLoading(true)
     try {
-      const res = await axios.get(`${API}/audit/logs?limit=${AUDIT_LIMIT}&offset=${offset}`)
+      const p = new URLSearchParams({ limit: AUDIT_LIMIT, offset })
+      if (filter.date_from)  p.append('date_from',  filter.date_from)
+      if (filter.date_to)    p.append('date_to',    filter.date_to)
+      if (filter.action)     p.append('action',     filter.action)
+      if (filter.student_id) p.append('student_id', filter.student_id)
+      const res = await axios.get(`${API}/audit/logs?${p}`)
       setAuditLogs(res.data.logs || [])
       setAuditTotal(res.data.total || 0)
       setAuditOffset(offset)
@@ -1797,12 +1803,49 @@ export default function Admin() {
       {/* Audit Log tab */}
       {tab === 'audit' && (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--fc-border)' }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-text)' }}>ประวัติการเปลี่ยนแปลง</div>
-              <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 2 }}>รวม {auditTotal} รายการ</div>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--fc-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-text)' }}>ประวัติการเปลี่ยนแปลง</div>
+                <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 2 }}>รวม {auditTotal} รายการ</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => loadAuditLogs(0)}>รีเฟรช</button>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => loadAuditLogs(0)}>รีเฟรช</button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>ตั้งแต่วัน</label>
+                <input type="date" value={auditFilter.date_from} style={{ width: 148 }}
+                  onChange={e => setAuditFilter(f => ({ ...f, date_from: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>ถึงวัน</label>
+                <input type="date" value={auditFilter.date_to} style={{ width: 148 }}
+                  onChange={e => setAuditFilter(f => ({ ...f, date_to: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>ประเภท</label>
+                <select value={auditFilter.action} style={{ width: 160 }}
+                  onChange={e => setAuditFilter(f => ({ ...f, action: e.target.value }))}>
+                  <option value="">ทุกประเภท</option>
+                  <option value="status_change">เปลี่ยนสถานะ</option>
+                  <option value="delete">ยกเลิกการเช็คชื่อ</option>
+                  <option value="create">บันทึกการเช็คชื่อ</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>รหัสนักเรียน</label>
+                <input value={auditFilter.student_id} placeholder="ค้นหา…" style={{ width: 140 }}
+                  onChange={e => setAuditFilter(f => ({ ...f, student_id: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && loadAuditLogs(0)} />
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => loadAuditLogs(0)}>แสดงข้อมูล</button>
+              {(auditFilter.date_from || auditFilter.date_to || auditFilter.action || auditFilter.student_id) && (
+                <button className="btn btn-ghost btn-sm"
+                  onClick={() => { const f = { date_from: '', date_to: '', action: '', student_id: '' }; setAuditFilter(f); loadAuditLogs(0, f) }}>
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </div>
           </div>
           {auditLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
@@ -1818,13 +1861,14 @@ export default function Admin() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>เวลา</th>
-                    <th>การกระทำ</th>
-                    <th>ผู้แก้ไข</th>
+                    <th style={{ width: 110 }}>เวลา</th>
+                    <th style={{ width: 130 }}>การกระทำ</th>
+                    <th style={{ width: 120 }}>ผู้แก้ไข</th>
                     <th>นักเรียน</th>
                     <th>วิชา</th>
-                    <th>สถานะเดิม</th>
-                    <th>สถานะใหม่</th>
+                    <th style={{ width: 80 }}>สถานะเดิม</th>
+                    <th style={{ width: 80 }}>สถานะใหม่</th>
+                    <th style={{ width: 140 }}>เหตุผล</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1868,7 +1912,9 @@ export default function Admin() {
                               {S[r.new_status]?.label || r.new_status}
                             </span>
                           )}
-                          {r.reason && <span style={{ fontSize: 10, color: '#7c3aed', marginLeft: 6, fontStyle: 'italic' }}>{r.reason}</span>}
+                        </td>
+                        <td style={{ fontSize: 11, color: '#7c3aed', fontStyle: r.reason ? 'italic' : 'normal' }}>
+                          {r.reason || <span style={{ color: 'var(--fc-text-4)', fontStyle: 'normal' }}>—</span>}
                         </td>
                       </tr>
                     )

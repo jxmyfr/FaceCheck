@@ -55,10 +55,11 @@ class FaceProcessor:
         min_blur_score: float = 40.0,
         skip_checks: bool = False,
     ) -> list:
-        """Detect all faces, run quality+liveness on each, return list of valid embeddings."""
+        """Detect all faces, run NMS + quality + liveness on each, return list of valid embeddings."""
         faces = self.app.get(frame)
         if not faces:
             return []
+        faces = self._nms_faces(faces)
         valid = []
         for face in faces:
             if not skip_checks:
@@ -70,6 +71,31 @@ class FaceProcessor:
                     continue
             valid.append(face.normed_embedding)
         return valid
+
+    @staticmethod
+    def _nms_faces(faces: list, iou_threshold: float = 0.3) -> list:
+        """Remove duplicate/overlapping face detections, keep highest det_score per group."""
+        if len(faces) <= 1:
+            return faces
+        faces = sorted(faces, key=lambda f: f.det_score, reverse=True)
+        kept = []
+        for face in faces:
+            b1 = face.bbox
+            overlap = False
+            for k in kept:
+                b2 = k.bbox
+                ix1, iy1 = max(b1[0], b2[0]), max(b1[1], b2[1])
+                ix2, iy2 = min(b1[2], b2[2]), min(b1[3], b2[3])
+                inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+                a1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
+                a2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
+                iou = inter / (a1 + a2 - inter + 1e-6)
+                if iou > iou_threshold:
+                    overlap = True
+                    break
+            if not overlap:
+                kept.append(face)
+        return kept
 
     def _check_quality(
         self,
@@ -170,10 +196,12 @@ class FaceProcessor:
         ring = fft_mag[(d2 > 64) & (d2 < 2025)]
         peak_ratio = float(np.percentile(ring, 99.5) / (np.median(ring) + 1.0)) if ring.size else 0.0
 
-        # Only reject when BOTH signals are extremely suspicious simultaneously.
-        # LBP var < 40 = near-uniform image (real faces in normal conditions: 300–4000+)
-        # FFT peak_ratio > 20 = very strong isolated spectral spikes
-        if lbp_var < 40 and peak_ratio > 20:
+        # Reject when BOTH signals are suspicious simultaneously.
+        # LBP var < 120: real faces in normal conditions score 300–4000+;
+        #   printed photos often score 40–200, blank screen: <30
+        # FFT peak_ratio > 15: screen pixel grids produce strong periodic peaks;
+        #   natural skin has diffuse spectra (ratio typically 3–10)
+        if lbp_var < 120 and peak_ratio > 15:
             return False, "ตรวจพบว่าใบหน้าอาจเป็นภาพถ่ายหรือหน้าจอ — กรุณาใช้ใบหน้าจริงต่อหน้ากล้อง"
 
         return True, ""

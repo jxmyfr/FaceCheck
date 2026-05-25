@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -17,19 +18,28 @@ ACTION_LABEL = {
 
 @router.get("/logs")
 def get_audit_logs(
-    limit:  int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0,  ge=0),
+    limit:      int            = Query(default=50, ge=1, le=200),
+    offset:     int            = Query(default=0,  ge=0),
+    date_from:  Optional[str]  = Query(default=None, description="YYYY-MM-DD"),
+    date_to:    Optional[str]  = Query(default=None, description="YYYY-MM-DD"),
+    action:     Optional[str]  = Query(default=None, description="status_change | delete | create"),
+    student_id: Optional[str]  = Query(default=None, description="รหัสนักเรียน"),
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    total = db.query(func.count(AttendanceAuditLog.id)).scalar() or 0
-    rows  = (
-        db.query(AttendanceAuditLog)
-        .order_by(AttendanceAuditLog.timestamp.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    q = db.query(AttendanceAuditLog)
+    if date_from:
+        q = q.filter(func.date(AttendanceAuditLog.timestamp) >= date_from)
+    if date_to:
+        q = q.filter(func.date(AttendanceAuditLog.timestamp) <= date_to)
+    if action:
+        q = q.filter(AttendanceAuditLog.action == action)
+    if student_id:
+        q = q.filter(AttendanceAuditLog.student_id_str.like(f"%{student_id}%"))
+
+    total = q.with_entities(func.count(AttendanceAuditLog.id)).scalar() or 0
+    rows  = q.order_by(AttendanceAuditLog.timestamp.desc()).offset(offset).limit(limit).all()
+
     return {
         "total": total,
         "logs": [
