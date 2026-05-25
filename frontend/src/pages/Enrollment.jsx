@@ -206,7 +206,7 @@ function SingleTab() {
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 18 }}>ข้อมูลนักเรียน</div>
         <div className="form-group">
           <label htmlFor="enroll-student-id" className="form-label">รหัสนักเรียน *</label>
-          <input id="enroll-student-id" placeholder="6408052218" value={form.student_id} onChange={e => set('student_id', e.target.value)} />
+          <input id="enroll-student-id" placeholder="6408052218" value={form.student_id} onChange={e => set('student_id', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
         </div>
         <div className="form-group">
           <label htmlFor="enroll-title" className="form-label">คำนำหน้า</label>
@@ -222,11 +222,11 @@ function SingleTab() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div className="form-group">
             <label htmlFor="enroll-first-name" className="form-label">ชื่อ *</label>
-            <input id="enroll-first-name" placeholder="สมชาย" value={form.first_name} onChange={e => set('first_name', e.target.value)} />
+            <input id="enroll-first-name" placeholder="สมชาย" value={form.first_name} onChange={e => set('first_name', e.target.value.replace(/[0-9]/g, ''))} />
           </div>
           <div className="form-group">
             <label htmlFor="enroll-last-name" className="form-label">นามสกุล *</label>
-            <input id="enroll-last-name" placeholder="ใจดี" value={form.last_name} onChange={e => set('last_name', e.target.value)} />
+            <input id="enroll-last-name" placeholder="ใจดี" value={form.last_name} onChange={e => set('last_name', e.target.value.replace(/[0-9]/g, ''))} />
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
