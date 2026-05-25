@@ -366,19 +366,20 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
 }
 
 .student-card-row {
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
   padding: 12px 16px; cursor: pointer;
   border-top: 1px solid rgba(0,0,0,0.05);
   transition: background 0.12s;
-  gap: 10px;
 }
 .student-card-row:hover { background: var(--fc-muted); }
-.student-card-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.student-card-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .student-card-name { font-size: 15px; font-weight: 700; color: var(--fc-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .student-card-id   { font-size: 12px; color: var(--fc-text-3); font-family: var(--fc-font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .student-card-meta { font-size: 12px; color: var(--fc-text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.student-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.student-card-right .btn-danger { font-size: 11px; padding: 4px 8px; }
+.student-card-right { display: flex; align-items: center; gap: 6px; }
 
 /* ── Admin users table / card responsive ── */
 .admin-users-table-wrap { display: block; }
