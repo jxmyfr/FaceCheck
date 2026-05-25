@@ -19,6 +19,9 @@ export default function Students() {
   const [filterFace, setFilterFace]   = useState('all')
   const [deleting, setDeleting]     = useState(null)
   const [confirm, setConfirm]       = useState(null)
+  const [editTarget, setEditTarget] = useState(null)   // student object being edited
+  const [editForm, setEditForm]     = useState({})
+  const [editSaving, setEditSaving] = useState(false)
   const [selected, setSelected]     = useState(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
@@ -128,6 +131,36 @@ export default function Students() {
       await alert('ลบไม่สำเร็จ กรุณาลองใหม่')
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  // Edit
+  const openEdit = (s, e) => {
+    e.stopPropagation()
+    setEditTarget(s)
+    setEditForm({ title: s.title || '', first_name: s.first_name || '', last_name: s.last_name || '', grade_level: s.grade_level || '', room_number: s.room_number || '' })
+  }
+
+  const handleEditSave = async () => {
+    if (!editTarget || editSaving) return
+    setEditSaving(true)
+    try {
+      const fd = new FormData()
+      fd.append('title',       editForm.title)
+      fd.append('first_name',  editForm.first_name)
+      fd.append('last_name',   editForm.last_name)
+      fd.append('grade_level', editForm.grade_level)
+      fd.append('room_number', editForm.room_number)
+      await axios.put(`${API}/students/${editTarget.student_id}`, fd)
+      setStudents(prev => prev.map(s => s.student_id === editTarget.student_id
+        ? { ...s, ...editForm, title: editForm.title || null, grade_level: editForm.grade_level || null, room_number: editForm.room_number || null }
+        : s
+      ))
+      setEditTarget(null)
+    } catch {
+      await alert('บันทึกไม่สำเร็จ กรุณาลองใหม่')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -354,7 +387,14 @@ export default function Students() {
                       }
                     </td>
                     {user?.role === 'admin' && (
-                      <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={e => openEdit(s, e)}
+                          style={{ marginRight: 6 }}
+                        >
+                          แก้ไข
+                        </button>
                         <button
                           className="btn btn-danger btn-sm"
                           disabled={deleting === s.student_id}
@@ -405,13 +445,21 @@ export default function Students() {
                     : <span className="chip" style={{ background: 'var(--fc-danger-light)', color: 'var(--fc-danger)' }}>ยังไม่มี</span>
                   }
                   {user?.role === 'admin' && (
-                    <button
-                      className="btn btn-danger btn-sm"
-                      disabled={deleting === s.student_id}
-                      onClick={e => { e.stopPropagation(); setConfirm(s) }}
-                    >
-                      {deleting === s.student_id ? '…' : 'ลบ'}
-                    </button>
+                    <>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={e => openEdit(s, e)}
+                      >
+                        แก้ไข
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        disabled={deleting === s.student_id}
+                        onClick={e => { e.stopPropagation(); setConfirm(s) }}
+                      >
+                        {deleting === s.student_id ? '…' : 'ลบ'}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -464,6 +512,58 @@ export default function Students() {
                 onClick={handleBulkDelete}
               >
                 {bulkDeleting ? 'กำลังลบ…' : `ลบ ${selected.size} คน`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editTarget && (
+        <div className="modal-overlay" onClick={() => !editSaving && setEditTarget(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-title">แก้ไขข้อมูลนักเรียน</div>
+            <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginBottom: 20, fontFamily: 'var(--fc-font-mono)' }}>
+              รหัส {editTarget.student_id}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <div style={{ flex: '0 0 100px' }}>
+                <label className="form-label">คำนำหน้า</label>
+                <select value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}>
+                  <option value="">—</option>
+                  <option value="นาย">นาย</option>
+                  <option value="นางสาว">นางสาว</option>
+                  <option value="เด็กชาย">เด็กชาย</option>
+                  <option value="เด็กหญิง">เด็กหญิง</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">ชื่อ</label>
+                <input value={editForm.first_name} onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))} placeholder="ชื่อ" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">นามสกุล</label>
+                <input value={editForm.last_name} onChange={e => setEditForm(f => ({ ...f, last_name: e.target.value }))} placeholder="นามสกุล" />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">ระดับชั้น</label>
+                <input value={editForm.grade_level} onChange={e => setEditForm(f => ({ ...f, grade_level: e.target.value }))} placeholder="เช่น ม.5" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">ห้อง</label>
+                <input value={editForm.room_number} onChange={e => setEditForm(f => ({ ...f, room_number: e.target.value }))} placeholder="เช่น 1" />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" disabled={editSaving} onClick={() => setEditTarget(null)}>ยกเลิก</button>
+              <button
+                className="btn btn-primary"
+                disabled={editSaving || !editForm.first_name.trim()}
+                onClick={handleEditSave}
+              >
+                {editSaving ? 'กำลังบันทึก…' : 'บันทึก'}
               </button>
             </div>
           </div>
