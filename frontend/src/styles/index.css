@@ -409,16 +409,8 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
 .admin-user-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ── Schedule page ── */
-.schedule-week-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
-}
-.schedule-day-view { display: none; }
-
-@media (max-width: 900px) {
-  .schedule-week-grid { grid-template-columns: repeat(4, 1fr); }
-}
+.schedule-week-grid { display: block; }
+.schedule-day-view  { display: none; }
 @media (max-width: 640px) {
   .schedule-week-grid { display: none; }
   .schedule-day-view  { display: block; }
