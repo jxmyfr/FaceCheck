@@ -4,8 +4,8 @@ import { useAuth } from '../hooks/useAuth'
 
 const API = import.meta.env.VITE_API_URL
 
-const DAYS     = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา']
-const DAY_FULL = { จ: 'จันทร์', อ: 'อังคาร', พ: 'พุธ', พฤ: 'พฤหัสบดี', ศ: 'ศุกร์', ส: 'เสาร์', อา: 'อาทิตย์' }
+const DAYS     = ['จ', 'อ', 'พ', 'พฤ', 'ศ']
+const DAY_FULL = { จ: 'จันทร์', อ: 'อังคาร', พ: 'พุธ', พฤ: 'พฤหัสบดี', ศ: 'ศุกร์' }
 const JS_TO_THAI = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 const TODAY = JS_TO_THAI[new Date().getDay()]
 
