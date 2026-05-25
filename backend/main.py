@@ -15,6 +15,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+# ลด verbosity ของ ONNX Runtime (WARNING=2, ERROR=3, FATAL=4)
+os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
 logger = logging.getLogger("facecheck")
 
 # สร้างตารางทั้งหมดอัตโนมัติ (ครั้งแรก)
@@ -43,7 +45,8 @@ def _is_expected_migration_error(msg: str) -> bool:
     msg = msg.lower()
     return any(k in msg for k in (
         "already exists", "duplicate column", "duplicate key",
-        "undefined column", "no such column", "column does not exist",
+        "undefinedcolumn", "undefined column", "no such column",
+        "does not exist", "column does not exist",
     ))
 
 if os.getenv("DATABASE_URL"):
