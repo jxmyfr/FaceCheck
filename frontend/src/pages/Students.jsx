@@ -235,7 +235,7 @@ export default function Students() {
             aria-label="ค้นหานักเรียน"
           />
         </div>
-        <div style={{ flex: '0 0 140px' }}>
+        <div style={{ flex: '0 0 130px' }}>
           <label htmlFor="students-grade" className="sr-only">กรองตามชั้น</label>
           <select
             id="students-grade"
@@ -247,7 +247,7 @@ export default function Students() {
             {grades.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
         </div>
-        <div style={{ flex: '0 0 120px' }}>
+        <div style={{ flex: '0 0 110px' }}>
           <label htmlFor="students-room" className="sr-only">กรองตามห้อง</label>
           <select
             id="students-room"
@@ -260,17 +260,15 @@ export default function Students() {
             {rooms.map(r => <option key={r} value={r}>ห้อง {r}</option>)}
           </select>
         </div>
-        <button
-          className="btn btn-sm"
-          onClick={() => setFilterFace(v => v === 'no_face' ? 'all' : 'no_face')}
-          style={{
-            background: filterFace === 'no_face' ? 'var(--fc-warning)' : 'var(--fc-muted)',
-            color: filterFace === 'no_face' ? '#fff' : 'var(--fc-text-3)',
-            border: 'none',
-          }}
+        <select
+          value={filterFace}
+          onChange={e => setFilterFace(e.target.value)}
+          style={{ flex: '0 0 160px' }}
+          aria-label="กรองตามใบหน้า"
         >
-          {filterFace === 'no_face' ? `ยังไม่มีใบหน้า (${noFaceCount})` : `ไม่มีใบหน้า (${noFaceCount})`}
-        </button>
+          <option value="all">ใบหน้า: ทั้งหมด</option>
+          <option value="no_face">ยังไม่มีใบหน้า ({noFaceCount})</option>
+        </select>
         {(filterGrade || filterRoom || search || filterFace !== 'all') && (
           <button
             className="btn btn-ghost btn-sm"
@@ -311,12 +309,10 @@ export default function Students() {
                       style={{ cursor: 'pointer' }}
                     />
                   </th>
-                  <th>รหัสนักเรียน</th>
-                  <th>ชื่อ</th>
-                  <th>นามสกุล</th>
-                  <th>ระดับชั้น</th>
-                  <th>ห้อง</th>
-                  <th>ใบหน้า</th>
+                  <th style={{ width: 120 }}>รหัสนักเรียน</th>
+                  <th>ชื่อ-นามสกุล</th>
+                  <th style={{ width: 100 }}>ชั้น/ห้อง</th>
+                  <th style={{ width: 90 }}>ใบหน้า</th>
                   {user?.role === 'admin' && <th />}
                 </tr>
               </thead>
@@ -340,13 +336,17 @@ export default function Students() {
                         style={{ cursor: 'pointer' }}
                       />
                     </td>
-                    <td style={{ fontWeight: 600, color: 'var(--fc-text)', fontFamily: 'var(--fc-font-mono)' }}>
+                    <td style={{ fontFamily: 'var(--fc-font-mono)', fontSize: 13, color: 'var(--fc-text-2)' }}>
                       {s.student_id}
                     </td>
-                    <td>{s.first_name}</td>
-                    <td>{s.last_name}</td>
-                    <td>{s.grade_level ?? '—'}</td>
-                    <td>{s.room_number ?? '—'}</td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--fc-text)', lineHeight: 1.3 }}>
+                        {[s.title, s.first_name, s.last_name].filter(Boolean).join(' ') || '—'}
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--fc-text-3)', fontSize: 13 }}>
+                      {s.grade_level && s.room_number ? `${s.grade_level}/${s.room_number}` : s.grade_level ?? '—'}
+                    </td>
                     <td>
                       {s.has_face
                         ? <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)' }}>มีแล้ว</span>
