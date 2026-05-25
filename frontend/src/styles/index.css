@@ -374,10 +374,11 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
 }
 .student-card-row:hover { background: var(--fc-muted); }
 .student-card-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.student-card-name { font-size: 14px; font-weight: 600; color: var(--fc-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.student-card-id   { font-size: 11px; color: var(--fc-text-3); font-family: var(--fc-font-mono); }
-.student-card-meta { font-size: 12px; color: var(--fc-text-3); margin-top: 1px; }
-.student-card-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.student-card-name { font-size: 15px; font-weight: 700; color: var(--fc-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.student-card-id   { font-size: 12px; color: var(--fc-text-3); font-family: var(--fc-font-mono); white-space: nowrap; }
+.student-card-meta { font-size: 12px; color: var(--fc-text-4); white-space: nowrap; }
+.student-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.student-card-right .btn-danger { font-size: 11px; padding: 4px 8px; }
 
 /* ── Admin users table / card responsive ── */
 .admin-users-table-wrap { display: block; }

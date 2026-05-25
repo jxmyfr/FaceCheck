@@ -392,10 +392,12 @@ export default function Students() {
                     style={{ cursor: 'pointer', flexShrink: 0 }}
                   />
                   <div className="student-card-main">
-                    <div className="student-card-name">{s.first_name} {s.last_name}</div>
+                    <div className="student-card-name">
+                      {[s.title, s.first_name, s.last_name].filter(Boolean).join(' ') || '(ไม่มีชื่อ)'}
+                    </div>
                     <div className="student-card-id">{s.student_id}</div>
                     <div className="student-card-meta">
-                      {s.grade_level ?? '—'} · ห้อง {s.room_number ?? '—'}
+                      {s.grade_level ? `ชั้น ${s.grade_level}` : '—'}{s.room_number ? ` ห้อง ${s.room_number}` : ''}
                     </div>
                   </div>
                 </div>
