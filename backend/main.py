@@ -15,12 +15,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-# ลด verbosity ของ ONNX Runtime (WARNING=2, ERROR=3, FATAL=4)
 os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
 logger = logging.getLogger("facecheck")
-
-# สร้างตารางทั้งหมดอัตโนมัติ (ครั้งแรก)
-Base.metadata.create_all(bind=engine)
 
 _MIGRATIONS = [
     "ALTER TABLE students ADD COLUMN face_image BYTEA",
@@ -49,33 +45,31 @@ def _is_expected_migration_error(msg: str) -> bool:
         "does not exist", "column does not exist",
     ))
 
-if os.getenv("DATABASE_URL"):
-    # PostgreSQL migration
-    from sqlalchemy import text as _text
-    with engine.connect() as _conn:
-        for _sql in _MIGRATIONS:
-            try:
-                _conn.execute(_text(_sql))
-                _conn.commit()
-            except Exception as _e:
-                _conn.rollback()
-                if not _is_expected_migration_error(str(_e)):
-                    print(f"[MIGRATION WARNING] {_sql!r}: {_e}")
-else:
-    # SQLite migration
-    import sqlite3
-    from app.models.database import STORAGE_DIR
-    _sqlite_migrations = [s.replace("BYTEA", "BLOB") for s in _MIGRATIONS]
-    with sqlite3.connect(str(STORAGE_DIR / "database.db")) as _conn:
-        for _sql in _sqlite_migrations:
-            try:
-                _conn.execute(_sql)
-            except sqlite3.OperationalError as _e:
-                if not _is_expected_migration_error(str(_e)):
-                    print(f"[MIGRATION WARNING] {_sql!r}: {_e}")
+def _run_migrations():
+    if os.getenv("DATABASE_URL"):
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            for sql in _MIGRATIONS:
+                try:
+                    conn.execute(_text(sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if not _is_expected_migration_error(str(e)):
+                        logger.warning(f"[MIGRATION] {sql!r}: {e}")
+    else:
+        import sqlite3
+        from app.models.database import STORAGE_DIR
+        migrations = [s.replace("BYTEA", "BLOB") for s in _MIGRATIONS]
+        with sqlite3.connect(str(STORAGE_DIR / "database.db")) as conn:
+            for sql in migrations:
+                try:
+                    conn.execute(sql)
+                except sqlite3.OperationalError as e:
+                    if not _is_expected_migration_error(str(e)):
+                        logger.warning(f"[MIGRATION] {sql!r}: {e}")
 
 def _qr_cleanup_loop():
-    """Delete QRSessionUsed rows older than 24 hours every 6 hours."""
     while True:
         try:
             db = next(get_db())
@@ -91,20 +85,22 @@ def _qr_cleanup_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # All DB work happens here — after uvicorn worker is fully up,
+    # not at import time (avoids StatReload crash-loop on slow PG connections)
+    Base.metadata.create_all(bind=engine)
+    _run_migrations()
     t = threading.Thread(target=_qr_cleanup_loop, daemon=True)
     t.start()
+    logger.info("FaceCheck startup complete")
     yield
 
 app = FastAPI(title="FaceCheck API", lifespan=lifespan)
 
-# 2. CORS — allow_origins=* when no CORS_ORIGINS env var set (dev); restrict in prod
 _raw_origins = os.getenv("CORS_ORIGINS", "")
 if _raw_origins.strip():
     _CORS_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-    _CORS_ALLOW_ALL = False
 else:
     _CORS_ORIGINS = ["*"]
-    _CORS_ALLOW_ALL = True
 
 app.add_middleware(
     CORSMiddleware,
@@ -114,7 +110,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. เชื่อมต่อเส้นทาง API ทั้งหมด
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
@@ -122,5 +117,4 @@ def health_check():
     return {"status": "online", "message": "FaceCheck Professional Backend is Ready"}
 
 if __name__ == "__main__":
-    # 4. สั่งรัน Server ที่ Port 8000
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
