@@ -41,7 +41,10 @@ _MIGRATIONS = [
 
 def _is_expected_migration_error(msg: str) -> bool:
     msg = msg.lower()
-    return any(k in msg for k in ("already exists", "duplicate column", "duplicate key"))
+    return any(k in msg for k in (
+        "already exists", "duplicate column", "duplicate key",
+        "undefined column", "no such column", "column does not exist",
+    ))
 
 if os.getenv("DATABASE_URL"):
     # PostgreSQL migration
@@ -91,9 +94,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FaceCheck API", lifespan=lifespan)
 
-# 2. CORS — restrict to configured origins (env: CORS_ORIGINS comma-separated)
-_raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
-_CORS_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+# 2. CORS — allow_origins=* when no CORS_ORIGINS env var set (dev); restrict in prod
+_raw_origins = os.getenv("CORS_ORIGINS", "")
+if _raw_origins.strip():
+    _CORS_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    _CORS_ALLOW_ALL = False
+else:
+    _CORS_ORIGINS = ["*"]
+    _CORS_ALLOW_ALL = True
 
 app.add_middleware(
     CORSMiddleware,
