@@ -383,7 +383,7 @@ export default function Students() {
                 }}
                 onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                   <input
                     type="checkbox"
                     checked={selected.has(s.student_id)}
