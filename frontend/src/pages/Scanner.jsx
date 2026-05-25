@@ -550,7 +550,7 @@ export default function Scanner() {
 
   useEffect(() => {
     if (!cooldown) { setCooldownSecs(0); return }
-    setCooldownSecs(8)
+    setCooldownSecs(3)
     const iv = setInterval(() => setCooldownSecs(s => Math.max(0, s - 1)), 1000)
     return () => clearInterval(iv)
   }, [cooldown])
@@ -739,7 +739,7 @@ export default function Scanner() {
       if (isAuto) {
         cooldownRef.current = true
         setCooldown(true)
-        setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 8000)
+        setTimeout(() => { cooldownRef.current = false; setCooldown(false) }, 3000)
       }
     } catch (e) {
       const httpStatus = e.response?.status
