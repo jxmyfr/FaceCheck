@@ -1,5 +1,6 @@
 import cv2
 import time
+import threading
 import numpy as np
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from fastapi.responses import Response
@@ -20,6 +21,7 @@ face_processor = FaceProcessor()
 
 # ── In-memory embedding cache ─────────────────────────────────────
 _EMB_CACHE: dict | None = None  # {'matrix': np.ndarray, 'students': list[_CachedStudent]}
+_EMB_CACHE_LOCK = threading.Lock()
 
 class _CachedStudent:
     """Plain-Python snapshot of Student columns — session-independent."""
@@ -35,28 +37,30 @@ class _CachedStudent:
 
 def invalidate_embedding_cache():
     global _EMB_CACHE
-    _EMB_CACHE = None
+    with _EMB_CACHE_LOCK:
+        _EMB_CACHE = None
 
 def _ensure_emb_cache(db: Session):
     global _EMB_CACHE
-    if _EMB_CACHE is not None:
-        return
-    rows = (
-        db.query(StudentFaceEmbedding, Student)
-        .join(Student, Student.id == StudentFaceEmbedding.student_id)
-        .all()
-    )
-    valid = [
-        (np.frombuffer(e.embedding, dtype=np.float32), _CachedStudent(s))
-        for e, s in rows
-        if len(e.embedding) == 512 * 4
-    ]
-    if not valid:
-        return
-    _EMB_CACHE = {
-        'matrix':   np.stack([v[0] for v in valid]),
-        'students': [v[1] for v in valid],
-    }
+    with _EMB_CACHE_LOCK:
+        if _EMB_CACHE is not None:
+            return
+        rows = (
+            db.query(StudentFaceEmbedding, Student)
+            .join(Student, Student.id == StudentFaceEmbedding.student_id)
+            .all()
+        )
+        valid = [
+            (np.frombuffer(e.embedding, dtype=np.float32), _CachedStudent(s))
+            for e, s in rows
+            if len(e.embedding) == 512 * 4
+        ]
+        if not valid:
+            return
+        _EMB_CACHE = {
+            'matrix':   np.stack([v[0] for v in valid]),
+            'students': [v[1] for v in valid],
+        }
 
 
 
@@ -284,15 +288,15 @@ async def scan_attendance(
     db.add(new_log)
 
     # Auto-learn: add scan embedding to improve future recognition accuracy.
-    # Fires for every successful recognition. Skip if this student already has a
-    # scan-sourced embedding saved today (avoids daily duplicates from same lighting).
+    # Only when match is confident (dist < 70% of threshold) to avoid polluting
+    # the cache with borderline embeddings from poor lighting or partial occlusion.
     MAX_AUTO_EMBEDDINGS = 50
     today_str = now.strftime("%d/%m")
     already_learned_today = db.query(StudentFaceEmbedding).filter(
         StudentFaceEmbedding.student_id == best_match.id,
         StudentFaceEmbedding.label.like(f"สแกน {today_str}%"),
     ).first()
-    if not already_learned_today:
+    if not already_learned_today and best_dist < THRESHOLD * 0.7:
         emb_count = db.query(StudentFaceEmbedding).filter(
             StudentFaceEmbedding.student_id == best_match.id
         ).count()
@@ -554,12 +558,12 @@ async def scan_multi(
         db.flush()
         log_id = new_log.id
 
-        # Auto-learn
+        # Auto-learn: only when match is confident (dist < 70% of threshold)
         already_learned = db.query(StudentFaceEmbedding).filter(
             StudentFaceEmbedding.student_id == student_id_pk,
             StudentFaceEmbedding.label.like(f"สแกน {today_label}%"),
         ).first()
-        if not already_learned:
+        if not already_learned and best_dist < THRESHOLD * 0.7:
             emb_count = db.query(StudentFaceEmbedding).filter(
                 StudentFaceEmbedding.student_id == student_id_pk
             ).count()

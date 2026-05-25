@@ -1,9 +1,7 @@
 import os
 import uvicorn
-from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from app.models.database import engine, Base
 from app.api.router import api_router
 
@@ -68,11 +66,6 @@ app.add_middleware(
 
 # 3. เชื่อมต่อเส้นทาง API ทั้งหมด
 app.include_router(api_router, prefix="/api/v1")
-
-# 4. Serve face images as static files
-FACES_DIR = Path(__file__).parent / "storage" / "faces"
-FACES_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/faces", StaticFiles(directory=str(FACES_DIR)), name="faces")
 
 @app.get("/")
 def health_check():
