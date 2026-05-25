@@ -1,9 +1,13 @@
 import io
+import csv
+import logging
 import cv2
 import numpy as np
 import openpyxl
 import zipfile
 import tempfile
+
+logger = logging.getLogger("facecheck.enroll")
 from openpyxl.styles import Font, PatternFill, Alignment
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, status, Body
@@ -983,4 +987,69 @@ async def import_zip(
         "duplicate_list": duplicates,
         "error_list":     errors,
         "faces_fail_list": faces_fail,
+    }
+
+
+@router.post("/import-csv", status_code=201)
+async def import_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """นำเข้านักเรียนจาก CSV (ไม่มีรูปใบหน้า)
+    หัวคอลัมน์: student_id, title, first_name, last_name, grade_level, room_number
+    """
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="รองรับเฉพาะไฟล์ .csv เท่านั้น")
+
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("tis-620", errors="replace")
+
+    reader = csv.DictReader(io.StringIO(text))
+    required = {"student_id", "first_name", "last_name"}
+    if not reader.fieldnames or not required.issubset({f.strip().lower() for f in reader.fieldnames}):
+        raise HTTPException(
+            status_code=400,
+            detail="CSV ต้องมีหัวคอลัมน์: student_id, first_name, last_name (และ title, grade_level, room_number ตามต้องการ)",
+        )
+
+    # Normalize fieldnames
+    norm = {f.strip().lower(): f for f in (reader.fieldnames or [])}
+
+    created, duplicates, errors = [], [], []
+    for i, row in enumerate(reader, start=2):
+        nrow = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
+        sid  = nrow.get("student_id", "")
+        fn   = nrow.get("first_name", "")
+        ln   = nrow.get("last_name", "")
+
+        if not sid or not fn or not ln:
+            errors.append({"row": i, "reason": "student_id / first_name / last_name ว่างเปล่า"})
+            continue
+        if db.query(Student).filter(Student.student_id == sid).first():
+            duplicates.append({"student_id": sid})
+            continue
+
+        db.add(Student(
+            student_id=sid,
+            title=nrow.get("title") or None,
+            first_name=fn,
+            last_name=ln,
+            grade_level=nrow.get("grade_level") or None,
+            room_number=nrow.get("room_number") or None,
+            face_image=None,
+        ))
+        created.append({"student_id": sid, "name": f"{fn} {ln}"})
+
+    db.commit()
+    return {
+        "created":    len(created),
+        "duplicates": len(duplicates),
+        "errors":     len(errors),
+        "created_list":   created,
+        "duplicate_list": duplicates,
+        "error_list":     errors,
     }

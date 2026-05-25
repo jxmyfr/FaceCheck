@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import time
+import threading
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -13,6 +15,24 @@ from app.core.dependencies import get_current_user, require_admin
 
 router = APIRouter()
 bearer_scheme = HTTPBearer()
+
+# ── Login brute-force protection (10 attempts per 5 minutes per IP) ──
+_LOGIN_WINDOW  = 300   # seconds
+_LOGIN_LIMIT   = 10
+_LOGIN_STORE: dict[str, tuple[int, float]] = {}
+_LOGIN_LOCK = threading.Lock()
+
+def _check_login_rate(ip: str) -> bool:
+    now = time.monotonic()
+    with _LOGIN_LOCK:
+        count, window_start = _LOGIN_STORE.get(ip, (0, now))
+        if now - window_start >= _LOGIN_WINDOW:
+            _LOGIN_STORE[ip] = (1, now)
+            return True
+        if count >= _LOGIN_LIMIT:
+            return False
+        _LOGIN_STORE[ip] = (count + 1, window_start)
+        return True
 
 
 def get_superadmin_id(db: Session) -> int | None:
@@ -54,8 +74,12 @@ class UpdateUserRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/login")
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
     """Login → คืน access_token + refresh_token"""
+    ip = request.client.host if request.client else "unknown"
+    if not _check_login_rate(ip):
+        raise HTTPException(status_code=429, detail="ลองเข้าสู่ระบบหลายครั้งเกินไป — กรุณารอ 5 นาที")
+
     user = db.query(User).filter(
         (User.email == body.email) | (User.username == body.email)
     ).first()

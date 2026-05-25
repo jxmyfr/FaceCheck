@@ -22,6 +22,7 @@ def export_attendance(
     subject_id:  Optional[int] = Query(default=None),
     grade_level: Optional[str] = Query(default=None),
     room_number: Optional[str] = Query(default=None),
+    student_id:  Optional[str] = Query(default=None, description="รหัสนักเรียน"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
@@ -44,6 +45,8 @@ def export_attendance(
         q = q.filter(Student.grade_level == grade_level)
     if room_number:
         q = q.filter(Student.room_number == room_number)
+    if student_id:
+        q = q.filter(Student.student_id == student_id)
 
     rows = q.order_by(AttendanceLog.timestamp.desc()).all()
 

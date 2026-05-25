@@ -1,13 +1,16 @@
 # AI Logic: Detection, Embedding, Liveness, Quality
+import logging
 import cv2
 import numpy as np
 import onnxruntime as ort
 from insightface.app import FaceAnalysis
 from typing import Optional, Tuple
 
+logger = logging.getLogger("facecheck.face_proc")
+
 _AVAILABLE = ort.get_available_providers()
 _PROVIDERS = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if 'CUDAExecutionProvider' in _AVAILABLE else ['CPUExecutionProvider']
-print(f"[FaceProcessor] using providers: {_PROVIDERS}")
+logger.info(f"FaceProcessor using providers: {_PROVIDERS}")
 
 
 class FaceProcessor:

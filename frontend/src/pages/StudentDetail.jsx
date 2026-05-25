@@ -594,12 +594,34 @@ export default function StudentDetail() {
   return (
     <main id="main-content" className="page">
 
-      {/* Back */}
-      <div style={{ marginBottom: 20 }}>
+      {/* Back + Export */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/students')}>
           <IcArrowLeft /> รายชื่อนักเรียน
         </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => window.open(`${import.meta.env.VITE_API_URL}/reports/export?student_id=${encodeURIComponent(studentId)}`, '_blank')}
+        >
+          <IcUpload /> ส่งออก Excel
+        </button>
       </div>
+
+      {/* Low attendance alert */}
+      {lastRate !== null && lastRate < 80 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: lastRate < 60 ? 'var(--fc-danger-light)' : 'var(--fc-warning-light)',
+          border: `1px solid ${lastRate < 60 ? 'var(--fc-danger)' : 'var(--fc-warning)'}`,
+          borderRadius: 10, padding: '10px 16px', marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <div style={{ fontSize: 13, color: lastRate < 60 ? 'var(--fc-danger)' : 'var(--fc-warning)', fontWeight: 500 }}>
+            อัตราการเข้าเรียนต่ำกว่าเกณฑ์ — <strong>{lastRate}%</strong>
+            {lastRate < 60 ? ' (ต่ำกว่า 60% — ต้องดำเนินการ)' : ' (ต่ำกว่า 80%)'}
+          </div>
+        </div>
+      )}
 
       {/* Hero card */}
       <div className="card" style={{ marginBottom: 20 }}>

@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, distinct
 from typing import Optional
 from datetime import date, datetime, timedelta, timezone
 
 _BKK = timezone(timedelta(hours=7))
 
-from app.models.database import get_db, AttendanceLog, Student, Subject, SemesterSetting, SubjectSchedule
+from app.models.database import get_db, AttendanceLog, Student, StudentFaceEmbedding, Subject, SemesterSetting, SubjectSchedule
 from app.models.user import User, TeacherSubject
 from app.core.dependencies import require_teacher_or_admin, require_admin
 
@@ -294,7 +294,12 @@ def get_student_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    student = db.query(Student).filter(Student.student_id == student_id).first()
+    student = (
+        db.query(Student)
+        .options(selectinload(Student.face_embeddings))
+        .filter(Student.student_id == student_id)
+        .first()
+    )
     if not student:
         raise HTTPException(status_code=404, detail="ไม่พบนักเรียน")
 
@@ -369,7 +374,7 @@ def get_student_attendance(
             "last_name":   student.last_name,
             "grade_level": student.grade_level,
             "room_number": student.room_number,
-            "has_face":    len(student.face_embedding) > 0,
+            "has_face":    len(student.face_embeddings) > 0,
         },
         "records": records,
         "summary": {

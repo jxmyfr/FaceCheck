@@ -1,12 +1,17 @@
 import cv2
 import time
+import uuid
+import logging
 import threading
 import numpy as np
+from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, datetime, timezone, timedelta
+
+logger = logging.getLogger("facecheck.attendance")
 
 _BKK = timezone(timedelta(hours=7))
 from typing import Optional
@@ -18,6 +23,16 @@ from app.core.dependencies import require_teacher_or_admin, require_admin, get_c
 
 router = APIRouter()
 face_processor = FaceProcessor()
+
+_BASE_DIR = Path(__file__).resolve().parents[3]
+SCAN_IMAGES_DIR = _BASE_DIR / "storage" / "scan_images"
+SCAN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+def _save_scan_image(jpeg_bytes: bytes) -> str:
+    """Write JPEG to filesystem, return relative path."""
+    fname = f"{uuid.uuid4().hex}.jpg"
+    (SCAN_IMAGES_DIR / fname).write_bytes(jpeg_bytes)
+    return f"scan_images/{fname}"
 
 # ── In-memory embedding cache ─────────────────────────────────────
 _EMB_CACHE: dict | None = None  # {'matrix': np.ndarray, 'students': list[_CachedStudent]}
@@ -287,12 +302,15 @@ async def scan_attendance(
         "confidence":  round(float(1 - (best_dist ** 2) / 2), 3),
     }
 
+    _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    jpeg_bytes = jpeg_buf.tobytes()
+
     if already_checked:
         checked_at_str = already_checked.timestamp.strftime("%H:%M")
-        _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        img_path = _save_scan_image(jpeg_bytes)
         dup_log = AttendanceLog(
             student_id=best_match.id, subject_id=subject_id, status="already_checked",
-            scan_image=jpeg_buf.tobytes(), timestamp=now, check_method="face",
+            scan_image_path=img_path, timestamp=now, check_method="face",
         )
         db.add(dup_log)
         db.commit()
@@ -305,10 +323,10 @@ async def scan_attendance(
             "checked_at": checked_at_str,
         }
 
-    _, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    img_path = _save_scan_image(jpeg_bytes)
     new_log = AttendanceLog(
         student_id=best_match.id, subject_id=subject_id, status=scan_status,
-        scan_image=jpeg_buf.tobytes(), timestamp=now, check_method="face",
+        scan_image_path=img_path, timestamp=now, check_method="face",
     )
     db.add(new_log)
 
@@ -333,6 +351,21 @@ async def scan_attendance(
                 face_image=full_jpeg.tobytes(),
                 label=f"สแกน {now.strftime('%d/%m %H:%M')}",
             ))
+
+    if substitute:
+        db.add(AttendanceAuditLog(
+            log_id=None,
+            action="substitute_scan",
+            changed_by_id=current_user.id,
+            changed_by_name=current_user.full_name,
+            new_status=scan_status,
+            reason=f"สอนแทนวิชา {subject.subject_code}",
+            student_id_str=best_match.student_id,
+            student_name=" ".join(filter(None, [best_match.first_name, best_match.last_name])),
+            subject_code=subject.subject_code,
+            subject_name=subject.subject_name,
+            log_date=now.date(),
+        ))
 
     db.commit()
     db.refresh(new_log)
@@ -564,7 +597,7 @@ async def scan_multi(
             checked_at_str = already_checked.timestamp.strftime("%H:%M")
             dup_log = AttendanceLog(
                 student_id=student_id_pk, subject_id=subject_id,
-                status="already_checked", scan_image=jpeg_scan_bytes,
+                status="already_checked", scan_image_path=_save_scan_image(jpeg_scan_bytes),
                 timestamp=now, check_method="face",
             )
             db.add(dup_log)
@@ -580,7 +613,7 @@ async def scan_multi(
         # New check-in
         new_log = AttendanceLog(
             student_id=student_id_pk, subject_id=subject_id,
-            status=scan_status_base, scan_image=jpeg_scan_bytes,
+            status=scan_status_base, scan_image_path=_save_scan_image(jpeg_scan_bytes),
             timestamp=now, check_method="face",
             reason=override_reason or None,
         )
@@ -623,17 +656,17 @@ def list_subjects(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    # Teacher เห็นเฉพาะวิชาที่ตัวเองสอน (ถ้าไม่ได้ substitute), Admin เห็นทั้งหมด
+    # Teacher เห็นเฉพาะวิชาที่ตัวเองสอน (ถ้าไม่ได้ substitute), Admin เห็นทั้งหมด; ไม่แสดง archived
     if current_user.role == "teacher" and not substitute:
         rows = (
             db.query(Subject)
             .join(TeacherSubject, TeacherSubject.subject_id == Subject.id)
-            .filter(TeacherSubject.teacher_id == current_user.id)
+            .filter(TeacherSubject.teacher_id == current_user.id, Subject.is_archived == False)
             .order_by(Subject.subject_code)
             .all()
         )
     else:
-        rows = db.query(Subject).order_by(Subject.subject_code).all()
+        rows = db.query(Subject).filter(Subject.is_archived == False).order_by(Subject.subject_code).all()
 
     return [
         {
@@ -808,13 +841,19 @@ def get_log_image(
     current_user: User = Depends(require_teacher_or_admin),
 ):
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
-    if not log or not log.scan_image:
-        raise HTTPException(status_code=404, detail="ไม่พบรูปภาพการสแกน")
+    if not log:
+        raise HTTPException(status_code=404, detail="ไม่พบบันทึก")
     if current_user.role == "teacher":
         ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
         if log.subject_id not in ts:
             raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ดูบันทึกนี้")
-    return Response(content=log.scan_image, media_type="image/jpeg")
+    if log.scan_image_path:
+        img_file = _BASE_DIR / "storage" / log.scan_image_path
+        if img_file.exists():
+            return Response(content=img_file.read_bytes(), media_type="image/jpeg")
+    if log.scan_image:
+        return Response(content=log.scan_image, media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="ไม่พบรูปภาพการสแกน")
 
 
 @router.get("/logs")
@@ -1217,8 +1256,7 @@ def delete_subject(
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
-    db.query(TeacherSubject).filter(TeacherSubject.subject_id == subject_id).delete()
-    db.delete(subject)
+    subject.is_archived = True
     db.commit()
 
 

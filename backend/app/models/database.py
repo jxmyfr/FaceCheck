@@ -58,6 +58,8 @@ class Subject(Base):
     description: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
     attendance_records: Mapped[List["AttendanceLog"]] = relationship(back_populates="subject", cascade="all, delete-orphan")
     schedules: Mapped[List["SubjectSchedule"]] = relationship(back_populates="subject", cascade="all, delete-orphan")
 
@@ -90,6 +92,7 @@ class AttendanceLog(Base):
     reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     check_method: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "face" | "qr" | "manual"
     scan_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    scan_image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # ✅ แก้ไขแล้ว: ระบุชื่อ Class ใน Mapped["ClassName"] ให้ครบถ้วน
     student: Mapped["Student"] = relationship(back_populates="attendance_records")

@@ -983,6 +983,70 @@ function FacePanel({ students, fetching, onFaceSaved }) {
   )
 }
 
+// ── CSV import tab ───────────────────────────────────────────────
+function CsvTab() {
+  const fileRef = useRef(null)
+  const [file, setFile]     = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError]   = useState('')
+
+  const pickFile = (f) => {
+    if (!f) return
+    if (!f.name.toLowerCase().endsWith('.csv')) { setError('รองรับเฉพาะไฟล์ .csv เท่านั้น'); return }
+    setFile(f); setResult(null); setError('')
+  }
+
+  const doImport = async () => {
+    if (!file) return
+    setLoading(true); setError(''); setResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await axios.post(`${API}/enroll/import-csv`, fd)
+      setResult(res.data); setFile(null)
+    } catch (e) {
+      setError(e.response?.data?.detail || 'นำเข้าไม่สำเร็จ')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 560 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 8 }}>นำเข้านักเรียนจาก CSV</div>
+      <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginBottom: 16, lineHeight: 1.6 }}>
+        CSV ต้องมีหัวคอลัมน์: <code>student_id, first_name, last_name</code><br/>
+        คอลัมน์ optional: <code>title, grade_level, room_number</code><br/>
+        รองรับ encoding UTF-8 และ TIS-620 — ยังไม่บันทึกใบหน้า
+      </div>
+      <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => pickFile(e.target.files?.[0])} />
+      {!file ? (
+        <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
+          <IcUpload /> เลือกไฟล์ CSV
+        </button>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <span style={{ fontSize: 13, color: 'var(--fc-text-2)' }}>{file.name}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setFile(null)}>เปลี่ยน</button>
+          <button className="btn btn-primary btn-sm" onClick={doImport} disabled={loading}>
+            {loading ? 'กำลังนำเข้า…' : 'นำเข้า'}
+          </button>
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12, color: 'var(--fc-danger)', marginTop: 10 }}>{error}</div>}
+      {result && (
+        <div style={{ marginTop: 14, fontSize: 13 }}>
+          <div style={{ color: 'var(--fc-success-dark)', fontWeight: 600, marginBottom: 4 }}>✓ เพิ่มใหม่ {result.created} คน</div>
+          {result.duplicates > 0 && <div style={{ color: 'var(--fc-warning)' }}>⚠ ซ้ำ {result.duplicates} คน (ข้ามไป)</div>}
+          {result.errors > 0 && <div style={{ color: 'var(--fc-danger)' }}>✗ ข้อผิดพลาด {result.errors} แถว</div>}
+          {result.error_list?.map((e, i) => (
+            <div key={i} style={{ fontSize: 11, color: 'var(--fc-danger)', paddingLeft: 10 }}>แถว {e.row}: {e.reason}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────
 export default function Enrollment() {
   const { user } = useAuth()
@@ -1009,12 +1073,16 @@ export default function Enrollment() {
             ลงทะเบียนทีละคน
           </button>
           <button className={`tab-item ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
-            นำเข้านักเรียน
+            นำเข้า Excel/ZIP
+          </button>
+          <button className={`tab-item ${tab === 'csv' ? 'active' : ''}`} onClick={() => setTab('csv')}>
+            นำเข้า CSV
           </button>
         </div>
 
         {tab === 'single' && <SingleTab />}
         {tab === 'import' && <ImportTab />}
+        {tab === 'csv'    && <CsvTab />}
       </div>
     </main>
   )
