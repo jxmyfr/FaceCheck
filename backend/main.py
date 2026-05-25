@@ -26,6 +26,10 @@ _MIGRATIONS = [
     "ALTER TABLE attendance_logs ADD COLUMN reason VARCHAR(200)",
 ]
 
+def _is_expected_migration_error(msg: str) -> bool:
+    msg = msg.lower()
+    return any(k in msg for k in ("already exists", "duplicate column", "duplicate key"))
+
 if os.getenv("DATABASE_URL"):
     # PostgreSQL migration
     from sqlalchemy import text as _text
@@ -34,8 +38,10 @@ if os.getenv("DATABASE_URL"):
             try:
                 _conn.execute(_text(_sql))
                 _conn.commit()
-            except Exception:
+            except Exception as _e:
                 _conn.rollback()
+                if not _is_expected_migration_error(str(_e)):
+                    print(f"[MIGRATION WARNING] {_sql!r}: {_e}")
 else:
     # SQLite migration
     import sqlite3
@@ -45,8 +51,9 @@ else:
         for _sql in _sqlite_migrations:
             try:
                 _conn.execute(_sql)
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as _e:
+                if not _is_expected_migration_error(str(_e)):
+                    print(f"[MIGRATION WARNING] {_sql!r}: {_e}")
 
 app = FastAPI(title="FaceCheck API")
 
