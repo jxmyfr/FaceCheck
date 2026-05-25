@@ -10,13 +10,24 @@ const JS_TO_THAI = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 const TODAY = JS_TO_THAI[new Date().getDay()]
 
 // ── Time grid constants ───────────────────────────────────────────
-const PX_PER_MIN  = 1.5
-const GRID_BASE   = 7 * 60        // 07:00
-const GRID_END    = 18 * 60       // 18:00
-const GRID_H      = (GRID_END - GRID_BASE) * PX_PER_MIN   // 990 px
-const DAY_HDR_H   = 44
-const TIME_COL_W  = 48
-const HOURS = Array.from({ length: (GRID_END - GRID_BASE) / 60 + 1 }, (_, i) => GRID_BASE / 60 + i)
+const PX_PER_MIN = 1.5
+const GRID_BASE  = 7 * 60       // 07:00
+const GRID_END   = 18 * 60      // 18:00
+const GRID_H     = (GRID_END - GRID_BASE) * PX_PER_MIN   // 990 px
+const DAY_HDR_H  = 44
+const TIME_COL_W = 60
+
+// ── School periods ────────────────────────────────────────────────
+const PERIODS = [
+  { n: 1, start: '08:30', end: '09:20' },
+  { n: 2, start: '09:20', end: '10:10' },
+  { n: 3, start: '10:20', end: '11:10' },
+  { n: 4, start: '11:10', end: '12:00' },
+  { n: 5, start: '13:00', end: '13:50' },
+  { n: 6, start: '13:50', end: '14:40' },
+  { n: 7, start: '14:40', end: '15:30' },
+]
+const getPeriodNum = (start, end) => PERIODS.find(p => p.start === start && p.end === end)?.n ?? null
 
 // ── Colors ────────────────────────────────────────────────────────
 const COLORS = [
@@ -124,21 +135,23 @@ function TimeGrid({ byDay }) {
 
   return (
     <div style={{ display: 'flex', minWidth: 600 }}>
-      {/* Time axis */}
+      {/* Time axis — period labels */}
       <div style={{ width: TIME_COL_W, flexShrink: 0 }}>
         <div style={{ height: DAY_HDR_H }} />
         <div style={{ position: 'relative', height: GRID_H }}>
-          {HOURS.map(h => (
-            <div key={h} style={{
+          {PERIODS.map(p => (
+            <div key={p.n} style={{
               position: 'absolute',
-              top: minToY(h * 60) - 7,
-              right: 6, left: 0,
+              top: minToY(toMin(p.start)) - 2,
+              right: 5, left: 2,
               textAlign: 'right',
-              fontSize: 9,
-              color: 'var(--fc-text-4)',
-              fontVariantNumeric: 'tabular-nums',
             }}>
-              {String(h).padStart(2, '0')}:00
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--fc-primary)', lineHeight: 1.2 }}>
+                คาบ {p.n}
+              </div>
+              <div style={{ fontSize: 8, color: 'var(--fc-text-4)', fontVariantNumeric: 'tabular-nums' }}>
+                {p.start}
+              </div>
             </div>
           ))}
         </div>
@@ -166,15 +179,17 @@ function TimeGrid({ byDay }) {
 
             {/* Grid area */}
             <div style={{ position: 'relative', height: GRID_H }}>
-              {/* Hour grid lines */}
-              {HOURS.map(h => (
-                <div key={h} style={{
+              {/* Period separator lines */}
+              {PERIODS.map(p => (
+                <div key={p.n} style={{
                   position: 'absolute',
-                  top: minToY(h * 60),
+                  top: minToY(toMin(p.start)),
                   left: 0, right: 0, height: 1,
-                  background: h % 2 === 0 ? 'rgba(0,0,0,0.07)' : 'rgba(0,0,0,0.03)',
+                  background: 'rgba(26,86,219,0.12)',
                 }} />
               ))}
+              {/* Lunch break line */}
+              <div style={{ position: 'absolute', top: minToY(12 * 60), left: 0, right: 0, height: 1, background: 'rgba(0,0,0,0.08)', borderTop: '1px dashed rgba(0,0,0,0.1)' }} />
 
               {/* Current-time line (today only) */}
               {isToday && nowY !== null && (
@@ -185,16 +200,17 @@ function TimeGrid({ byDay }) {
 
               {/* Cards */}
               {cards.map(s => {
-                const top    = minToY(toMin(s.time_start))
-                const height = Math.max((toMin(s.time_end) - toMin(s.time_start)) * PX_PER_MIN - 3, 24)
-                const w      = 100 / s.totalLanes
-                const l      = (s.lane / s.totalLanes) * 100
-                const c      = colorOf(s.subject_id)
-                const active = isActive(s)
+                const top      = minToY(toMin(s.time_start))
+                const height   = Math.max((toMin(s.time_end) - toMin(s.time_start)) * PX_PER_MIN - 3, 24)
+                const w        = 100 / s.totalLanes
+                const l        = (s.lane / s.totalLanes) * 100
+                const c        = colorOf(s.subject_id)
+                const active   = isActive(s)
+                const periodN  = getPeriodNum(s.time_start, s.time_end)
                 return (
                   <div
                     key={s.schedule_id}
-                    title={`${s.subject_code} — ${s.subject_name}\n${s.time_start}–${s.time_end}  ${s.grade_level ?? ''} ห้อง ${s.room_number ?? ''}\n${s.teacher_name ?? ''}`}
+                    title={`${periodN ? `คาบ ${periodN}  ` : ''}${s.subject_code} — ${s.subject_name}\n${s.time_start}–${s.time_end}  ${s.grade_level ?? ''} ห้อง ${s.room_number ?? ''}\n${s.teacher_name ?? ''}`}
                     style={{
                       position: 'absolute',
                       top, height,
@@ -209,15 +225,27 @@ function TimeGrid({ byDay }) {
                       cursor: 'default',
                     }}
                   >
+                    {/* Period badge + time */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, marginBottom: 1 }}>
+                      {periodN && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: active ? 'var(--fc-primary)' : c.accent, flexShrink: 0 }}>
+                          คาบ {periodN}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 8, color: 'var(--fc-text-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.time_start}–{s.time_end}
+                      </span>
+                    </div>
+                    {/* Subject code */}
                     <div style={{ fontSize: 10, fontWeight: 700, color: active ? 'var(--fc-primary)' : c.accent, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.subject_code}
                     </div>
-                    {height > 38 && (
+                    {height > 42 && (
                       <div style={{ fontSize: 9, color: 'var(--fc-text-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.35 }}>
                         {s.subject_name}
                       </div>
                     )}
-                    {height > 60 && (s.grade_level || s.room_number) && (
+                    {height > 64 && (s.grade_level || s.room_number) && (
                       <div style={{ fontSize: 9, color: 'var(--fc-text-4)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {[s.grade_level, s.room_number ? `ห้อง ${s.room_number}` : ''].filter(Boolean).join(' ')}
                       </div>
@@ -235,8 +263,9 @@ function TimeGrid({ byDay }) {
 
 // ── Card (mobile list) ────────────────────────────────────────────
 function SubjectCard({ s }) {
-  const active = isActive(s)
-  const c = colorOf(s.subject_id)
+  const active   = isActive(s)
+  const c        = colorOf(s.subject_id)
+  const periodN  = getPeriodNum(s.time_start, s.time_end)
   return (
     <div style={{
       padding: '10px 12px', borderRadius: 10,
@@ -245,9 +274,14 @@ function SubjectCard({ s }) {
       position: 'relative', overflow: 'hidden',
     }}>
       {active && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'var(--fc-primary)' }} />}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-        <span style={{ fontSize: 10, color: 'var(--fc-text-4)', fontWeight: 600 }}>{s.time_start}–{s.time_end}</span>
-        {active && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--fc-primary)', color: '#fff', padding: '1px 6px', borderRadius: 20 }}>กำลังสอน</span>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        {periodN && (
+          <span style={{ fontSize: 11, fontWeight: 700, color: active ? 'var(--fc-primary)' : c.accent }}>
+            คาบ {periodN}
+          </span>
+        )}
+        <span style={{ fontSize: 10, color: 'var(--fc-text-4)' }}>{s.time_start}–{s.time_end}</span>
+        {active && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--fc-primary)', color: '#fff', padding: '1px 6px', borderRadius: 20, marginLeft: 'auto' }}>กำลังสอน</span>}
       </div>
       <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--fc-primary)' : c.accent, marginBottom: 2 }}>{s.subject_code}</div>
       <div style={{ fontSize: 11, color: 'var(--fc-text-2)', lineHeight: 1.45, marginBottom: 3 }}>{s.subject_name}</div>
