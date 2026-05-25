@@ -1,4 +1,9 @@
 import os
+
+# Must be set before any import that pulls in insightface/albumentations
+os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
+os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
+
 import logging
 import threading
 import time
@@ -15,7 +20,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
 logger = logging.getLogger("facecheck")
 
 _MIGRATIONS = [
