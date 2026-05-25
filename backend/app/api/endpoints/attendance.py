@@ -1309,6 +1309,40 @@ def get_today_schedules(
     return results
 
 
+@router.get("/schedules/all")
+def get_all_schedules(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    """ตารางสอนทั้งสัปดาห์ (teacher: เฉพาะวิชาตัวเอง, admin: ทุกวิชา)"""
+    if current_user.role == "teacher":
+        subj_list = (
+            db.query(Subject)
+            .join(TeacherSubject, TeacherSubject.subject_id == Subject.id)
+            .filter(TeacherSubject.teacher_id == current_user.id, Subject.is_archived == False)
+            .all()
+        )
+    else:
+        subj_list = db.query(Subject).filter(Subject.is_archived == False).all()
+
+    results = []
+    for s in subj_list:
+        for sc in s.schedules:
+            results.append({
+                "schedule_id": sc.id,
+                "subject_id":  s.id,
+                "subject_code": s.subject_code,
+                "subject_name": s.subject_name,
+                "teacher_name": s.teacher_name,
+                "day_of_week":  sc.day_of_week,
+                "time_start":   sc.time_start,
+                "time_end":     sc.time_end,
+                "grade_level":  sc.grade_level,
+                "room_number":  sc.room_number,
+            })
+    return results
+
+
 @router.post("/subjects/{subject_id}/qr-session")
 def create_qr_session(
     subject_id: int,

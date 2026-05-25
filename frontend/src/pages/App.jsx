@@ -9,6 +9,7 @@ import Admin from './Admin'
 import Students from './Students'
 import StudentDetail from './StudentDetail'
 import Reports from './Reports'
+import Schedule from './Schedule'
 import QRCheckin from './QRCheckin'
 
 function ProtectedRoute({ children }) {
@@ -32,6 +33,7 @@ function Layout() {
           <Route path="/enroll" element={<ProtectedRoute><Enrollment /></ProtectedRoute>} />
           <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
           <Route path="/students/:studentId" element={<ProtectedRoute><StudentDetail /></ProtectedRoute>} />
+          <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />

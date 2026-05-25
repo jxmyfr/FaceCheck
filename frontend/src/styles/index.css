@@ -408,6 +408,22 @@ input::placeholder, textarea::placeholder { color: var(--fc-text-4); }
 .admin-user-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .admin-user-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* ── Schedule page ── */
+.schedule-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+}
+.schedule-day-view { display: none; }
+
+@media (max-width: 900px) {
+  .schedule-week-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 640px) {
+  .schedule-week-grid { display: none; }
+  .schedule-day-view  { display: block; }
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

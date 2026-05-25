@@ -50,6 +50,14 @@ const IcLogout = () => (
     <line x1="21" y1="12" x2="9" y2="12"/>
   </svg>
 )
+const IcCalendar = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+)
 const IcMenu = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="3" y1="6"  x2="21" y2="6"/>
@@ -266,6 +274,14 @@ const HELP_TEACHER = [
     ],
   },
   {
+    title: 'ตารางสอน',
+    body: [
+      'ดูตารางสอนประจำสัปดาห์ของคุณ แยกตามวัน',
+      'คาบที่กำลังสอนอยู่จะถูก highlight ให้เห็นชัดเจน',
+      'แถบสรุปด้านบนแสดงทุกคาบของวันนี้',
+    ],
+  },
+  {
     title: 'Students — รายชื่อนักเรียน',
     body: [
       'ดูรายชื่อนักเรียนทั้งหมดในระบบ ค้นหาและกรองตามชั้น/ห้อง',
@@ -472,11 +488,12 @@ export default function Sidebar() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   const links = [
-    { to: '/',         label: 'Dashboard',  icon: <IcDashboard /> },
-    { to: '/scan',     label: 'Scanner',    icon: <IcCamera /> },
-    { to: '/students', label: 'Students',   icon: <IcUsers /> },
+    { to: '/',          label: 'Dashboard',  icon: <IcDashboard /> },
+    { to: '/scan',      label: 'Scanner',    icon: <IcCamera /> },
+    { to: '/schedule',  label: 'ตารางสอน',   icon: <IcCalendar /> },
+    { to: '/students',  label: 'Students',   icon: <IcUsers /> },
     ...(user?.role === 'admin' ? [{ to: '/enroll', label: 'Enrollment', icon: <IcClipboard /> }] : []),
-    { to: '/reports',  label: 'Reports',    icon: <IcReport /> },
+    { to: '/reports',   label: 'Reports',    icon: <IcReport /> },
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', icon: <IcSettings /> }] : []),
   ]
 
