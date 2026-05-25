@@ -507,9 +507,13 @@ export default function Scanner() {
   const [autoActive, setAutoActive] = useState(false)
   const [scanning, setScanning]     = useState(false)
   const [cooldown, setCooldown]     = useState(false)
+  const [cooldownSecs, setCooldownSecs] = useState(0)
   const [faceDetected, setFaceDetected] = useState(null) // null=unknown, true=face in frame, false=no face
   const cooldownRef = useRef(false)
   const scanningRef = useRef(false)
+
+  // Camera error state
+  const [camError, setCamError] = useState(null)
 
   // Manual photo state
   const [manualLoading, setManualLoading] = useState(false)
@@ -543,6 +547,13 @@ export default function Scanner() {
   useEffect(() => {
     localStorage.setItem('scanner-mode', mode)
   }, [mode])
+
+  useEffect(() => {
+    if (!cooldown) { setCooldownSecs(0); return }
+    setCooldownSecs(8)
+    const iv = setInterval(() => setCooldownSecs(s => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(iv)
+  }, [cooldown])
 
   // ── Poll roster every 5s ──────────────────────────────────────────
   useEffect(() => {
@@ -1267,8 +1278,21 @@ export default function Scanner() {
               videoConstraints={{ facingMode: scanFacingMode, width: 640, height: 480 }}
               mirrored={scanMirrored}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              onUserMedia={() => setCamReady(true)}
+              onUserMedia={() => { setCamReady(true); setCamError(null) }}
+              onUserMediaError={() => setCamError('ไม่สามารถเข้าถึงกล้องได้ — กรุณาอนุญาตการเข้าถึงกล้องในเบราว์เซอร์')}
             />
+
+            {/* Camera error banner */}
+            {camError && (
+              <div style={{
+                position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 12, padding: 24, textAlign: 'center',
+              }}>
+                <span style={{ fontSize: 32 }}>📷</span>
+                <span style={{ color: '#F87171', fontWeight: 600, fontSize: 14 }}>{camError}</span>
+              </div>
+            )}
 
             {/* Camera controls overlay */}
             <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
@@ -1329,7 +1353,7 @@ export default function Scanner() {
               let dot, label
               if (cooldown) {
                 dot = { background: '#60A5FA' }
-                label = 'เช็คชื่อสำเร็จ — รอสักครู่'
+                label = `เช็คชื่อสำเร็จ — รอ ${cooldownSecs} วินาที`
               } else if (faceDetected === true) {
                 dot = { background: '#4ADE80', animation: 'pulse 1.2s ease-in-out infinite' }
                 label = 'พบใบหน้า — กำลังระบุตัวตน...'

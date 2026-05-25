@@ -130,8 +130,10 @@ export default function Students() {
       const ids = [...selected]
       await axios.post(`${API}/students/bulk-delete`, { student_ids: ids })
       setStudents(prev => prev.filter(s => !selected.has(s.student_id)))
+      const count = ids.length
       setSelected(new Set())
       setBulkConfirm(false)
+      await alert(`ลบนักเรียน ${count} คนเรียบร้อยแล้ว`)
     } catch {
       await alert('ลบไม่สำเร็จ กรุณาลองใหม่')
     } finally {

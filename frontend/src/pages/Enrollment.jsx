@@ -106,7 +106,12 @@ function SingleTab() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const switchFaceTab = (t) => { setFaceTab(t); setShots([]); setStep(0); setPhotoItems([]); setState('idle'); setMessage(''); setAngleMsg({ text: '', ok: false }) }
+  const switchFaceTab = (t) => {
+    if (faceTab === t) return
+    const hasProgress = shots.some(Boolean) || photoItems.length > 0
+    if (hasProgress && !window.confirm('เปลี่ยน tab จะล้างรูปที่ถ่ายไปแล้วทั้งหมด ยืนยันหรือไม่?')) return
+    setFaceTab(t); setShots([]); setStep(0); setPhotoItems([]); setState('idle'); setMessage(''); setAngleMsg({ text: '', ok: false })
+  }
 
   const EXPECTED = ['front', 'right', 'left']  // mirrored screenshot flips yaw sign
 
@@ -222,11 +227,11 @@ function SingleTab() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div className="form-group">
             <label htmlFor="enroll-first-name" className="form-label">ชื่อ *</label>
-            <input id="enroll-first-name" placeholder="สมชาย" value={form.first_name} onChange={e => set('first_name', e.target.value.replace(/[0-9]/g, ''))} />
+            <input id="enroll-first-name" placeholder="สมชาย" value={form.first_name} onChange={e => set('first_name', e.target.value)} />
           </div>
           <div className="form-group">
             <label htmlFor="enroll-last-name" className="form-label">นามสกุล *</label>
-            <input id="enroll-last-name" placeholder="ใจดี" value={form.last_name} onChange={e => set('last_name', e.target.value.replace(/[0-9]/g, ''))} />
+            <input id="enroll-last-name" placeholder="ใจดี" value={form.last_name} onChange={e => set('last_name', e.target.value)} />
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
