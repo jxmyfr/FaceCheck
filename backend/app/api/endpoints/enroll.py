@@ -8,7 +8,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, status, Body
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.database import get_db, Student, StudentFaceEmbedding, SubjectSchedule
 from app.models.user import User, TeacherSubject
@@ -60,7 +60,6 @@ async def register_student(
         last_name=last_name,
         grade_level=grade_level or None,
         room_number=room_number or None,
-        face_embedding=embedding.tobytes(),
         face_image=img_bytes,
     )
     db.add(new_student)
@@ -103,7 +102,6 @@ async def update_face(
         raise HTTPException(status_code=400, detail="ไม่พบใบหน้าในภาพ — กรุณาให้ใบหน้าอยู่กลางภาพและมองตรงเข้าหากล้อง")
 
     _, jpeg_buf = cv2.imencode('.jpg', frame)
-    student.face_embedding = embedding.tobytes()
     student.face_image = jpeg_buf.tobytes()
     db.commit()
     cv2.imwrite(str(FACES_DIR / f"{student_id}.jpg"), frame)
@@ -137,7 +135,7 @@ def list_students(
             # ครูยังไม่มีตารางสอน → ไม่แสดงนักเรียนเลย
             return []
 
-    students = q.order_by(Student.student_id).all()
+    students = q.options(selectinload(Student.face_embeddings)).order_by(Student.student_id).all()
     return [
         {
             "id": s.id,
@@ -147,7 +145,7 @@ def list_students(
             "last_name": s.last_name,
             "grade_level": s.grade_level,
             "room_number": s.room_number,
-            "has_face": len(s.face_embedding) > 0,
+            "has_face": len(s.face_embeddings) > 0,
         }
         for s in students
     ]

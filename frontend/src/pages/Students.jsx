@@ -25,7 +25,9 @@ export default function Students() {
   const [selected, setSelected]     = useState(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [page, setPage] = useState(1)
   const selectAllRef = useRef(null)
+  const PAGE_SIZE = 50
 
   const load = useCallback(async () => {
     try {
@@ -42,8 +44,8 @@ export default function Students() {
 
   useEffect(() => { load() }, [load])
 
-  // Clear selection when filters change
-  useEffect(() => { setSelected(new Set()) }, [filterGrade, filterRoom, filterFace, search])
+  // Clear selection + reset page when filters change
+  useEffect(() => { setSelected(new Set()); setPage(1) }, [filterGrade, filterRoom, filterFace, search])
 
   const grades = [...new Set(students.map(s => s.grade_level).filter(Boolean))].sort()
   const rooms  = [...new Set(
@@ -68,7 +70,10 @@ export default function Students() {
     return matchSearch && matchGrade && matchRoom && matchFace
   })
 
-  // Selection helpers
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  // Selection helpers — span ALL filtered rows across pages
   const allFilteredSelected = filtered.length > 0 && filtered.every(s => selected.has(s.student_id))
   const someFilteredSelected = filtered.some(s => selected.has(s.student_id))
 
@@ -350,7 +355,7 @@ export default function Students() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(s => (
+                {paginated.map(s => (
                   <tr
                     key={s.student_id}
                     style={{
@@ -412,7 +417,7 @@ export default function Students() {
 
           {/* Mobile cards */}
           <div className="students-cards-wrap">
-            {filtered.map(s => (
+            {paginated.map(s => (
               <div
                 key={s.student_id}
                 className="student-card-row"
@@ -465,6 +470,29 @@ export default function Students() {
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 16px', borderTop: '1px solid var(--fc-border)' }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+              >
+                ← ก่อนหน้า
+              </button>
+              <span style={{ fontSize: 13, color: 'var(--fc-text-2)', minWidth: 90, textAlign: 'center' }}>
+                หน้า {page} / {totalPages}
+              </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={page === totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >
+                ถัดไป →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

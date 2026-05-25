@@ -22,6 +22,7 @@ _MIGRATIONS = [
     "ALTER TABLE semester_settings ADD COLUMN min_face_ratio REAL DEFAULT 0.08",
     "ALTER TABLE semester_settings ADD COLUMN min_blur_score REAL DEFAULT 40.0",
     "ALTER TABLE attendance_logs ADD COLUMN reason VARCHAR(200)",
+    "ALTER TABLE students DROP COLUMN face_embedding",
 ]
 
 def _is_expected_migration_error(msg: str) -> bool:

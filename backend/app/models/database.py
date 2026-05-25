@@ -23,8 +23,6 @@ class Student(Base):
     grade_level: Mapped[Optional[str]] = mapped_column(String(10)) 
     room_number: Mapped[Optional[str]] = mapped_column(String(10))
     
-    # เก็บ Face Embedding เป็นเวกเตอร์ตัวเลข (Binary) เพื่อความไวสูงสุด
-    face_embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, default=b"")
     # เก็บรูปใบหน้า JPEG สำหรับแสดงผล
     face_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     

@@ -2,7 +2,7 @@ import cv2
 import time
 import threading
 import numpy as np
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -22,6 +22,26 @@ face_processor = FaceProcessor()
 # ── In-memory embedding cache ─────────────────────────────────────
 _EMB_CACHE: dict | None = None  # {'matrix': np.ndarray, 'students': list[_CachedStudent]}
 _EMB_CACHE_LOCK = threading.Lock()
+
+# ── Simple fixed-window rate limiter for /scan endpoints ──────────
+# 60 requests per 60-second window per IP
+_RATE_WINDOW = 60       # seconds
+_RATE_LIMIT  = 60       # max requests per window
+_RATE_STORE: dict[str, tuple[int, float]] = {}  # ip → (count, window_start)
+_RATE_LOCK = threading.Lock()
+
+def _check_rate_limit(ip: str) -> bool:
+    """Return True if request allowed, False if over limit."""
+    now = time.monotonic()
+    with _RATE_LOCK:
+        count, window_start = _RATE_STORE.get(ip, (0, now))
+        if now - window_start >= _RATE_WINDOW:
+            _RATE_STORE[ip] = (1, now)
+            return True
+        if count >= _RATE_LIMIT:
+            return False
+        _RATE_STORE[ip] = (count + 1, window_start)
+        return True
 
 class _CachedStudent:
     """Plain-Python snapshot of Student columns — session-independent."""
@@ -66,6 +86,7 @@ def _ensure_emb_cache(db: Session):
 
 @router.post("/scan")
 async def scan_attendance(
+    request:     Request,
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
     dev_mode:    bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
@@ -74,6 +95,10 @@ async def scan_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="คำขอมากเกินไป — กรุณารอสักครู่แล้วลองใหม่")
+
     if dev_mode and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="dev_mode ใช้ได้เฉพาะ admin")
 
@@ -323,6 +348,7 @@ async def scan_attendance(
 
 @router.post("/scan/multi")
 async def scan_multi(
+    request:     Request,
     subject_id:  int           = Query(...,        description="ID ของรายวิชา"),
     schedule_id: Optional[int] = Query(default=None, description="ID ของ schedule สำหรับล็อคห้อง"),
     dev_mode:        bool          = Query(default=False, description="Developer test mode (admin only) — ไม่บันทึก log"),
@@ -333,6 +359,10 @@ async def scan_multi(
     current_user: User = Depends(require_teacher_or_admin),
 ):
     """สแกนใบหน้าหลายคนในภาพเดียว — คืน list ผลลัพธ์ทุกใบหน้าที่ระบุตัวตนได้"""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="คำขอมากเกินไป — กรุณารอสักครู่แล้วลองใหม่")
+
     if dev_mode and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="dev_mode ใช้ได้เฉพาะ admin")
 

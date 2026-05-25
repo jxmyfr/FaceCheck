@@ -53,7 +53,7 @@ def export_attendance(
     ws.title = "รายงานการเช็คชื่อ"
 
     headers = ["รหัสนักเรียน", "ชื่อ-นามสกุล", "ชั้น", "ห้อง",
-               "รหัสวิชา", "ชื่อวิชา", "วันที่", "เวลา", "สถานะ"]
+               "รหัสวิชา", "ชื่อวิชา", "วันที่", "เวลา", "สถานะ", "วิธีเช็คชื่อ", "เหตุผล"]
     header_fill = PatternFill("solid", fgColor="1D4ED8")
     header_font = Font(color="FFFFFF", bold=True, size=11)
 
@@ -63,7 +63,8 @@ def export_attendance(
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    STATUS_LABEL = {"present": "มาเรียน", "late": "มาสาย", "absent": "ขาดเรียน"}
+    STATUS_LABEL = {"present": "มาเรียน", "late": "มาสาย", "absent": "ขาดเรียน", "excused": "ลา", "already_checked": "เช็คแล้ว"}
+    METHOD_LABEL = {"face": "สแกนใบหน้า", "qr": "QR Code", "manual": "บันทึกมือ"}
 
     for log, student, subject in rows:
         name = " ".join(filter(None, [student.title, student.first_name, student.last_name]))
@@ -77,9 +78,11 @@ def export_attendance(
             log.timestamp.strftime("%Y-%m-%d"),
             log.timestamp.strftime("%H:%M"),
             STATUS_LABEL.get(log.status, log.status),
+            METHOD_LABEL.get(log.check_method or "", log.check_method or ""),
+            log.reason or "",
         ])
 
-    col_widths = [14, 24, 8, 8, 14, 28, 12, 8, 10]
+    col_widths = [14, 24, 8, 8, 14, 28, 12, 8, 10, 14, 24]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
