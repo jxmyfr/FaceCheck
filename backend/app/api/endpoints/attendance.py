@@ -810,6 +810,10 @@ def add_schedule(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
+    if not grade_level or not grade_level.strip():
+        raise HTTPException(status_code=422, detail="กรุณาเลือกชั้น")
+    if not room_number or not room_number.strip():
+        raise HTTPException(status_code=422, detail="กรุณาเลือกห้อง")
     s = db.query(Subject).filter(Subject.id == subject_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")

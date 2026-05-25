@@ -493,6 +493,8 @@ export default function Admin() {
   }
 
   const addSchedule = async () => {
+    if (!newSched.grade_level) { flash('กรุณาเลือกชั้น', 'error'); return }
+    if (!newSched.room_number) { flash('กรุณาเลือกห้อง', 'error'); return }
     const period = PERIODS[Number(newSched.period)]
     if (subDetail.teacher_name) {
       const conflict = subjects.find(s =>
@@ -1764,6 +1766,8 @@ export default function Admin() {
             <SchedForm
               sched={newSched} setSched={setNewSched}
               onAdd={() => {
+                if (!newSched.grade_level) { flash('กรุณาเลือกชั้น', 'error'); return }
+                if (!newSched.room_number) { flash('กรุณาเลือกห้อง', 'error'); return }
                 const period = PERIODS[Number(newSched.period)]
                 if (newSub.teacher_name) {
                   const conflict = subjects.find(s =>
