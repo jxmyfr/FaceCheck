@@ -224,7 +224,7 @@ export default function Admin() {
 
   // Attendance log state
   const [logs, setLogs]             = useState([])
-  const [logDate, setLogDate]       = useState(() => new Date().toISOString().slice(0, 10))
+  const [logDate, setLogDate]       = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })
   const [logSubject, setLogSubject] = useState('')
   const [logLoading, setLogLoading] = useState(false)
   const [logDetail, setLogDetail]   = useState(null)   // selected log for detail modal

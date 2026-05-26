@@ -24,7 +24,7 @@ export default function Reports() {
   const { dialog, alert } = useDialog()
   const { user } = useAuth()
   const isTeacher = user?.role === 'teacher'
-  const today = new Date().toISOString().slice(0, 10)
+  const today = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })()
   const [filters, setFilters] = useState({
     date_from: today,
     date_to:   today,

@@ -1545,8 +1545,8 @@ export default function Scanner() {
               </div>
               <div style={{ maxHeight: 420, overflowY: 'auto' }}>
                 {(() => {
-                  const todayStr = new Date().toISOString().slice(0, 10)
-                  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+                  const todayStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })()
+                  const yesterdayStr = (() => { const n = new Date(Date.now() - 86400000); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })()
                   const fmtDate = (d) => {
                     if (!d) return null
                     if (d === todayStr) return 'วันนี้'
