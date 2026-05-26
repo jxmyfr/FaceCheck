@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useDialog } from '../hooks/useDialog'
+import { usePrivacy, censorLastName } from '../contexts/PrivacyContext'
 
 const API = `${import.meta.env.VITE_API_URL}/enroll`
 
 export default function Students() {
   const { user } = useAuth()
+  const { privacyMode } = usePrivacy()
   const navigate = useNavigate()
   const { dialog, alert } = useDialog()
   const [students, setStudents] = useState([])
@@ -381,7 +383,7 @@ export default function Students() {
                     </td>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--fc-text)', lineHeight: 1.3 }}>
-                        {[s.title, s.first_name, s.last_name].filter(Boolean).join(' ') || '—'}
+                        {[s.title, s.first_name, privacyMode ? censorLastName(s.last_name) : s.last_name].filter(Boolean).join(' ') || '—'}
                       </div>
                     </td>
                     <td style={{ color: 'var(--fc-text-3)', fontSize: 13 }}>
@@ -439,7 +441,7 @@ export default function Students() {
                 />
                 <div className="student-card-main">
                   <div className="student-card-name">
-                    {[s.title, s.first_name, s.last_name].filter(Boolean).join(' ') || '(ไม่มีชื่อ)'}
+                    {[s.title, s.first_name, privacyMode ? censorLastName(s.last_name) : s.last_name].filter(Boolean).join(' ') || '(ไม่มีชื่อ)'}
                   </div>
                   <div className="student-card-id">{s.student_id}</div>
                   <div className="student-card-meta">

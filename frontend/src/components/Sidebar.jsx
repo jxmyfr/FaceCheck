@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { usePrivacy } from '../contexts/PrivacyContext'
 
 // ── Icons ────────────────────────────────────────────────────────
 const IcDashboard = () => (
@@ -457,11 +458,58 @@ function HelpButton({ collapsed, onClick }) {
   )
 }
 
+// ── PrivacyButton ────────────────────────────────────────────────
+function PrivacyButton({ collapsed, privacyMode, onToggle }) {
+  const [hov, setHov] = useState(false)
+  const ref = useRef(null)
+  const label = privacyMode ? 'Privacy ON' : 'Privacy Mode'
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div
+        role="button" tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onToggle() }}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+        aria-label={label}
+        aria-pressed={privacyMode}
+        aria-describedby={collapsed && hov ? 'sidebar-tip-privacy' : undefined}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 11,
+          padding: '9px 12px', justifyContent: 'flex-start',
+          borderRadius: 8, cursor: 'pointer',
+          fontSize: 13, fontWeight: privacyMode ? 600 : 400,
+          color: privacyMode ? '#FCD34D' : hov ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.4)',
+          background: privacyMode
+            ? 'rgba(251,191,36,0.12)'
+            : hov ? 'rgba(255,255,255,0.05)' : 'transparent',
+          transition: 'color 0.12s, background 0.12s',
+          border: 'none',
+        }}
+      >
+        <span style={{ flexShrink: 0, display: 'flex', fontSize: 15 }}>
+          {privacyMode ? '🔒' : '👁'}
+        </span>
+        <span style={{
+          ...lbl(collapsed),
+          flex: collapsed ? '0 0 0px' : 1,
+          maxWidth: collapsed ? 0 : 'none',
+          letterSpacing: '0.01em',
+        }}>
+          {privacyMode ? 'Privacy ON' : 'Privacy Mode'}
+        </span>
+      </div>
+      <SideTooltip anchorRef={ref} label={label} visible={collapsed && hov} tooltipId="sidebar-tip-privacy" />
+    </div>
+  )
+}
+
 // ── Sidebar ──────────────────────────────────────────────────────
 export default function Sidebar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { privacyMode, togglePrivacy } = usePrivacy()
   const [collapsed, setCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -631,6 +679,7 @@ export default function Sidebar() {
               onClose={isMobile ? () => setMobileOpen(false) : undefined}
             />
           ))}
+          <PrivacyButton collapsed={isCollapsed} privacyMode={privacyMode} onToggle={togglePrivacy} />
           <HelpButton collapsed={isCollapsed} onClick={() => setHelpOpen(true)} />
         </nav>
 

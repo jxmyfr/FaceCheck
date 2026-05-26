@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../hooks/useAuth'
+import { PrivacyProvider } from '../contexts/PrivacyContext'
 import Sidebar from '../components/Sidebar'
 import Dashboard from './Dashboard'
 import Scanner from './Scanner'
@@ -46,11 +47,13 @@ function Layout() {
 export default function App() {
   return (
     <AuthProvider>
+      <PrivacyProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/checkin" element={<QRCheckin />} />
         <Route path="/*" element={<Layout />} />
       </Routes>
+      </PrivacyProvider>
     </AuthProvider>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { usePrivacy, censorLastName, censorFullName } from '../contexts/PrivacyContext'
 
 const API = `${import.meta.env.VITE_API_URL}/stats`
 const API_ATTEND = `${import.meta.env.VITE_API_URL}/attendance`
@@ -614,7 +615,7 @@ function TeacherDashboard() {
                     <tr key={s.student_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/students/${encodeURIComponent(s.student_id)}`)}>
                       <td>
-                        <div style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{s.full_name}</div>
+                        <div style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{privacyMode ? censorFullName(s.full_name) : s.full_name}</div>
                         <div style={{ fontSize: 11, color: 'var(--fc-text-4)', fontFamily: 'var(--fc-font-mono)' }}>{s.student_id}</div>
                       </td>
                       <td style={{ textAlign: 'center', color: 'var(--fc-success-dark)', fontWeight: 600 }}>{s.present}</td>
@@ -641,6 +642,7 @@ function TeacherDashboard() {
 // ── Main Component ─────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth()
+  const { privacyMode } = usePrivacy()
   if (user?.role === 'teacher') return <TeacherDashboard />
   const [ov, setOv]         = useState(null)
   const [dl, setDl]         = useState([])
@@ -1040,10 +1042,10 @@ export default function Dashboard() {
             : lg.slice(0, 5).map((r, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--fc-primary-light)', color: 'var(--fc-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                  {r.full_name?.[0]}
+                  {privacyMode ? '?' : r.full_name?.[0]}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.full_name}</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{privacyMode ? censorFullName(r.full_name) : r.full_name}</div>
                   <div style={{ fontSize: 10, color: 'var(--fc-text-4)' }}>{r.subject_code} · {new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
               </div>
@@ -1224,7 +1226,7 @@ export default function Dashboard() {
                         }}
                       >
                         <td style={{ fontFamily: 'var(--fc-font-mono)', fontWeight: 600, color: 'var(--fc-text-2)' }}>{s.student_id}</td>
-                        <td style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{s.full_name}</td>
+                        <td style={{ fontWeight: 500, color: 'var(--fc-text)' }}>{privacyMode ? censorFullName(s.full_name) : s.full_name}</td>
                         <td style={{ color: 'var(--fc-text-3)' }}>{s.grade_level ?? '—'}</td>
                         <td style={{ color: 'var(--fc-text-3)' }}>{s.room_number ?? '—'}</td>
                         <td style={{ textAlign: 'right' }}>
@@ -1253,10 +1255,10 @@ export default function Dashboard() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 20, fontWeight: 700, flexShrink: 0,
                   }}>
-                    {studentDetail.student.full_name[0]}
+                    {privacyMode ? '?' : studentDetail.student.full_name[0]}
                   </div>
                   <div>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--fc-text)' }}>{studentDetail.student.full_name}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--fc-text)' }}>{privacyMode ? censorFullName(studentDetail.student.full_name) : studentDetail.student.full_name}</div>
                     <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 3, display: 'flex', gap: 8 }}>
                       <span>รหัส {studentDetail.student.student_id}</span>
                       {studentDetail.student.grade_level && <span>· ม.{gradeNum(studentDetail.student.grade_level)}</span>}

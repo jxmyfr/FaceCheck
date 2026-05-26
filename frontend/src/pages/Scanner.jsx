@@ -4,6 +4,7 @@ import axios from 'axios'
 import { QRCodeCanvas } from 'qrcode.react'
 import { useDialog } from '../hooks/useDialog'
 import { useAuth } from '../hooks/useAuth'
+import { usePrivacy, censorFullName } from '../contexts/PrivacyContext'
 
 const API = import.meta.env.VITE_API_URL
 
@@ -114,7 +115,7 @@ function ResultCard({ result, onDismiss, onCancel }) {
               flexShrink: 0, background: 'var(--fc-muted)',
             }}>
               <img src={result.photo} alt="scanned"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: privacyMode ? 'blur(10px)' : 'none' }} />
             </div>
           )}
 
@@ -129,7 +130,7 @@ function ResultCard({ result, onDismiss, onCancel }) {
             {result.name ? (
               <>
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--fc-text)', lineHeight: 1.3 }}>
-                  {result.name}
+                  {privacyMode ? censorFullName(result.name) : result.name}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--fc-text-4)', fontFamily: 'var(--fc-font-mono)', marginTop: 2 }}>
                   {result.student_id}
@@ -279,7 +280,7 @@ function BatchResultCard({ result, onDismiss }) {
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.accent, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.name}
+                    {privacyMode ? censorFullName(r.name) : r.name}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>
                     {r.student_id}
@@ -310,7 +311,7 @@ function BatchResultCard({ result, onDismiss }) {
 }
 
 // ── Log thumbnail (fetches from backend if no in-memory photo) ───
-function LogThumb({ photo, logId, status, studentId }) {
+function LogThumb({ photo, logId, status, studentId, blur }) {
   const [src, setSrc] = useState(photo || null)
   useEffect(() => {
     if (src) return
@@ -330,7 +331,7 @@ function LogThumb({ photo, logId, status, studentId }) {
   if (!src) return null
   return (
     <div style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', flexShrink: 0, background: 'var(--fc-muted)' }}>
-      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: blur ? 'blur(10px)' : 'none' }} />
     </div>
   )
 }
@@ -490,6 +491,7 @@ function CameraSettings() {
 export default function Scanner() {
   const { dialog, alert, confirm, prompt } = useDialog()
   const { user } = useAuth()
+  const { privacyMode } = usePrivacy()
   const cam = useRef(null)
   const [subjects, setSubjects]   = useState([])
   const [subjectId, setSubjectId] = useState(() => localStorage.getItem('scanner-subject-id') || '')
@@ -1586,10 +1588,10 @@ export default function Scanner() {
                         animation: i === 0 ? 'slideIn 0.2s ease-out' : 'none',
                         cursor: 'pointer',
                       }} onClick={() => setLogDetail(log)}>
-                        <LogThumb photo={log.photo} logId={log.log_id} status={log.status} studentId={log.student_id} />
+                        <LogThumb photo={log.photo} logId={log.log_id} status={log.status} studentId={log.student_id} blur={privacyMode} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {log.name ?? '—'}
+                            {log.name ? (privacyMode ? censorFullName(log.name) : log.name) : '—'}
                           </div>
                           <div style={{ fontSize: 13, color: 'var(--fc-text-4)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
                             {log.student_id}
@@ -1840,7 +1842,7 @@ function LogDetailModal({ log, cfg, onClose, onCancel }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, color: 'var(--fc-text-4)' }}>ชื่อ-นามสกุล</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)' }}>{log.name}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)' }}>{privacyMode ? censorFullName(log.name) : log.name}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, color: 'var(--fc-text-4)' }}>รหัสนักเรียน</span>
