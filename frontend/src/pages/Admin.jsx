@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { useDialog } from '../hooks/useDialog'
+import { usePrivacy, censorFullName } from '../contexts/PrivacyContext'
 
 const API = import.meta.env.VITE_API_URL
 
@@ -177,6 +178,7 @@ export default function Admin() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { dialog, confirm, alert } = useDialog()
+  const { privacyMode } = usePrivacy()
   const [users, setUsers]         = useState([])
   const [subjects, setSubjects]   = useState([])
   const [gradeRooms, setGradeRooms] = useState({}) // { 'ม.5': ['1','2','3'], ... }
@@ -1068,7 +1070,7 @@ export default function Admin() {
                             {log.timestamp}
                           </td>
                           <td style={{fontFamily:'var(--fc-font-mono)',fontSize:12}}>{log.student_id}</td>
-                          <td style={{fontWeight:500,color:'var(--fc-text)'}}>{log.name}</td>
+                          <td style={{fontWeight:500,color:'var(--fc-text)'}}>{privacyMode ? censorFullName(log.name) : log.name}</td>
                           <td style={{fontSize:12,color:'var(--fc-text-3)'}}>
                             {log.grade_level ? `ชั้น ${log.grade_level}` : '—'}
                             {log.room_number ? ` ห้อง ${log.room_number}` : ''}
@@ -1813,13 +1815,13 @@ export default function Admin() {
             {/* Scan photo */}
             {logPhoto && (
               <div style={{ borderRadius: 12, overflow: 'hidden', aspectRatio: '4/3', background: 'var(--fc-muted)' }}>
-                <img src={logPhoto} alt="scan" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                <img src={logPhoto} alt="scan" style={{width:'100%',height:'100%',objectFit:'cover',display:'block',filter:privacyMode?'blur(12px)':'none'}}/>
               </div>
             )}
             {/* Info */}
             <div>
               <div style={{fontSize:18,fontWeight:700,color:'var(--fc-text)',marginBottom:4}}>
-                {logDetail.name}
+                {privacyMode ? censorFullName(logDetail.name) : logDetail.name}
               </div>
               <div style={{fontSize:13,color:'var(--fc-text-4)',fontFamily:'var(--fc-font-mono)',marginBottom:16}}>
                 {logDetail.student_id}
