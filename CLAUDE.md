@@ -29,6 +29,7 @@ frontend/
 
 ## Conventions
 
+- **ห้ามใช้ emoji ในโปรเจคนี้เด็ดขาด** — ทั้ง UI, code comments, และ output ต่างๆ ใช้ SVG icon หรือ text แทนทั้งหมด
 - CSS ใช้ CSS variables ทั้งหมด (`--fc-primary`, `--fc-surface` ฯลฯ) — ห้าม hardcode สี
 - Responsive: CSS classes ใน `index.css` (`scanner-grid`, `stats-4col`, `enroll-single-grid` ฯลฯ)
 - Mobile ≤640px: table → card layout pattern (ดู Students.jsx, Admin.jsx)
