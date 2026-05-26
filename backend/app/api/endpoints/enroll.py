@@ -752,9 +752,10 @@ async def import_excel(
         if all(v is None or str(v).strip() == "" for v in row):
             continue  # skip blank rows
 
-        sid  = cell(row, "student_id")
-        fn   = cell(row, "first_name")
-        ln   = cell(row, "last_name")
+        sid   = cell(row, "student_id")
+        fn    = cell(row, "first_name")
+        ln    = cell(row, "last_name")
+        title = cell(row, "title")
         grade = cell(row, "grade_level")
         room  = cell(row, "room_number")
 
@@ -768,6 +769,7 @@ async def import_excel(
 
         db.add(Student(
             student_id=sid,
+            title=title or None,
             first_name=fn,
             last_name=ln,
             grade_level=grade or None,
@@ -815,6 +817,7 @@ def _import_students_from_ws(ws, db):
         sid   = cell(row, "student_id")
         fn    = cell(row, "first_name")
         ln    = cell(row, "last_name")
+        title = cell(row, "title")
         grade = cell(row, "grade_level")
         room  = cell(row, "room_number")
 
@@ -828,6 +831,7 @@ def _import_students_from_ws(ws, db):
 
         db.add(Student(
             student_id=sid,
+            title=title or None,
             first_name=fn,
             last_name=ln,
             grade_level=grade or None,
