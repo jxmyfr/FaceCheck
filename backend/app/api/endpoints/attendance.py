@@ -976,35 +976,6 @@ def update_log_status(
     return {"log_id": log_id, "status": status, "reason": log.reason}
 
 
-@router.delete("/logs/{log_id}", status_code=204)
-def delete_log(
-    log_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher_or_admin),
-):
-    log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
-    if not log:
-        raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
-    if current_user.role == "teacher":
-        ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
-        if log.subject_id not in ts:
-            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ลบบันทึกนี้")
-    db.add(AttendanceAuditLog(
-        log_id=log.id,
-        action="delete",
-        changed_by_id=current_user.id,
-        changed_by_name=current_user.full_name,
-        old_status=log.status,
-        student_id_str=log.student.student_id,
-        student_name=f"{log.student.first_name} {log.student.last_name}",
-        subject_code=log.subject.subject_code,
-        subject_name=log.subject.subject_name,
-        log_date=log.timestamp.date(),
-    ))
-    db.delete(log)
-    db.commit()
-
-
 @router.delete("/logs/bulk", status_code=200)
 def bulk_delete_logs(
     ids: str = Query(..., description="comma-separated log IDs"),
@@ -1047,6 +1018,35 @@ def bulk_delete_logs(
 
     db.commit()
     return {"deleted": deleted}
+
+
+@router.delete("/logs/{log_id}", status_code=204)
+def delete_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher_or_admin),
+):
+    log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+    if current_user.role == "teacher":
+        ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
+        if log.subject_id not in ts:
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์ลบบันทึกนี้")
+    db.add(AttendanceAuditLog(
+        log_id=log.id,
+        action="delete",
+        changed_by_id=current_user.id,
+        changed_by_name=current_user.full_name,
+        old_status=log.status,
+        student_id_str=log.student.student_id,
+        student_name=f"{log.student.first_name} {log.student.last_name}",
+        subject_code=log.subject.subject_code,
+        subject_name=log.subject.subject_name,
+        log_date=log.timestamp.date(),
+    ))
+    db.delete(log)
+    db.commit()
 
 
 @router.post("/manual", status_code=201)

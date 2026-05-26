@@ -521,7 +521,10 @@ export default function Admin() {
       setLogs(prev => prev.filter(l => !selectedLogs.has(l.log_id)))
       setSelectedLogs(new Set())
       flash(`ยกเลิกสำเร็จ ${res.data.deleted} รายการ`)
-    } catch (e) { flash(e.response?.data?.detail || 'เกิดข้อผิดพลาด', 'error') }
+    } catch (e) {
+      const d = e.response?.data?.detail
+      flash(typeof d === 'string' ? d : 'เกิดข้อผิดพลาด', 'error')
+    }
     finally { setBulkDeleting(false) }
   }
 
