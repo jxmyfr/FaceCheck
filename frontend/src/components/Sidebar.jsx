@@ -487,8 +487,11 @@ function PrivacyButton({ collapsed, privacyMode, onToggle }) {
           border: 'none',
         }}
       >
-        <span style={{ flexShrink: 0, display: 'flex', fontSize: 15 }}>
-          {privacyMode ? '🔒' : '👁'}
+        <span style={{ flexShrink: 0, display: 'flex', color: privacyMode ? '#FCD34D' : hov ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.32)', transition: 'color 0.12s' }}>
+          {privacyMode
+            ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          }
         </span>
         <span style={{
           ...lbl(collapsed),
