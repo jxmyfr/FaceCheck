@@ -311,6 +311,7 @@ async def scan_attendance(
         dup_log = AttendanceLog(
             student_id=best_match.id, subject_id=subject_id, status="already_checked",
             scan_image_path=img_path, timestamp=now, check_method="face",
+            face_distance=round(best_dist, 6),
         )
         db.add(dup_log)
         db.commit()
@@ -327,6 +328,7 @@ async def scan_attendance(
     new_log = AttendanceLog(
         student_id=best_match.id, subject_id=subject_id, status=scan_status,
         scan_image_path=img_path, timestamp=now, check_method="face",
+        face_distance=round(best_dist, 6),
     )
     db.add(new_log)
 
@@ -599,6 +601,7 @@ async def scan_multi(
                 student_id=student_id_pk, subject_id=subject_id,
                 status="already_checked", scan_image_path=_save_scan_image(jpeg_scan_bytes),
                 timestamp=now, check_method="face",
+                face_distance=round(best_dist, 6),
             )
             db.add(dup_log)
             results.append({
@@ -616,6 +619,7 @@ async def scan_multi(
             status=scan_status_base, scan_image_path=_save_scan_image(jpeg_scan_bytes),
             timestamp=now, check_method="face",
             reason=override_reason or None,
+            face_distance=round(best_dist, 6),
         )
         db.add(new_log)
         db.flush()

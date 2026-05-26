@@ -39,6 +39,7 @@ _MIGRATIONS = [
     "ALTER TABLE students DROP COLUMN face_embedding",
     "ALTER TABLE subjects ADD COLUMN is_archived BOOLEAN DEFAULT FALSE",
     "ALTER TABLE attendance_logs ADD COLUMN scan_image_path VARCHAR(255)",
+    "ALTER TABLE attendance_logs ADD COLUMN face_distance REAL",
 ]
 
 def _is_expected_migration_error(msg: str) -> bool:

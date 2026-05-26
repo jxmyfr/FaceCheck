@@ -700,3 +700,56 @@ def get_subject_attendance(
         "session_dates": session_dates,
         "students":      result,
     }
+
+
+@router.get("/face-accuracy")
+def get_face_accuracy(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """สถิติความแม่นยำของการสแกนใบหน้า — เฉพาะ log ที่มี face_distance"""
+    from app.models.database import SemesterSetting
+    from sqlalchemy import case
+
+    threshold_row = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
+    threshold = threshold_row.face_threshold if threshold_row and threshold_row.face_threshold else 1.0
+
+    rows = (
+        db.query(AttendanceLog.face_distance, AttendanceLog.status)
+        .filter(
+            AttendanceLog.check_method == "face",
+            AttendanceLog.face_distance.isnot(None),
+        )
+        .all()
+    )
+
+    if not rows:
+        return {
+            "total_face_scans": 0,
+            "avg_confidence_pct": None,
+            "threshold": threshold,
+            "distribution": [],
+        }
+
+    distances = [r.face_distance for r in rows]
+    # confidence: cosine similarity approx from L2 on unit-norm vectors
+    confidences = [max(0.0, round(1 - (d ** 2) / 2, 4)) for d in distances]
+    avg_conf = round(sum(confidences) / len(confidences) * 100, 1)
+
+    # Distribution in buckets of 10%
+    buckets = [0] * 10
+    for c in confidences:
+        idx = min(int(c * 10), 9)
+        buckets[idx] += 1
+
+    distribution = [
+        {"range": f"{i*10}–{i*10+10}%", "count": buckets[i]}
+        for i in range(10)
+    ]
+
+    return {
+        "total_face_scans": len(rows),
+        "avg_confidence_pct": avg_conf,
+        "threshold": threshold,
+        "distribution": distribution,
+    }

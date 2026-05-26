@@ -649,6 +649,7 @@ export default function Dashboard() {
   const [lg, setLg]         = useState([])
   const [byGrade, setByGrade]     = useState([])
   const [smStats, setSmStats]     = useState(null)
+  const [faceAcc, setFaceAcc]     = useState(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [refreshed, setRefreshed] = useState(new Date())
@@ -717,7 +718,7 @@ export default function Dashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [a, b, b30, c, d, e, f] = await Promise.all([
+      const [a, b, b30, c, d, e, f, g] = await Promise.all([
         axios.get(`${API}/overview`).then(r => r.data),
         axios.get(`${API}/daily?days=7`).then(r => r.data),
         axios.get(`${API}/daily?days=30`).then(r => r.data),
@@ -725,6 +726,7 @@ export default function Dashboard() {
         axios.get(`${API}/logs?limit=8`).then(r => r.data),
         axios.get(`${API}/by-grade`).then(r => r.data),
         axios.get(`${API}/semester-stats`).then(r => r.data).catch(() => null),
+        axios.get(`${API}/face-accuracy`).then(r => r.data).catch(() => null),
       ])
       setOv(a)
       setDl(Array.isArray(b) ? b : [])
@@ -733,6 +735,7 @@ export default function Dashboard() {
       setLg(Array.isArray(d) ? d : [])
       setByGrade(Array.isArray(e) ? e : [])
       setSmStats(f?.trend?.length ? f : null)
+      setFaceAcc(g)
       setRefreshed(new Date())
       setError(null)
     } catch {
@@ -1069,6 +1072,41 @@ export default function Dashboard() {
             </div>
           </div>
           <AreaChart data={smStats.trend} valueKey="rate" color="#1A56DB" height={130} title={`กราฟอัตราการเข้าเรียนตลอดภาคเรียน ${smStats.semester?.name ?? ''}`} />
+        </div>
+      )}
+
+      {/* ── Face accuracy card ── */}
+      {faceAcc && faceAcc.total_face_scans > 0 && (
+        <div className="card" style={{ padding: '22px 26px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)' }}>ความแม่นยำการสแกนใบหน้า</div>
+              <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 3 }}>
+                {faceAcc.total_face_scans.toLocaleString()} ครั้ง · threshold {(faceAcc.threshold ?? 1).toFixed(2)}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1,
+                color: faceAcc.avg_confidence_pct >= 80 ? '#16A34A' : faceAcc.avg_confidence_pct >= 60 ? '#D97706' : '#DC2626' }}>
+                {faceAcc.avg_confidence_pct}%
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>ค่าเฉลี่ย confidence</div>
+            </div>
+          </div>
+          {/* Distribution bar */}
+          <div style={{ display: 'flex', gap: 2, height: 28, borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+            {faceAcc.distribution.map((b, i) => {
+              const pct = faceAcc.total_face_scans > 0 ? b.count / faceAcc.total_face_scans : 0
+              const hue = Math.round((i / 9) * 120)
+              return pct > 0 ? (
+                <div key={i} title={`${b.range}: ${b.count} ครั้ง (${Math.round(pct * 100)}%)`}
+                  style={{ flex: pct, background: `hsl(${hue},72%,48%)`, minWidth: 2 }} />
+              ) : null
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fc-text-4)' }}>
+            <span>0% (แย่)</span><span>100% (ดี)</span>
+          </div>
         </div>
       )}
 

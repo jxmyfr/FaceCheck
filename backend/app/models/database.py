@@ -91,6 +91,7 @@ class AttendanceLog(Base):
     status: Mapped[str] = mapped_column(String(20), default="present")
     reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     check_method: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "face" | "qr" | "manual"
+    face_distance: Mapped[Optional[float]] = mapped_column(nullable=True)  # L2 distance from face recognition (lower = better)
     scan_image: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     scan_image_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
