@@ -522,11 +522,6 @@ export default function Scanner() {
   // Manual photo state
   const [manualLoading, setManualLoading] = useState(false)
 
-  // Class session state (null = loading, false = no session, object = active/closed session)
-  const [classSession, setClassSession] = useState(null)
-  const [sessionOpening, setSessionOpening] = useState(false)
-  const [sessionClosing, setSessionClosing] = useState(false)
-
   // Lookup (manual by student ID) state
   const [lookupId, setLookupId]         = useState('')
   const [lookupStatus, setLookupStatus] = useState('present')
@@ -563,56 +558,6 @@ export default function Scanner() {
     const iv = setInterval(() => setCooldownSecs(s => Math.max(0, s - 1)), 1000)
     return () => clearInterval(iv)
   }, [cooldown])
-
-  // ── Load today's class session when subject/schedule changes ─────
-  useEffect(() => {
-    if (!subjectId) { setClassSession(null); return }
-    const schedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    const params = new URLSearchParams({ subject_id: subjectId })
-    if (schedId) params.append('schedule_id', schedId)
-    axios.get(`${API}/sessions/today?${params}`)
-      .then(r => setClassSession(r.data.session || false))
-      .catch(() => setClassSession(false))
-  }, [subjectId, override, lockedSched])
-
-  const handleOpenSession = async () => {
-    if (sessionOpening) return
-    setSessionOpening(true)
-    const schedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    try {
-      const res = await axios.post(`${API}/sessions/open`, {
-        subject_id: Number(subjectId),
-        schedule_id: schedId || null,
-      })
-      setClassSession(res.data.session)
-    } catch (e) {
-      await alert(e.response?.data?.detail || 'เริ่มคาบไม่สำเร็จ')
-    } finally { setSessionOpening(false) }
-  }
-
-  const handleCloseSession = async () => {
-    if (!classSession || sessionClosing) return
-    const ok = await confirm(
-      'ปิดคาบนี้จะบันทึกว่าครูสิ้นสุดการสอน และบันทึกขาดเรียนให้นักเรียนที่ยังไม่เช็คชื่อ ยืนยัน?',
-      { title: 'ปิดคาบ', danger: true },
-    )
-    if (!ok) return
-    setSessionClosing(true)
-    // Mark absent first
-    const activeSchedId = (!override && lockedSched) ? lockedSched.schedule_id : null
-    const absentUrl = `${API}/attendance/subjects/${subjectId}/mark-absent${activeSchedId ? `?schedule_id=${activeSchedId}` : ''}`
-    try {
-      const absentRes = await axios.post(absentUrl)
-      setAbsentResult(absentRes.data)
-    } catch {}
-    // Close session
-    try {
-      const res = await axios.post(`${API}/sessions/${classSession.id}/close`)
-      setClassSession(res.data.session)
-    } catch (e) {
-      await alert(e.response?.data?.detail || 'ปิดคาบไม่สำเร็จ')
-    } finally { setSessionClosing(false) }
-  }
 
   // ── Poll roster every 5s ──────────────────────────────────────────
   useEffect(() => {
@@ -1271,87 +1216,6 @@ export default function Scanner() {
             ปิด
           </button>
         </div>
-      )}
-
-      {/* Class session banner */}
-      {subjectId && classSession !== null && (
-        classSession === false ? (
-          <div style={{
-            marginBottom: 16, padding: '14px 18px', borderRadius: 10,
-            background: '#F0FDF4', border: '1px solid #86EFAC',
-            display: 'flex', alignItems: 'center', gap: 14,
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>ยังไม่ได้เริ่มคาบ</div>
-              <div style={{ fontSize: 12, color: '#16A34A', marginTop: 2 }}>
-                กด "เริ่มคาบ" เพื่อบันทึกว่าครูเข้าสอน — ระบบจะบันทึกเวลาเริ่มคาบไว้
-              </div>
-            </div>
-            <button
-              onClick={handleOpenSession}
-              disabled={sessionOpening}
-              style={{
-                padding: '9px 22px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                background: '#16A34A', color: '#fff', fontSize: 13, fontWeight: 700,
-                flexShrink: 0, opacity: sessionOpening ? 0.6 : 1,
-              }}
-            >
-              {sessionOpening ? 'กำลังเริ่ม…' : 'เริ่มคาบ'}
-            </button>
-          </div>
-        ) : classSession.is_open ? (
-          <div style={{
-            marginBottom: 16, padding: '12px 18px', borderRadius: 10,
-            background: '#EFF6FF', border: '1px solid #BFDBFE',
-            display: 'flex', alignItems: 'center', gap: 14,
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: '50%', background: '#3B82F6', flexShrink: 0,
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#1E40AF' }}>กำลังสอน</span>
-                <span style={{ fontSize: 12, color: '#3B82F6' }}>
-                  · เริ่ม {classSession.opened_at
-                    ? new Date(classSession.opened_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-                    : '—'}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: '#60A5FA', marginTop: 3 }}>บันทึกว่าครูเข้าสอนแล้ว — กด "ปิดคาบ" เมื่อสิ้นสุดการสอน</div>
-            </div>
-            <button
-              onClick={handleCloseSession}
-              disabled={sessionClosing}
-              style={{
-                padding: '7px 18px', borderRadius: 8, cursor: 'pointer',
-                border: '1px solid #1E40AF', background: 'transparent',
-                color: '#1E40AF', fontSize: 12, fontWeight: 600, flexShrink: 0,
-                opacity: sessionClosing ? 0.6 : 1,
-              }}
-            >
-              {sessionClosing ? 'กำลังปิด…' : 'ปิดคาบ'}
-            </button>
-          </div>
-        ) : (
-          <div style={{
-            marginBottom: 16, padding: '10px 18px', borderRadius: 10,
-            background: 'var(--fc-muted)', border: '1px solid var(--fc-border)',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <span style={{ fontSize: 12, color: 'var(--fc-text-3)', flex: 1 }}>
-              คาบนี้ปิดแล้ว · สิ้นสุดเมื่อ {classSession.closed_at
-                ? new Date(classSession.closed_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-                : '—'}
-            </span>
-            <button
-              onClick={() => setClassSession(false)}
-              style={{ fontSize: 11, color: 'var(--fc-text-4)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
-            >
-              เริ่มคาบใหม่
-            </button>
-          </div>
-        )
       )}
 
       {/* Main layout */}

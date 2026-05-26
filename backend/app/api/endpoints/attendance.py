@@ -16,7 +16,7 @@ logger = logging.getLogger("facecheck.attendance")
 _BKK = timezone(timedelta(hours=7))
 from typing import Optional
 
-from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding, AttendanceAuditLog, QRSessionUsed
+from app.models.database import get_db, Student, Subject, SubjectSchedule, AttendanceLog, SemesterSetting, StudentFaceEmbedding, AttendanceAuditLog, QRSessionUsed, ClassSession
 from app.models.user import User, TeacherSubject
 from app.services.face_proc import FaceProcessor
 from app.core.dependencies import require_teacher_or_admin, require_admin, get_current_user
@@ -25,6 +25,18 @@ router = APIRouter()
 face_processor = FaceProcessor()
 
 _BASE_DIR = Path(__file__).resolve().parents[3]
+
+
+def _ensure_class_session(db: Session, subject_id: int, teacher_id: int, schedule_id: Optional[int] = None) -> None:
+    today = date.today()
+    existing = db.query(ClassSession).filter(
+        ClassSession.subject_id == subject_id,
+        ClassSession.teacher_id == teacher_id,
+        ClassSession.session_date == today,
+    ).first()
+    if not existing:
+        db.add(ClassSession(subject_id=subject_id, teacher_id=teacher_id, session_date=today, schedule_id=schedule_id))
+        db.commit()
 SCAN_IMAGES_DIR = _BASE_DIR / "storage" / "scan_images"
 SCAN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -650,6 +662,8 @@ async def scan_multi(
             "message":     "มาสาย" if scan_status_base == "late" else "เช็คชื่อสำเร็จ",
         })
 
+    if not dev_mode and matched:
+        _ensure_class_session(db, subject_id, current_user.id, schedule_id)
     db.commit()
     return {"results": results, "face_count": len(embeddings), "matched_count": len(matched)}
 
@@ -1098,6 +1112,7 @@ def manual_attendance(
     db.add(log)
     db.commit()
     db.refresh(log)
+    _ensure_class_session(db, subject_id, current_user.id)
 
     STATUS_LABEL = {"present": "มาเรียน", "late": "มาสาย", "absent": "ขาดเรียน"}
     return {
@@ -1378,6 +1393,7 @@ def create_qr_session(
         "jti":         str(uuid.uuid4()),
         "exp":         expire,
     }, SECRET_KEY, algorithm=ALGORITHM)
+    _ensure_class_session(db, subject_id, current_user.id, schedule_id)
     return {
         "token":        token,
         "expires_at":   expire.isoformat(),
