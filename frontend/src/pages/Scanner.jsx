@@ -313,23 +313,22 @@ function BatchResultCard({ result, onDismiss }) {
 }
 
 // ── Log thumbnail (fetches from backend if no in-memory photo) ───
-function LogThumb({ photo, logId, status, studentId, blur }) {
+function LogThumb({ photo, logId, status, studentId, blur, checkMethod }) {
   const [src, setSrc] = useState(photo || null)
   useEffect(() => {
     if (src) return
     let objectUrl = null
     if (status === 'already_checked' && studentId) {
-      // already_checked shares the original log_id — use registered face instead
       axios.get(`${API}/enroll/students/${studentId}/face`, { responseType: 'blob' })
         .then(r => { objectUrl = URL.createObjectURL(r.data); setSrc(objectUrl) })
         .catch(() => {})
-    } else if (logId) {
+    } else if (logId && checkMethod === 'face') {
       axios.get(`${API}/attendance/logs/${logId}/image`, { responseType: 'blob' })
         .then(r => { objectUrl = URL.createObjectURL(r.data); setSrc(objectUrl) })
         .catch(() => {})
     }
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [logId, studentId])
+  }, [logId, studentId, checkMethod])
   if (!src) return null
   return (
     <div style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', flexShrink: 0, background: 'var(--fc-muted)' }}>
@@ -1593,7 +1592,7 @@ export default function Scanner() {
                         animation: i === 0 ? 'slideIn 0.2s ease-out' : 'none',
                         cursor: 'pointer',
                       }} onClick={() => setLogDetail(log)}>
-                        <LogThumb photo={log.photo} logId={log.log_id} status={log.status} studentId={log.student_id} blur={privacyMode} />
+                        <LogThumb photo={log.photo} logId={log.log_id} status={log.status} studentId={log.student_id} blur={privacyMode} checkMethod={log.check_method} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fc-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {log.name ? (privacyMode ? censorFullName(log.name) : log.name) : '—'}
