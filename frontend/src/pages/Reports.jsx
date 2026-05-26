@@ -39,10 +39,12 @@ export default function Reports() {
   const [loading, setLoading]   = useState(false)
   const [exporting, setExporting] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [semesters, setSemesters] = useState([])
 
   useEffect(() => {
     const subjectUrl = isTeacher ? `${API}/auth/me/subjects` : `${API}/attendance/subjects`
     axios.get(subjectUrl).then(r => setSubjects(r.data)).catch(() => {})
+    axios.get(`${API}/settings/semesters`).then(r => setSemesters(r.data)).catch(() => {})
     axios.get(`${API}/enroll/students`).then(r => {
       const gr = {}
       r.data.forEach(s => {
@@ -177,7 +179,33 @@ export default function Reports() {
 
       {/* Filter card */}
       <div className="card print-hide" style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 16 }}>เงื่อนไขการค้นหา</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)' }}>เงื่อนไขการค้นหา</div>
+          {semesters.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ fontSize: 12, color: 'var(--fc-text-4)' }}>ดูตามภาคเรียน:</label>
+              <select
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                defaultValue=""
+                onChange={e => {
+                  const s = semesters.find(x => String(x.id) === e.target.value)
+                  if (s && s.term_start && s.term_end) {
+                    setFilters(f => ({ ...f, date_from: s.term_start, date_to: s.term_end }))
+                  }
+                }}
+              >
+                <option value="">— เลือกภาคเรียน —</option>
+                {semesters.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name || `ภาคเรียนที่ ${s.semester_number}`}
+                    {s.academic_year ? ` /${s.academic_year}` : ''}
+                    {s.is_active ? ' (ปัจจุบัน)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">วันที่เริ่มต้น</label>

@@ -40,6 +40,8 @@ _MIGRATIONS = [
     "ALTER TABLE subjects ADD COLUMN is_archived BOOLEAN DEFAULT FALSE",
     "ALTER TABLE attendance_logs ADD COLUMN scan_image_path VARCHAR(255)",
     "ALTER TABLE attendance_logs ADD COLUMN face_distance REAL",
+    "ALTER TABLE semester_settings ADD COLUMN academic_year VARCHAR(10)",
+    "ALTER TABLE semester_settings ADD COLUMN semester_number INTEGER DEFAULT 1",
 ]
 
 def _is_expected_migration_error(msg: str) -> bool:

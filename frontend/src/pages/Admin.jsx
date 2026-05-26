@@ -184,8 +184,19 @@ export default function Admin() {
   const [loading, setLoading]     = useState(true)
   const [toast, setToast]         = useState(null)
 
-  const [semester, setSemester]     = useState({ name: '', term_start: '', term_end: '', face_threshold: 1.0 })
+  const [semester, setSemester]     = useState({ name: '', academic_year: '', semester_number: 1, term_start: '', term_end: '', face_threshold: 1.0 })
   const [semSaving, setSemSaving]   = useState(false)
+  const [semesters, setSemesters]   = useState([])
+  const [showNewSem, setShowNewSem] = useState(false)
+  const [newSemForm, setNewSemForm] = useState({ name: '', academic_year: '', semester_number: 1, term_start: '', term_end: '' })
+  const [newSemSaving, setNewSemSaving] = useState(false)
+
+  const [holidays, setHolidays]     = useState([])
+  const [holidayYear, setHolidayYear] = useState(new Date().getFullYear())
+  const [holidayLoading, setHolidayLoading] = useState(false)
+  const [holidaySyncing, setHolidaySyncing] = useState(false)
+  const [newHoliday, setNewHoliday] = useState({ date: '', name: '', type: 'school' })
+  const [holidayAdding, setHolidayAdding] = useState(false)
 
   // Audit log state
   const [auditLogs, setAuditLogs]     = useState([])
@@ -275,15 +286,16 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true)
     try {
-      const [u, s, sem] = await Promise.all([
+      const [u, s, sem, sems] = await Promise.all([
         axios.get(`${API}/auth/users`).then(r=>r.data),
         axios.get(`${API}/attendance/subjects`).then(async r => {
           return Promise.all(r.data.map(s => axios.get(`${API}/attendance/subjects/${s.id}`).then(d=>d.data)))
         }),
         axios.get(`${API}/settings/semester`).then(r=>r.data).catch(()=>null),
+        axios.get(`${API}/settings/semesters`).then(r=>r.data).catch(()=>[]),
       ])
-      setUsers(u); setSubjects(s)
-      if (sem) setSemester({ name: sem.name||'', term_start: sem.term_start||'', term_end: sem.term_end||'', face_threshold: sem.face_threshold ?? 1.0 })
+      setUsers(u); setSubjects(s); setSemesters(sems)
+      if (sem) setSemester({ name: sem.name||'', academic_year: sem.academic_year||'', semester_number: sem.semester_number||1, term_start: sem.term_start||'', term_end: sem.term_end||'', face_threshold: sem.face_threshold ?? 1.0 })
       // build grade→rooms map from student list
       const students = await axios.get(`${API}/enroll/students`).then(r=>r.data).catch(()=>[])
       const gr = {}
@@ -300,14 +312,75 @@ export default function Admin() {
     setSemSaving(true)
     try {
       await axios.put(`${API}/settings/semester`, {
-        name:            semester.name       || undefined,
-        term_start:      semester.term_start || undefined,
-        term_end:        semester.term_end   || undefined,
+        name:            semester.name            || undefined,
+        academic_year:   semester.academic_year   || undefined,
+        semester_number: semester.semester_number || undefined,
+        term_start:      semester.term_start      || undefined,
+        term_end:        semester.term_end        || undefined,
         face_threshold:  semester.face_threshold,
       })
       flash('บันทึกข้อมูลภาคเรียนสำเร็จ')
+      const sems = await axios.get(`${API}/settings/semesters`).then(r=>r.data).catch(()=>[])
+      setSemesters(sems)
     } catch (e) { flash(e.response?.data?.detail||'เกิดข้อผิดพลาด','error') }
     finally { setSemSaving(false) }
+  }
+
+  const createNewSemester = async () => {
+    if (!newSemForm.name.trim()) { flash('กรุณากรอกชื่อภาคเรียน', 'error'); return }
+    setNewSemSaving(true)
+    try {
+      await axios.post(`${API}/settings/semester/new`, {
+        name:            newSemForm.name,
+        academic_year:   newSemForm.academic_year   || undefined,
+        semester_number: newSemForm.semester_number || 1,
+        term_start:      newSemForm.term_start       || undefined,
+        term_end:        newSemForm.term_end         || undefined,
+      })
+      flash('เริ่มภาคเรียนใหม่สำเร็จ')
+      setShowNewSem(false)
+      loadAll()
+    } catch (e) { flash(e.response?.data?.detail||'เกิดข้อผิดพลาด','error') }
+    finally { setNewSemSaving(false) }
+  }
+
+  const loadHolidays = async (year = holidayYear) => {
+    setHolidayLoading(true)
+    try {
+      const res = await axios.get(`${API}/holidays/?year=${year}`)
+      setHolidays(res.data)
+    } catch {}
+    finally { setHolidayLoading(false) }
+  }
+
+  const syncHolidays = async () => {
+    setHolidaySyncing(true)
+    try {
+      const res = await axios.post(`${API}/holidays/sync/${holidayYear}`)
+      flash(`ซิงค์วันหยุดราชการ ${res.data.year} สำเร็จ · เพิ่มใหม่ ${res.data.added} วัน`)
+      loadHolidays(holidayYear)
+    } catch (e) { flash(e.response?.data?.detail||'ซิงค์ไม่สำเร็จ','error') }
+    finally { setHolidaySyncing(false) }
+  }
+
+  const addHoliday = async () => {
+    if (!newHoliday.date || !newHoliday.name.trim()) { flash('กรุณากรอกวันที่และชื่อวันหยุด','error'); return }
+    setHolidayAdding(true)
+    try {
+      await axios.post(`${API}/holidays/`, newHoliday)
+      flash('เพิ่มวันหยุดสำเร็จ')
+      setNewHoliday({ date: '', name: '', type: 'school' })
+      loadHolidays(holidayYear)
+    } catch (e) { flash(e.response?.data?.detail||'เพิ่มวันหยุดไม่สำเร็จ','error') }
+    finally { setHolidayAdding(false) }
+  }
+
+  const deleteHoliday = async (id) => {
+    try {
+      await axios.delete(`${API}/holidays/${id}`)
+      setHolidays(prev => prev.filter(h => h.id !== id))
+      flash('ลบวันหยุดสำเร็จ')
+    } catch (e) { flash(e.response?.data?.detail||'ลบไม่สำเร็จ','error') }
   }
 
   const deleteUser = async (id) => {
@@ -576,6 +649,9 @@ export default function Admin() {
         </button>
         <button className={`tab-item ${tab==='semester'?'active':''}`} onClick={()=>setTab('semester')}>
           ภาคเรียน
+        </button>
+        <button className={`tab-item ${tab==='holidays'?'active':''}`} onClick={()=>{ setTab('holidays'); loadHolidays(holidayYear) }}>
+          วันหยุด
         </button>
         <button className={`tab-item ${tab==='audit'?'active':''}`} onClick={()=>{ setTab('audit'); loadAuditLogs(0) }}>
           Audit Log
@@ -1030,93 +1106,320 @@ export default function Admin() {
 
       {/* Semester tab */}
       {tab === 'semester' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, alignItems: 'start' }}>
-          {/* Settings form */}
-          <div className="card" style={{ padding: '24px 28px' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-text)', marginBottom: 20 }}>ตั้งค่าภาคเรียน</div>
-            <div className="form-group">
-              <label htmlFor="semester-name" className="form-label">ชื่อภาคเรียน</label>
-              <input
-                id="semester-name"
-                placeholder="เช่น ภาคเรียนที่ 1/2568"
-                value={semester.name}
-                onChange={e => setSemester(p => ({ ...p, name: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="semester-start" className="form-label">วันเปิดเทอม</label>
-              <input
-                id="semester-start"
-                type="date"
-                value={semester.term_start}
-                onChange={e => setSemester(p => ({ ...p, term_start: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="semester-end" className="form-label">วันปิดเทอม</label>
-              <input
-                id="semester-end"
-                type="date"
-                value={semester.term_end}
-                onChange={e => setSemester(p => ({ ...p, term_end: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="face-threshold" className="form-label">
-                ความเข้มงวดการจดจำใบหน้า
-                <span style={{ fontWeight: 400, color: 'var(--fc-text-4)', marginLeft: 8 }}>
-                  {semester.face_threshold.toFixed(2)}
-                  {semester.face_threshold < 0.6 ? ' · เข้มงวดมาก' : semester.face_threshold < 1.0 ? ' · เข้มงวด' : semester.face_threshold < 1.4 ? ' · ปกติ' : ' · ผ่อนปรน'}
-                </span>
-              </label>
-              <input
-                id="face-threshold"
-                type="range"
-                min="0.1" max="2.0" step="0.05"
-                value={semester.face_threshold}
-                onChange={e => setSemester(p => ({ ...p, face_threshold: Number(e.target.value) }))}
-                style={{ width: '100%', accentColor: 'var(--fc-primary)' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>
-                <span>0.1 เข้มงวดมาก</span>
-                <span>1.0 ปกติ</span>
-                <span>2.0 ผ่อนปรน</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, alignItems: 'start' }}>
+            {/* Settings form */}
+            <div className="card" style={{ padding: '24px 28px' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-text)', marginBottom: 20 }}>ภาคเรียนปัจจุบัน</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label htmlFor="semester-name" className="form-label">ชื่อภาคเรียน</label>
+                  <input
+                    id="semester-name"
+                    placeholder="เช่น ภาคเรียนที่ 1/2568"
+                    value={semester.name}
+                    onChange={e => setSemester(p => ({ ...p, name: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="semester-number" className="form-label">ภาคเรียนที่</label>
+                  <select id="semester-number" value={semester.semester_number}
+                    onChange={e => setSemester(p => ({ ...p, semester_number: Number(e.target.value) }))}>
+                    <option value={1}>1</option>
+                    <option value={2}>2</option>
+                    <option value={3}>3 (พิเศษ)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="academic-year" className="form-label">ปีการศึกษา (พ.ศ.)</label>
+                <input
+                  id="academic-year"
+                  placeholder="เช่น 2568"
+                  value={semester.academic_year}
+                  onChange={e => setSemester(p => ({ ...p, academic_year: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label htmlFor="semester-start" className="form-label">วันเปิดเทอม</label>
+                  <input id="semester-start" type="date" value={semester.term_start}
+                    onChange={e => setSemester(p => ({ ...p, term_start: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="semester-end" className="form-label">วันปิดเทอม</label>
+                  <input id="semester-end" type="date" value={semester.term_end}
+                    onChange={e => setSemester(p => ({ ...p, term_end: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="face-threshold" className="form-label">
+                  ความเข้มงวดการจดจำใบหน้า
+                  <span style={{ fontWeight: 400, color: 'var(--fc-text-4)', marginLeft: 8 }}>
+                    {semester.face_threshold.toFixed(2)}
+                    {semester.face_threshold < 0.6 ? ' · เข้มงวดมาก' : semester.face_threshold < 1.0 ? ' · เข้มงวด' : semester.face_threshold < 1.4 ? ' · ปกติ' : ' · ผ่อนปรน'}
+                  </span>
+                </label>
+                <input id="face-threshold" type="range" min="0.1" max="2.0" step="0.05"
+                  value={semester.face_threshold}
+                  onChange={e => setSemester(p => ({ ...p, face_threshold: Number(e.target.value) }))}
+                  style={{ width: '100%', accentColor: 'var(--fc-primary)' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fc-text-4)', marginTop: 4 }}>
+                  <span>0.1 เข้มงวดมาก</span>
+                  <span>1.0 ปกติ</span>
+                  <span>2.0 ผ่อนปรน</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                <button className="btn btn-primary" style={{ flex: 1 }} disabled={semSaving} onClick={saveSemester}>
+                  {semSaving ? 'กำลังบันทึก…' : 'บันทึก'}
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  style={{ flex: 1, color: 'var(--fc-success-dark)', border: '1px solid var(--fc-success-dark)' }}
+                  onClick={() => {
+                    const nextYear = String(Number(semester.academic_year || new Date().getFullYear()) + (semester.semester_number >= 2 ? 1 : 0))
+                    const nextNum = semester.semester_number >= 2 ? 1 : (semester.semester_number || 1) + 1
+                    setNewSemForm({ name: `ภาคเรียนที่ ${nextNum}/${nextYear}`, academic_year: nextYear, semester_number: nextNum, term_start: '', term_end: '' })
+                    setShowNewSem(true)
+                  }}
+                >
+                  เริ่มภาคเรียนใหม่
+                </button>
               </div>
             </div>
-            <button
-              className="btn btn-primary"
-              style={{ marginTop: 8, minWidth: 100 }}
-              disabled={semSaving}
-              onClick={saveSemester}
-            >
-              {semSaving ? 'กำลังบันทึก…' : 'บันทึก'}
-            </button>
+
+            {/* Info + notes */}
+            <div className="card" style={{ padding: '24px 28px', background: 'var(--fc-primary-light)', border: '1px solid var(--fc-primary-light)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fc-primary)', marginBottom: 12 }}>เมื่อเริ่มภาคเรียนใหม่</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[
+                  { n: '1', text: 'ข้อมูลนักเรียน รูปใบหน้า และตารางสอนทั้งหมดยังคงอยู่' },
+                  { n: '2', text: 'ประวัติการเช็คชื่อเดิมไม่หายไป — ดูย้อนหลังได้เสมอ' },
+                  { n: '3', text: 'ภาคเรียนเก่าจะถูกเก็บไว้ในประวัติด้านล่าง' },
+                  { n: '4', text: 'ใช้ฟิลเตอร์วันที่ใน Reports เพื่อดูข้อมูลภาคเรียนที่ผ่านมา' },
+                ].map(item => (
+                  <div key={item.n} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: 'var(--fc-primary)',
+                      color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>{item.n}</div>
+                    <span style={{ fontSize: 13, color: 'var(--fc-text-2)', lineHeight: 1.5 }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* Info card */}
-          <div className="card" style={{ padding: '24px 28px', background: 'var(--fc-primary-light)', border: '1px solid var(--fc-primary-light)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fc-primary)', marginBottom: 12 }}>วิธีการนับสถิติการเข้าเรียน</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { n: '1', text: 'เริ่มนับตั้งแต่วันแรกที่นักเรียนเช็คชื่อในระบบ' },
-                { n: '2', text: 'ทุกวันตั้งแต่วันนั้นถึงวันปัจจุบันนับเป็น 1 วัน' },
-                { n: '3', text: 'หากวันใดมีการเช็คชื่อ = ถือว่ามาเรียน' },
-                { n: '4', text: 'อัตรา = (วันที่มา ÷ วันทั้งหมด) × 100%' },
-              ].map(item => (
-                <div key={item.n} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: '50%', background: 'var(--fc-primary)',
-                    color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>{item.n}</div>
-                  <span style={{ fontSize: 13, color: 'var(--fc-text-2)', lineHeight: 1.5 }}>{item.text}</span>
-                </div>
-              ))}
+          {/* Semester history */}
+          {semesters.length > 1 && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--fc-border)', fontSize: 13, fontWeight: 700, color: 'var(--fc-text)' }}>
+                ประวัติภาคเรียน ({semesters.length} ภาคเรียน)
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tbl">
+                  <thead><tr>
+                    <th>ชื่อภาคเรียน</th>
+                    <th style={{ width: 80 }}>ปีการศึกษา</th>
+                    <th style={{ width: 60 }}>ภาคที่</th>
+                    <th style={{ width: 120 }}>เปิดเทอม</th>
+                    <th style={{ width: 120 }}>ปิดเทอม</th>
+                    <th style={{ width: 80 }}>สถานะ</th>
+                  </tr></thead>
+                  <tbody>
+                    {semesters.map(s => (
+                      <tr key={s.id}>
+                        <td style={{ fontWeight: 500 }}>{s.name || '—'}</td>
+                        <td style={{ fontFamily: 'var(--fc-font-mono)', fontSize: 13 }}>{s.academic_year || '—'}</td>
+                        <td style={{ textAlign: 'center' }}>{s.semester_number || '—'}</td>
+                        <td style={{ fontSize: 12, color: 'var(--fc-text-3)' }}>{s.term_start || '—'}</td>
+                        <td style={{ fontSize: 12, color: 'var(--fc-text-3)' }}>{s.term_end || '—'}</td>
+                        <td>
+                          {s.is_active
+                            ? <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)', fontSize: 11 }}>ปัจจุบัน</span>
+                            : <span className="chip" style={{ background: 'var(--fc-muted)', color: 'var(--fc-text-4)', fontSize: 11 }}>เก็บไว้</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="divider" style={{ margin: '16px 0' }} />
-            <div style={{ fontSize: 12, color: 'var(--fc-text-4)', lineHeight: 1.6 }}>
-              ข้อมูลภาคเรียนจะถูกใช้ใน Dashboard หลักเพื่อแสดงกราฟ<br/>อัตราการเข้าเรียนตลอดภาคเรียน
+          )}
+        </div>
+      )}
+
+      {/* New semester modal */}
+      {showNewSem && (
+        <Modal title="เริ่มภาคเรียนใหม่" onClose={() => setShowNewSem(false)} maxWidth={480}>
+          <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginBottom: 16, padding: '10px 14px', background: '#FFFBEB', borderRadius: 8, border: '1px solid #FCD34D' }}>
+            ภาคเรียนปัจจุบันจะถูกเก็บไว้ในประวัติ — ข้อมูลการเช็คชื่อทั้งหมดยังคงอยู่
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">ชื่อภาคเรียน *</label>
+              <input placeholder="เช่น ภาคเรียนที่ 1/2569" value={newSemForm.name}
+                onChange={e => setNewSemForm(f => ({ ...f, name: e.target.value }))} />
             </div>
+            <div className="form-group">
+              <label className="form-label">ภาคเรียนที่</label>
+              <select value={newSemForm.semester_number}
+                onChange={e => setNewSemForm(f => ({ ...f, semester_number: Number(e.target.value) }))}>
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3 (พิเศษ)</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">ปีการศึกษา (พ.ศ.)</label>
+            <input placeholder="เช่น 2569" value={newSemForm.academic_year}
+              onChange={e => setNewSemForm(f => ({ ...f, academic_year: e.target.value }))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">วันเปิดเทอม</label>
+              <input type="date" value={newSemForm.term_start}
+                onChange={e => setNewSemForm(f => ({ ...f, term_start: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">วันปิดเทอม</label>
+              <input type="date" value={newSemForm.term_end}
+                onChange={e => setNewSemForm(f => ({ ...f, term_end: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button className="btn btn-ghost btn-full" onClick={() => setShowNewSem(false)}>ยกเลิก</button>
+            <button className="btn btn-primary btn-full" onClick={createNewSemester} disabled={newSemSaving}>
+              {newSemSaving ? 'กำลังสร้าง…' : 'เริ่มภาคเรียนใหม่'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Holidays tab */}
+      {tab === 'holidays' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Year selector + sync */}
+          <div className="card" style={{ padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label className="form-label" style={{ margin: 0 }}>ปี พ.ศ.</label>
+                <select value={holidayYear} style={{ width: 110 }}
+                  onChange={e => { const y = Number(e.target.value); setHolidayYear(y); loadHolidays(y) }}>
+                  {[...Array(5)].map((_, i) => {
+                    const y = new Date().getFullYear() + 543 - i
+                    return <option key={y} value={y - 543}>{y}</option>
+                  })}
+                </select>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => loadHolidays(holidayYear)} disabled={holidayLoading}>
+                {holidayLoading ? 'กำลังโหลด…' : 'แสดง'}
+              </button>
+              <button
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 14px', borderRadius: 8, border: '1px solid #0284C7',
+                  background: 'transparent', color: '#0284C7', fontSize: 12,
+                  fontWeight: 600, cursor: 'pointer', opacity: holidaySyncing ? 0.6 : 1,
+                }}
+                onClick={syncHolidays}
+                disabled={holidaySyncing}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                {holidaySyncing ? 'กำลังซิงค์…' : 'ซิงค์วันหยุดราชการ'}
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--fc-text-4)', marginLeft: 'auto' }}>
+                วันหยุดราชการดึงจาก date.nager.at
+              </span>
+            </div>
+          </div>
+
+          {/* Add holiday form */}
+          <div className="card" style={{ padding: '16px 20px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fc-text)', marginBottom: 12 }}>เพิ่มวันหยุด</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>วันที่</label>
+                <input type="date" value={newHoliday.date} style={{ width: 160 }}
+                  onChange={e => setNewHoliday(h => ({ ...h, date: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 200px' }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>ชื่อวันหยุด</label>
+                <input placeholder="เช่น วันหยุดชดเชย, ปิดเพื่อจัดงาน..."
+                  value={newHoliday.name}
+                  onChange={e => setNewHoliday(h => ({ ...h, name: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && addHoliday()}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>ประเภท</label>
+                <select value={newHoliday.type} style={{ width: 130 }}
+                  onChange={e => setNewHoliday(h => ({ ...h, type: e.target.value }))}>
+                  <option value="school">โรงเรียน</option>
+                  <option value="public">ราชการ</option>
+                </select>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={addHoliday} disabled={holidayAdding}>
+                {holidayAdding ? 'กำลังเพิ่ม…' : '+ เพิ่มวันหยุด'}
+              </button>
+            </div>
+          </div>
+
+          {/* Holiday list */}
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--fc-border)', fontSize: 13, fontWeight: 600, color: 'var(--fc-text)' }}>
+              วันหยุดปี {holidayYear + 543} ({holidays.length} วัน)
+            </div>
+            {holidayLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                <div className="spinner" />
+              </div>
+            ) : holidays.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--fc-text-4)', fontSize: 13 }}>
+                ยังไม่มีวันหยุดในปีนี้ — กดซิงค์วันหยุดราชการหรือเพิ่มเอง
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead><tr>
+                  <th style={{ width: 120 }}>วันที่</th>
+                  <th>ชื่อวันหยุด</th>
+                  <th style={{ width: 100 }}>ประเภท</th>
+                  <th style={{ width: 70 }}></th>
+                </tr></thead>
+                <tbody>
+                  {holidays.map(h => (
+                    <tr key={h.id}>
+                      <td style={{ fontFamily: 'var(--fc-font-mono)', fontSize: 12, color: 'var(--fc-text-3)' }}>{h.date}</td>
+                      <td style={{ fontWeight: 500 }}>{h.name}</td>
+                      <td>
+                        <span className="chip" style={h.type === 'public'
+                          ? { background: 'var(--fc-primary-light)', color: 'var(--fc-primary)', fontSize: 11 }
+                          : { background: 'var(--fc-muted)', color: 'var(--fc-text-3)', fontSize: 11 }
+                        }>
+                          {h.type === 'public' ? 'ราชการ' : 'โรงเรียน'}
+                        </span>
+                      </td>
+                      <td>
+                        <button className="btn btn-danger btn-sm" onClick={() => deleteHoliday(h.id)}>ลบ</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

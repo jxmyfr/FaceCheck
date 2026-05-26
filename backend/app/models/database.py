@@ -105,6 +105,8 @@ class SemesterSetting(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(50), default="ภาคเรียนที่ 1")
+    academic_year: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    semester_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
     term_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     term_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -113,6 +115,33 @@ class SemesterSetting(Base):
     min_det_score:  Mapped[float] = mapped_column(default=0.65)
     min_face_ratio: Mapped[float] = mapped_column(default=0.08)
     min_blur_score: Mapped[float] = mapped_column(default=40.0)
+
+
+class ClassSession(Base):
+    """บันทึกการเปิด/ปิดคาบของครู — ใช้ยืนยันว่าครูเข้าสอน"""
+    __tablename__ = "class_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"), nullable=False, index=True)
+    schedule_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    teacher_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    session_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    subject: Mapped["Subject"] = relationship()
+
+
+class Holiday(Base):
+    """วันหยุด — ทั้งวันหยุดราชการและวันหยุดของโรงเรียน"""
+    __tablename__ = "holidays"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    holiday_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    holiday_type: Mapped[str] = mapped_column(String(20), default="public")  # "public" | "school"
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
 
 class AttendanceAuditLog(Base):
