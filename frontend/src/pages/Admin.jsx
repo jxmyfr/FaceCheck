@@ -374,7 +374,7 @@ export default function Admin() {
     setSemSaving(true)
     try {
       await axios.put(`${API}/settings/semester`, {
-        name:            semester.name            || undefined,
+        name:            `ภาคเรียนที่ ${semester.semester_number}/${semester.academic_year}`,
         academic_year:   semester.academic_year   || undefined,
         semester_number: semester.semester_number || undefined,
         term_start:      semester.term_start      || undefined,
@@ -389,11 +389,10 @@ export default function Admin() {
   }
 
   const createNewSemester = async () => {
-    if (!newSemForm.name.trim()) { flash('กรุณากรอกชื่อภาคเรียน', 'error'); return }
     setNewSemSaving(true)
     try {
       await axios.post(`${API}/settings/semester/new`, {
-        name:            newSemForm.name,
+        name:            `ภาคเรียนที่ ${newSemForm.semester_number}/${newSemForm.academic_year}`,
         academic_year:   newSemForm.academic_year   || undefined,
         semester_number: newSemForm.semester_number || 1,
         term_start:      newSemForm.term_start       || undefined,
@@ -1204,13 +1203,13 @@ export default function Admin() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
                 <div className="form-group">
-                  <label htmlFor="semester-name" className="form-label">ชื่อภาคเรียน</label>
-                  <input
-                    id="semester-name"
-                    placeholder="เช่น ภาคเรียนที่ 1/2568"
-                    value={semester.name}
-                    onChange={e => setSemester(p => ({ ...p, name: e.target.value }))}
-                  />
+                  <label htmlFor="academic-year" className="form-label">ปีการศึกษา (พ.ศ.)</label>
+                  <select id="academic-year" value={semester.academic_year}
+                    onChange={e => setSemester(p => ({ ...p, academic_year: e.target.value }))}>
+                    {Array.from({ length: 7 }, (_, i) => (new Date().getFullYear() + 543) - 3 + i).map(y => (
+                      <option key={y} value={String(y)}>{y}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label htmlFor="semester-number" className="form-label">ภาคเรียนที่</label>
@@ -1221,16 +1220,6 @@ export default function Admin() {
                     <option value={3}>3 (พิเศษ)</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="academic-year" className="form-label">ปีการศึกษา (พ.ศ.)</label>
-                <input
-                  id="academic-year"
-                  placeholder="เช่น 2568"
-                  value={semester.academic_year}
-                  onChange={e => setSemester(p => ({ ...p, academic_year: e.target.value }))}
-                />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1276,7 +1265,7 @@ export default function Admin() {
                   onClick={() => {
                     const nextYear = String(Number(semester.academic_year || new Date().getFullYear()) + (semester.semester_number >= 2 ? 1 : 0))
                     const nextNum = semester.semester_number >= 2 ? 1 : (semester.semester_number || 1) + 1
-                    setNewSemForm({ name: `ภาคเรียนที่ ${nextNum}/${nextYear}`, academic_year: nextYear, semester_number: nextNum, term_start: '', term_end: '' })
+                    setNewSemForm({ name: '', academic_year: nextYear, semester_number: nextNum, term_start: '', term_end: '' })
                     setShowNewSem(true)
                   }}
                 >
@@ -1356,9 +1345,13 @@ export default function Admin() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label className="form-label">ชื่อภาคเรียน *</label>
-              <input placeholder="เช่น ภาคเรียนที่ 1/2569" value={newSemForm.name}
-                onChange={e => setNewSemForm(f => ({ ...f, name: e.target.value }))} />
+              <label className="form-label">ปีการศึกษา (พ.ศ.)</label>
+              <select value={newSemForm.academic_year}
+                onChange={e => setNewSemForm(f => ({ ...f, academic_year: e.target.value }))}>
+                {Array.from({ length: 7 }, (_, i) => (new Date().getFullYear() + 543) - 3 + i).map(y => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
             </div>
             <div className="form-group">
               <label className="form-label">ภาคเรียนที่</label>
@@ -1369,11 +1362,6 @@ export default function Admin() {
                 <option value={3}>3 (พิเศษ)</option>
               </select>
             </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">ปีการศึกษา (พ.ศ.)</label>
-            <input placeholder="เช่น 2569" value={newSemForm.academic_year}
-              onChange={e => setNewSemForm(f => ({ ...f, academic_year: e.target.value }))} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
