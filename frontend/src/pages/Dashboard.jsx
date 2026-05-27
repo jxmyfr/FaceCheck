@@ -426,7 +426,7 @@ function TeacherDashboard() {
           {[
             { label: 'นักเรียนที่สอน', value: fmt(ov.total_students), sub: 'คนทั้งหมด', color: '#1A56DB', icon: <IcUsers /> },
             { label: 'รายวิชา',        value: fmt(ov.total_subjects), sub: 'วิชาที่รับผิดชอบ', color: '#7C3AED', icon: <IcBook /> },
-            { label: 'เช็คชื่อวันนี้',  value: fmt(ov.today_logs),    sub: 'บันทึกในวันนี้', color: '#16A34A', icon: <IcCheck /> },
+            { label: 'เช็คอินวันนี้',  value: fmt(ov.today_logs),    sub: 'บันทึกในวันนี้', color: '#16A34A', icon: <IcCheck /> },
             { label: 'บันทึกทั้งหมด',  value: fmt(ov.total_logs),    sub: 'ตลอดภาคเรียน',  color: '#D97706', icon: <IcLog /> },
           ].map(k => <StatCard key={k.label} {...k} />)}
         </div>
@@ -708,7 +708,7 @@ export default function Dashboard() {
   }
 
   const deleteLogModal = async (logId) => {
-    if (!window.confirm('ยืนยันการยกเลิกการเช็คชื่อนี้?')) return
+    if (!window.confirm('ยืนยันการยกเลิกการเช็คอินนี้?')) return
     try {
       await axios.delete(`${API_ATTEND}/logs/${logId}`)
       if (studentDetail) {
@@ -885,7 +885,7 @@ export default function Dashboard() {
       <div className="grid-kpi">
         <StatCard label="นักเรียนทั้งหมด"   value={fmt(ov.total_students)}          color="#1A56DB" icon={<IcUsers />} sub="คนที่ลงทะเบียน" />
         <StatCard label="รายวิชา"            value={fmt(ov.total_subjects)}          color="#0891B2" icon={<IcBook />}  sub="วิชาที่เปิดสอน" />
-        <StatCard label="เช็คชื่อวันนี้"     value={fmt(checkedIn)}                  color="#16A34A" icon={<IcCheck />} sub={lateCount > 0 ? `มาตรงเวลา ${fmt(presentCount)} · สาย ${fmt(lateCount)}` : `${attendanceRate}% ของทั้งหมด`} />
+        <StatCard label="เช็คอินวันนี้"     value={fmt(checkedIn)}                  color="#16A34A" icon={<IcCheck />} sub={lateCount > 0 ? `มาตรงเวลา ${fmt(presentCount)} · สาย ${fmt(lateCount)}` : `${attendanceRate}% ของทั้งหมด`} />
         <StatCard label="บันทึกสะสม"         value={fmt(ov.total_attendance_logs)}   color="#7C3AED" icon={<IcLog />}   sub="รายการทั้งหมด" />
       </div>
 
@@ -955,7 +955,7 @@ export default function Dashboard() {
         <div className="card" style={{ padding: '22px 26px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)' }}>แนวโน้มการเช็คชื่อ 30 วัน</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)' }}>แนวโน้มการเช็คอิน 30 วัน</div>
               <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginTop: 3 }}>ครั้ง/วัน รวมทุกรายวิชา</div>
             </div>
             {dl30.length > 0 && (
@@ -965,12 +965,12 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <AreaChart data={dl30} valueKey="count" color="#1A56DB" height={160} title="กราฟแนวโน้มการเช็คชื่อ 30 วันล่าสุด" />
+          <AreaChart data={dl30} valueKey="count" color="#1A56DB" height={160} title="กราฟแนวโน้มการเช็คอิน 30 วันล่าสุด" />
         </div>
 
         {/* Col 3 Row 1: Subject ranking */}
         <div className="card" style={{ padding: '20px' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 14 }}>เช็คชื่อรายวิชา</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 14 }}>เช็คอินรายวิชา</div>
           {sb.length === 0
             ? <p style={{ fontSize: 12, color: 'var(--fc-text-4)', textAlign: 'center', paddingTop: 24 }}>ยังไม่มีข้อมูล</p>
             : (() => {
@@ -1206,7 +1206,7 @@ export default function Dashboard() {
                       <th>ชื่อ-นามสกุล</th>
                       <th>ชั้น</th>
                       <th>ห้อง</th>
-                      <th style={{ textAlign: 'right' }}>เช็คชื่อสะสม</th>
+                      <th style={{ textAlign: 'right' }}>เช็คอินสะสม</th>
                       <th />
                     </tr>
                   </thead>
@@ -1291,7 +1291,7 @@ export default function Dashboard() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)' }}>แนวโน้มการเข้าเรียน</div>
-                          <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>นับตั้งแต่วันแรกที่เช็คชื่อ</div>
+                          <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 2 }}>นับตั้งแต่วันแรกที่เช็คอิน</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: 28, fontWeight: 700, color: trendColor, letterSpacing: '-0.02em', lineHeight: 1 }}>
@@ -1440,7 +1440,7 @@ export default function Dashboard() {
                   </div>
                   <button className="btn btn-danger btn-full btn-sm"
                     onClick={() => deleteLogModal(logModal.log_id)}>
-                    ยกเลิกการเช็คชื่อ
+                    ยกเลิกการเช็คอิน
                   </button>
                 </>
               )}

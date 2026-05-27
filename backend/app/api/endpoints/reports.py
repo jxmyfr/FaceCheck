@@ -53,10 +53,10 @@ def export_attendance(
     # ── Build Excel ──────────────────────────────────────────────
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "รายงานการเช็คชื่อ"
+    ws.title = "รายงานการเช็คอิน"
 
     headers = ["รหัสนักเรียน", "ชื่อ-นามสกุล", "ชั้น", "ห้อง",
-               "รหัสวิชา", "ชื่อวิชา", "วันที่", "เวลา", "สถานะ", "วิธีเช็คชื่อ", "เหตุผล"]
+               "รหัสวิชา", "ชื่อวิชา", "วันที่", "เวลา", "สถานะ", "วิธีเช็คอิน", "เหตุผล"]
     header_fill = PatternFill("solid", fgColor="1D4ED8")
     header_font = Font(color="FFFFFF", bold=True, size=11)
 

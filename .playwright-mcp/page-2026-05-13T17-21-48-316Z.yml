@@ -1,0 +1,21 @@
+- generic [ref=e320]:
+  - generic [ref=e321]:
+    - img "FaceCheck" [ref=e322]
+    - generic [ref=e323]: FaceCheck
+    - generic [ref=e324]: ระบบตรวจสอบการเข้าเรียน
+  - generic [ref=e325]:
+    - heading "เข้าสู่ระบบ" [level=1] [ref=e326]
+    - paragraph [ref=e327]: สำหรับครูและผู้ดูแลระบบ
+    - generic [ref=e328]:
+      - generic [ref=e329]: อีเมลหรือชื่อผู้ใช้
+      - textbox "อีเมลหรือชื่อผู้ใช้" [active] [ref=e330]:
+        - /placeholder: teacher@school.ac.th หรือ username
+    - generic [ref=e331]:
+      - generic [ref=e332]: รหัสผ่าน
+      - generic [ref=e333]:
+        - textbox "รหัสผ่าน" [ref=e334]:
+          - /placeholder: ••••••••
+        - button "แสดงรหัสผ่าน" [ref=e335] [cursor=pointer]:
+          - img [ref=e336]
+    - button "เข้าสู่ระบบ" [disabled] [ref=e339]
+  - paragraph [ref=e340]: ติดต่อผู้ดูแลระบบเพื่อขอบัญชีผู้ใช้

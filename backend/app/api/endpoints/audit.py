@@ -11,8 +11,8 @@ router = APIRouter()
 
 ACTION_LABEL = {
     "status_change": "เปลี่ยนสถานะ",
-    "delete":        "ยกเลิกการเช็คชื่อ",
-    "create":        "บันทึกการเช็คชื่อ",
+    "delete":        "ยกเลิกการเช็คอิน",
+    "create":        "บันทึกการเช็คอิน",
 }
 
 

@@ -1022,7 +1022,7 @@ export default function StudentDetail() {
               <div style={{ background: 'var(--fc-muted)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
                 {[
                   'รูปที่แตกต่างกัน (แสง มุม สภาพแวดล้อม) ช่วยให้ระบบแม่นขึ้น',
-                  'ระบบจะเพิ่มรูปจากการสแกนเช็คชื่อให้อัตโนมัติด้วย',
+                  'ระบบจะเพิ่มรูปจากการสแกนเช็คอินให้อัตโนมัติด้วย',
                 ].map(t => (
                   <p key={t} style={{ fontSize: 11, color: 'var(--fc-text-3)', lineHeight: 1.8, margin: 0 }}>· {t}</p>
                 ))}
@@ -1322,14 +1322,14 @@ export default function StudentDetail() {
               {/* ── Scan-learned ── */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)' }}>จากการสแกนเช็คชื่อ</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-text-2)' }}>จากการสแกนเช็คอิน</div>
                   <div style={{ fontSize: 11, color: 'var(--fc-text-4)', marginTop: 1 }}>
                     {scanSlots.length} รูป · เพิ่มอัตโนมัติทุกครั้งที่สแกนสำเร็จ · ช่วยให้จดจำใบหน้าแม่นยำขึ้น
                   </div>
                 </div>
                 {scanSlots.length === 0 ? (
                   <div style={{ padding: '18px 0', color: 'var(--fc-text-4)', fontSize: 13, textAlign: 'center' }}>
-                    ยังไม่มีรูปจากการสแกน — จะเพิ่มอัตโนมัติเมื่อสแกนเช็คชื่อครั้งแรก
+                    ยังไม่มีรูปจากการสแกน — จะเพิ่มอัตโนมัติเมื่อสแกนเช็คอินครั้งแรก
                   </div>
                 ) : (
                   <FaceGrid group={scanSlots} canDelete={true} />

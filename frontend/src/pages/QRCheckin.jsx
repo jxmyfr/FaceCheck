@@ -29,14 +29,14 @@ export default function QRCheckin() {
       )
       setResult(res.data)
     } catch (e) {
-      setError(e.response?.data?.detail || 'เช็คชื่อไม่สำเร็จ กรุณาลองใหม่')
+      setError(e.response?.data?.detail || 'เช็คอินไม่สำเร็จ กรุณาลองใหม่')
     } finally { setLoading(false) }
   }
 
   const STATUS_CFG = {
-    success:         { label: 'เช็คชื่อสำเร็จ',  color: '#16A34A', bg: '#F0FDF4' },
+    success:         { label: 'เช็คอินสำเร็จ',  color: '#16A34A', bg: '#F0FDF4' },
     late:            { label: 'มาสาย',            color: '#D97706', bg: '#FFFBEB' },
-    already_checked: { label: 'เช็คชื่อแล้ว',    color: '#D97706', bg: '#FFFBEB' },
+    already_checked: { label: 'เช็คอินแล้ว',    color: '#D97706', bg: '#FFFBEB' },
   }
 
   return (
@@ -64,7 +64,7 @@ export default function QRCheckin() {
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>เช็คชื่อเข้าเรียน</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>เช็คอินเข้าเรียน</h1>
           <p style={{ fontSize: 13, color: '#6B7280', marginTop: 6, marginBottom: 0 }}>
             กรอกรหัสนักเรียนเพื่อบันทึกการเข้าเรียน
           </p>
@@ -116,7 +116,7 @@ export default function QRCheckin() {
                   cursor: 'pointer', fontWeight: 500,
                 }}
               >
-                เช็คชื่อคนต่อไป
+                เช็คอินคนต่อไป
               </button>
             </div>
           ) : (
@@ -181,7 +181,7 @@ export default function QRCheckin() {
                     }} />
                     กำลังบันทึก...
                   </>
-                ) : 'เช็คชื่อเข้าเรียน'}
+                ) : 'เช็คอินเข้าเรียน'}
               </button>
             </form>
           )}

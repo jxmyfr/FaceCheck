@@ -174,7 +174,7 @@ export default function Reports() {
 
       <div style={{ marginBottom: 24 }} className="print-hide">
         <h1 className="page-title">รายงาน</h1>
-        <p className="page-sub">ออกรายงานการเช็คชื่อและ Export Excel</p>
+        <p className="page-sub">ออกรายงานการเช็คอินและ Export Excel</p>
       </div>
 
       {/* Filter card */}
@@ -268,7 +268,7 @@ export default function Reports() {
       {/* Print header (only visible when printing) */}
       {searched && logs.length > 0 && (
         <div style={{ display: 'none' }} className="print-header">
-          <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>บันทึกการเช็คชื่อ</h2>
+          <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>บันทึกการเช็คอิน</h2>
           <p style={{ margin: '0 0 16px', color: '#666', fontSize: 13 }}>{printTitle}</p>
         </div>
       )}
@@ -315,7 +315,7 @@ export default function Reports() {
         </div>
       ) : searched && logs.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', color: 'var(--fc-text-4)', padding: '48px 0', fontSize: 13 }}>
-          ไม่พบบันทึกการเช็คชื่อในช่วงเวลานี้
+          ไม่พบบันทึกการเช็คอินในช่วงเวลานี้
         </div>
       ) : logs.length > 0 && view === 'summary' ? (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -463,7 +463,7 @@ export default function Reports() {
                   <th>ชื่อ-นามสกุล</th>
                   <th>ชั้น/ห้อง</th>
                   <th>วิชา</th>
-                  <th>วิธีเช็คชื่อ</th>
+                  <th>วิธีเช็คอิน</th>
                   <th>สถานะ</th>
                 </tr>
               </thead>

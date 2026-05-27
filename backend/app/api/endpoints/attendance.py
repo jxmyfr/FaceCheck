@@ -179,13 +179,13 @@ async def scan_attendance(
     if not subject:
         raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
 
-    # Teacher เช็คชื่อได้เฉพาะวิชาที่ตัวเองสอน (เว้นแต่สอนแทน)
+    # Teacher เช็คอินได้เฉพาะวิชาที่ตัวเองสอน (เว้นแต่สอนแทน)
     if current_user.role == "teacher" and not substitute:
         assigned = db.query(TeacherSubject).filter_by(
             teacher_id=current_user.id, subject_id=subject_id
         ).first()
         if not assigned:
-            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คชื่อวิชานี้")
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คอินวิชานี้")
 
     # Load settings first so quality thresholds are available for process_capture
     setting        = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
@@ -242,7 +242,7 @@ async def scan_attendance(
         if sched.day_of_week and sched.day_of_week != _today_day:
             raise HTTPException(
                 status_code=403,
-                detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คชื่อได้",
+                detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คอินได้",
             )
     elif not dev_mode and _all_subj_scheds and not _today_scheds:
         _days_str = ' '.join(sorted({sc.day_of_week for sc in _all_subj_scheds if sc.day_of_week}))
@@ -295,7 +295,7 @@ async def scan_attendance(
             if not (sh * 60 + sm - GRACE_MIN <= now_min <= eh * 60 + em + GRACE_MIN):
                 raise HTTPException(
                     status_code=403,
-                    detail="ไม่อยู่ในช่วงเวลาเรียน — ไม่สามารถเช็คชื่อได้ขณะนี้",
+                    detail="ไม่อยู่ในช่วงเวลาเรียน — ไม่สามารถเช็คอินได้ขณะนี้",
                 )
         except HTTPException:
             raise
@@ -378,7 +378,7 @@ async def scan_attendance(
             **student_info,
             "log_id":  dup_log.id,
             "status":  "already_checked",
-            "message": f"{best_match.first_name} เช็คชื่อวิชานี้ไปแล้ววันนี้",
+            "message": f"{best_match.first_name} เช็คอินวิชานี้ไปแล้ววันนี้",
             "checked_at": checked_at_str,
         }
 
@@ -435,7 +435,7 @@ async def scan_attendance(
         "log_id":      new_log.id,
         "status":      "success",
         "scan_status": scan_status,
-        "message":     "มาสาย" if scan_status == "late" else "เช็คชื่อสำเร็จ",
+        "message":     "มาสาย" if scan_status == "late" else "เช็คอินสำเร็จ",
     }
 
 
@@ -468,7 +468,7 @@ async def scan_multi(
             teacher_id=current_user.id, subject_id=subject_id
         ).first()
         if not assigned:
-            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คชื่อวิชานี้")
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คอินวิชานี้")
 
     setting        = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
     THRESHOLD      = setting.face_threshold  if (setting and setting.face_threshold  is not None) else 0.65
@@ -514,7 +514,7 @@ async def scan_multi(
         if not dev_mode and sched.day_of_week and sched.day_of_week != _today_day:
             raise HTTPException(
                 status_code=403,
-                detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คชื่อได้",
+                detail=f"ตารางสอนนี้เป็นวัน{sched.day_of_week} ไม่ใช่วันนี้ ({_today_day}) — ไม่สามารถเช็คอินได้",
             )
     elif not dev_mode and _all_subj_scheds and not _today_scheds:
         _days_str = ' '.join(sorted({sc.day_of_week for sc in _all_subj_scheds if sc.day_of_week}))
@@ -532,7 +532,7 @@ async def scan_multi(
             if not (sh * 60 + sm - GRACE_MIN <= now_min <= eh * 60 + em + GRACE_MIN):
                 raise HTTPException(
                     status_code=403,
-                    detail="ไม่อยู่ในช่วงเวลาเรียน — ไม่สามารถเช็คชื่อได้ขณะนี้",
+                    detail="ไม่อยู่ในช่วงเวลาเรียน — ไม่สามารถเช็คอินได้ขณะนี้",
                 )
         except HTTPException:
             raise
@@ -666,7 +666,7 @@ async def scan_multi(
                 **student_info,
                 "log_id":     already_checked.id,
                 "status":     "already_checked",
-                "message":    f"{student.first_name} เช็คชื่อวิชานี้ไปแล้ววันนี้",
+                "message":    f"{student.first_name} เช็คอินวิชานี้ไปแล้ววันนี้",
                 "checked_at": checked_at_str,
             })
             continue
@@ -705,7 +705,7 @@ async def scan_multi(
             "log_id":      log_id,
             "status":      "success",
             "scan_status": scan_status_base,
-            "message":     "มาสาย" if scan_status_base == "late" else "เช็คชื่อสำเร็จ",
+            "message":     "มาสาย" if scan_status_base == "late" else "เช็คอินสำเร็จ",
         })
 
     if not dev_mode and matched:
@@ -991,12 +991,12 @@ def update_log_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    """แก้ไขสถานะการเช็คชื่อ"""
+    """แก้ไขสถานะการเช็คอิน"""
     if status not in ("present", "late", "absent", "excused"):
         raise HTTPException(status_code=400, detail="status ต้องเป็น present, late, absent หรือ excused")
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
-        raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+        raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คอิน")
     if current_user.role == "teacher":
         ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
         if log.subject_id not in ts:
@@ -1028,7 +1028,7 @@ def bulk_delete_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    """ลบบันทึกการเช็คชื่อหลายรายการพร้อมกัน"""
+    """ลบบันทึกการเช็คอินหลายรายการพร้อมกัน"""
     try:
         id_list = [int(i.strip()) for i in ids.split(',') if i.strip()]
     except ValueError:
@@ -1074,7 +1074,7 @@ def delete_log(
 ):
     log = db.query(AttendanceLog).filter(AttendanceLog.id == log_id).first()
     if not log:
-        raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คชื่อ")
+        raise HTTPException(status_code=404, detail="ไม่พบบันทึกการเช็คอิน")
     if current_user.role == "teacher":
         ts = {r.subject_id for r in db.query(TeacherSubject).filter_by(teacher_id=current_user.id).all()}
         if log.subject_id not in ts:
@@ -1103,7 +1103,7 @@ def manual_attendance(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    """ครู/แอดมินเช็คชื่อนักเรียนด้วยตนเอง (ไม่ใช้ใบหน้า)"""
+    """ครู/แอดมินเช็คอินนักเรียนด้วยตนเอง (ไม่ใช้ใบหน้า)"""
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail=f"ไม่พบรายวิชา ID {subject_id}")
@@ -1113,7 +1113,7 @@ def manual_attendance(
             teacher_id=current_user.id, subject_id=subject_id
         ).first()
         if not assigned:
-            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คชื่อวิชานี้")
+            raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เช็คอินวิชานี้")
 
     if status not in ("present", "late", "absent"):
         raise HTTPException(status_code=400, detail="status ต้องเป็น present, late หรือ absent")
@@ -1150,7 +1150,7 @@ def manual_attendance(
             **info,
             "log_id":     already.id,
             "status":     "already_checked",
-            "message":    f"{student.first_name} เช็คชื่อวิชานี้ไปแล้ววันนี้",
+            "message":    f"{student.first_name} เช็คอินวิชานี้ไปแล้ววันนี้",
             "checked_at": already.timestamp.strftime("%H:%M"),
         }
 
@@ -1176,7 +1176,7 @@ def mark_absent(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    """ปิดคาบ: บันทึกขาดเรียนให้นักเรียนที่ยังไม่ได้เช็คชื่อวิชานี้วันนี้"""
+    """ปิดคาบ: บันทึกขาดเรียนให้นักเรียนที่ยังไม่ได้เช็คอินวิชานี้วันนี้"""
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
@@ -1248,7 +1248,7 @@ def get_roster(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    """Roster ชั้นเรียน: ใครเช็คชื่อแล้ว / ยังไม่เช็ค / ยังไม่ได้ลงทะเบียนใบหน้า"""
+    """Roster ชั้นเรียน: ใครเช็คอินแล้ว / ยังไม่เช็ค / ยังไม่ได้ลงทะเบียนใบหน้า"""
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
     if not subject:
         raise HTTPException(status_code=404, detail="ไม่พบรายวิชา")
@@ -1418,7 +1418,7 @@ def create_qr_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
-    """สร้าง QR token สำหรับเช็คชื่อด้วย QR Code (อายุ 30 นาที)"""
+    """สร้าง QR token สำหรับเช็คอินด้วย QR Code (อายุ 30 นาที)"""
     from app.core.security import SECRET_KEY, ALGORITHM
     from jose import jwt as _jwt
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
@@ -1454,7 +1454,7 @@ def qr_checkin(
     student_id_str: str = Query(..., alias="student_id", description="รหัสนักเรียน"),
     db: Session = Depends(get_db),
 ):
-    """นักเรียนเช็คชื่อผ่าน QR Code (ไม่ต้อง login)"""
+    """นักเรียนเช็คอินผ่าน QR Code (ไม่ต้อง login)"""
     from app.core.security import SECRET_KEY, ALGORITHM
     from jose import jwt as _jwt, JWTError
     try:
@@ -1548,7 +1548,7 @@ def qr_checkin(
             db.commit()
         return {
             "status": "already_checked",
-            "message": f"เช็คชื่อวิชานี้ไปแล้ววันนี้ (เวลา {already.timestamp.strftime('%H:%M')})",
+            "message": f"เช็คอินวิชานี้ไปแล้ววันนี้ (เวลา {already.timestamp.strftime('%H:%M')})",
             "student_name": f"{student.first_name} {student.last_name}",
             "subject_name": subject.subject_name,
         }

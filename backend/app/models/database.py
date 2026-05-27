@@ -145,7 +145,7 @@ class Holiday(Base):
 
 
 class AttendanceAuditLog(Base):
-    """บันทึก audit trail การเปลี่ยนแปลงสถานะการเช็คชื่อ"""
+    """บันทึก audit trail การเปลี่ยนแปลงสถานะการเช็คอิน"""
     __tablename__ = "attendance_audit_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

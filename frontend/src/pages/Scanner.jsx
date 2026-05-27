@@ -55,9 +55,9 @@ const IcAlertTriangle = () => (
 
 // ── Status config ────────────────────────────────────────────────
 const STATUS_CFG = {
-  success:        { label: 'เช็คชื่อสำเร็จ', color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
+  success:        { label: 'เช็คอินสำเร็จ', color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)', accent: '#16A34A' },
   success_late:   { label: 'มาสาย',           color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
-  already_checked:{ label: 'เช็คชื่อแล้ว',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
+  already_checked:{ label: 'เช็คอินแล้ว',   color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)', accent: '#D97706' },
   error:          { label: 'ระบุตัวตนไม่ได้', color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)',  accent: '#DC2626' },
   wrong_room:     { label: 'ไม่ใช่ห้องนี้',   color: '#92400E',                bg: '#FEF3C7',                 accent: '#D97706' },
   dev_mode:       { label: '[DEV] ทดสอบ',     color: '#6D28D9',                bg: '#EDE9FE',                 accent: '#7C3AED' },
@@ -205,7 +205,7 @@ function ResultCard({ result, onDismiss, onCancel }) {
                 fontSize: 12, color: 'var(--fc-danger)', cursor: 'pointer',
               }}
             >
-              {cancelling ? 'กำลังยกเลิก...' : 'ยกเลิกการเช็คชื่อ'}
+              {cancelling ? 'กำลังยกเลิก...' : 'ยกเลิกการเช็คอิน'}
             </button>
           )}
           <button
@@ -256,7 +256,7 @@ function BatchResultCard({ result, onDismiss }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
           {successCount > 0 && (
             <span className="chip" style={{ background: 'var(--fc-success-light)', color: 'var(--fc-success-dark)', fontWeight: 600 }}>
-              เช็คชื่อ {successCount} คน
+              เช็คอิน {successCount} คน
             </span>
           )}
           {alreadyCount > 0 && (
@@ -857,7 +857,7 @@ export default function Scanner() {
 
   const handleMarkAbsent = async () => {
     if (!subjectId || markingAbsent) return
-    const ok = await confirm('บันทึกขาดเรียนให้นักเรียนทุกคนที่ยังไม่ได้เช็คชื่อวันนี้ใช่หรือไม่?', {
+    const ok = await confirm('บันทึกขาดเรียนให้นักเรียนทุกคนที่ยังไม่ได้เช็คอินวันนี้ใช่หรือไม่?', {
       title: 'ปิดคาบ — บันทึกขาดเรียน',
       danger: true,
     })
@@ -942,7 +942,7 @@ export default function Scanner() {
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         <h1 className="page-title">Face Scanner</h1>
-        <p className="page-sub">สแกนใบหน้าเพื่อเช็คชื่อเข้าเรียน</p>
+        <p className="page-sub">สแกนใบหน้าเพื่อเช็คอินเข้าเรียน</p>
       </div>
 
       {/* Subject + Mode */}
@@ -1082,7 +1082,7 @@ export default function Scanner() {
           {[
             { key: 'auto',   label: 'อัตโนมัติ', icon: <IcZap /> },
             { key: 'manual', label: 'เมนวล',     icon: <IcHand /> },
-            { key: 'lookup', label: 'เช็คชื่อ ID', icon: <IcSearch /> },
+            { key: 'lookup', label: 'เช็คอิน ID', icon: <IcSearch /> },
           ].map(m => (
             <button key={m.key} onClick={() => switchMode(m.key)} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px',
@@ -1223,8 +1223,8 @@ export default function Scanner() {
         {/* Lookup panel (replaces camera when in lookup mode) */}
         {mode === 'lookup' ? (
           <div className="card">
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 4 }}>เช็คชื่อด้วยรหัสนักเรียน</div>
-            <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginBottom: 20 }}>ใช้เมื่อใบหน้าสแกนไม่ผ่านหรือต้องการเช็คชื่อแทนนักเรียน</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fc-text)', marginBottom: 4 }}>เช็คอินด้วยรหัสนักเรียน</div>
+            <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginBottom: 20 }}>ใช้เมื่อใบหน้าสแกนไม่ผ่านหรือต้องการเช็คอินแทนนักเรียน</div>
 
             <div className="form-group">
               <label htmlFor="lookup-id" className="form-label">รหัสนักเรียน</label>
@@ -1265,7 +1265,7 @@ export default function Scanner() {
             <div style={{ marginTop: 16, background: 'var(--fc-muted)', borderRadius: 8, padding: '10px 14px' }}>
               <div style={{ fontSize: 11, color: 'var(--fc-text-4)', lineHeight: 1.8 }}>
                 · ป้อนรหัสนักเรียนแล้วกด Enter หรือปุ่มบันทึก<br />
-                · ระบบจะตรวจสอบว่าเช็คชื่อซ้ำในวันนี้หรือไม่<br />
+                · ระบบจะตรวจสอบว่าเช็คอินซ้ำในวันนี้หรือไม่<br />
                 · ใช้โหมดนี้เมื่อจำเป็นเท่านั้น เพราะไม่มีการยืนยันใบหน้า
               </div>
             </div>
@@ -1359,7 +1359,7 @@ export default function Scanner() {
               let dot, label
               if (cooldown) {
                 dot = { background: '#60A5FA' }
-                label = `เช็คชื่อสำเร็จ — รอ ${cooldownSecs} วินาที`
+                label = `เช็คอินสำเร็จ — รอ ${cooldownSecs} วินาที`
               } else if (faceDetected === true) {
                 dot = { background: '#4ADE80', animation: 'pulse 1.2s ease-in-out infinite' }
                 label = 'พบใบหน้า — กำลังระบุตัวตน...'
@@ -1416,7 +1416,7 @@ export default function Scanner() {
               >
                 {manualLoading
                   ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} /> ประมวลผล...</>
-                  : <><IcCamera /> ถ่ายภาพและเช็คชื่อ</>
+                  : <><IcCamera /> ถ่ายภาพและเช็คอิน</>
                 }
               </button>
             )}
@@ -1464,7 +1464,7 @@ export default function Scanner() {
                 }}>
                   {absentResult.marked_absent > 0
                     ? `บันทึกขาดเรียน ${absentResult.marked_absent} คน (จากทั้งหมด ${absentResult.total_students} คน)`
-                    : `นักเรียนทุกคนเช็คชื่อครบแล้ว (${absentResult.total_students} คน)`
+                    : `นักเรียนทุกคนเช็คอินครบแล้ว (${absentResult.total_students} คน)`
                   }
                 </div>
               )}
@@ -1520,7 +1520,7 @@ export default function Scanner() {
               <div style={{ fontSize: 13, textAlign: 'center', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                 {mode === 'auto'
                   ? autoActive ? 'รอรับใบหน้า...\nผลจะแสดงที่นี่' : 'กด "เริ่มสแกนอัตโนมัติ"\nแล้วให้นักเรียนเดินเข้ากรอบ'
-                  : 'กด "ถ่ายภาพและเช็คชื่อ"\nผลการสแกนจะแสดงที่นี่'
+                  : 'กด "ถ่ายภาพและเช็คอิน"\nผลการสแกนจะแสดงที่นี่'
                 }
               </div>
             </div>
@@ -1534,7 +1534,7 @@ export default function Scanner() {
                 padding: '12px 16px', borderBottom: '1px solid var(--fc-border)',
               }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fc-text-2)' }}>
-                  ประวัติการเช็คชื่อ ({displayedLogs.length} คน)
+                  ประวัติการเช็คอิน ({displayedLogs.length} คน)
                 </div>
                 <button
                   onClick={() => { setLogs([]); setResult(null) }}
@@ -1685,7 +1685,7 @@ export default function Scanner() {
                 <div style={{ maxHeight: 240, overflowY: 'auto' }}>
                   {roster.pending_students.length === 0 ? (
                     <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--fc-success-dark)', textAlign: 'center', fontWeight: 600 }}>
-                      นักเรียนทุกคนเช็คชื่อครบแล้ว
+                      นักเรียนทุกคนเช็คอินครบแล้ว
                     </div>
                   ) : (
                     roster.pending_students.map(s => (
@@ -1746,7 +1746,7 @@ export default function Scanner() {
         return (
           <div className="modal-overlay" onClick={() => setShowQr(false)}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center' }}>
-              <div className="modal-title">QR Code สำหรับเช็คชื่อ</div>
+              <div className="modal-title">QR Code สำหรับเช็คอิน</div>
               <div style={{ fontSize: 13, color: 'var(--fc-text-3)', marginBottom: 4 }}>{qrData.subject_name}</div>
               <div style={{
                 fontSize: 13, fontWeight: 600,
@@ -1831,7 +1831,7 @@ function LogDetailModal({ log, cfg, onClose, onCancel }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-        <div className="modal-title">รายละเอียดการเช็คชื่อ</div>
+        <div className="modal-title">รายละเอียดการเช็คอิน</div>
 
         {photo && (
           <div style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 16, aspectRatio: '4/3', background: 'var(--fc-muted)' }}>
@@ -1884,7 +1884,7 @@ function LogDetailModal({ log, cfg, onClose, onCancel }) {
               className="btn btn-sm"
               style={{ flex: 1, background: 'transparent', border: '1px solid var(--fc-danger)', color: 'var(--fc-danger)' }}
               onClick={onCancel}
-            >ยกเลิกการเช็คชื่อ</button>
+            >ยกเลิกการเช็คอิน</button>
           )}
           <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={onClose}>ปิด</button>
         </div>

@@ -341,7 +341,7 @@ def get_student_attendance(
     late    = sum(1 for r in records if r["status"] == "late")
     absent  = sum(1 for r in records if r["status"] == "absent")
 
-    # ── Attendance trend (นับตั้งแต่วันแรกที่นักเรียนเช็คชื่อ) ──
+    # ── Attendance trend (นับตั้งแต่วันแรกที่นักเรียนเช็คอิน) ──
     semester = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
     all_dates = sorted({r["date"] for r in records})
     trend: list[dict] = []

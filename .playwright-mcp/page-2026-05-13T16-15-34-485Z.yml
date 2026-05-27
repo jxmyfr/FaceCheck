@@ -1,0 +1,33 @@
+- generic [ref=e3]:
+  - button "เปิดเมนู" [ref=e4] [cursor=pointer]:
+    - img [ref=e5]
+  - complementary "เมนูนำทาง" [ref=e6]:
+    - link "ข้ามไปเนื้อหาหลัก" [ref=e7] [cursor=pointer]:
+      - /url: "#main-content"
+    - generic [ref=e8]:
+      - img "FaceCheck" [ref=e9]
+      - generic [ref=e10]:
+        - generic [ref=e11]: FaceCheck
+        - generic [ref=e12]: ระบบเช็คชื่อ
+      - button "ปิดเมนู" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+    - navigation "เมนูหลัก" [ref=e17]:
+      - link "Dashboard" [ref=e19] [cursor=pointer]:
+        - /url: /
+        - img [ref=e21]
+        - generic [ref=e26]: Dashboard
+      - link "Scanner" [ref=e28] [cursor=pointer]:
+        - /url: /scan
+        - img [ref=e30]
+        - generic [ref=e33]: Scanner
+      - link "Students" [ref=e35] [cursor=pointer]:
+        - /url: /students
+        - img [ref=e37]
+        - generic [ref=e41]: Students
+      - link "Reports" [ref=e43] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e45]
+        - generic [ref=e48]: Reports
+      - button "คู่มือการใช้งาน" [ref=e50] [cursor=pointer]:
+        - img [ref=e52]
+        - generic [ref=e55]: ช่วยเหลือ

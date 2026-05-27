@@ -588,18 +588,18 @@ export default function Admin() {
   }
 
   const deleteLog = async (logId) => {
-    if (!await confirm('ยืนยันการยกเลิกการเช็คชื่อนี้?', { title: 'ยกเลิกการเช็คชื่อ', danger: true })) return
+    if (!await confirm('ยืนยันการยกเลิกการเช็คอินนี้?', { title: 'ยกเลิกการเช็คอิน', danger: true })) return
     try {
       await axios.delete(`${API}/attendance/logs/${logId}`)
       setLogs(prev => prev.filter(l => l.log_id !== logId))
       setSelectedLogs(prev => { const n = new Set(prev); n.delete(logId); return n })
-      flash('ยกเลิกการเช็คชื่อสำเร็จ')
+      flash('ยกเลิกการเช็คอินสำเร็จ')
     } catch (e) { flash(e.response?.data?.detail || 'เกิดข้อผิดพลาด', 'error') }
   }
 
   const bulkDeleteLogs = async () => {
     if (selectedLogs.size === 0) return
-    if (!await confirm(`ยืนยันการยกเลิกการเช็คชื่อ ${selectedLogs.size} รายการ?`, { title: 'ยกเลิกหลายรายการ', danger: true })) return
+    if (!await confirm(`ยืนยันการยกเลิกการเช็คอิน ${selectedLogs.size} รายการ?`, { title: 'ยกเลิกหลายรายการ', danger: true })) return
     setBulkDeleting(true)
     try {
       const ids = [...selectedLogs].join(',')
@@ -627,7 +627,7 @@ export default function Admin() {
   }
 
   const deleteSub = async (id) => {
-    if (!await confirm('ลบวิชาจะลบประวัติเช็คชื่อที่เกี่ยวข้องด้วย ยืนยัน?', { title: 'ลบรายวิชา', danger: true })) return
+    if (!await confirm('ลบวิชาจะลบประวัติเช็คอินที่เกี่ยวข้องด้วย ยืนยัน?', { title: 'ลบรายวิชา', danger: true })) return
     try {
       await axios.delete(`${API}/attendance/subjects/${id}`)
       flash('ลบวิชาสำเร็จ'); loadAll()
@@ -734,7 +734,7 @@ export default function Admin() {
           รายวิชา ({subjects.length})
         </button>
         <button className={`tab-item ${tab==='logs'?'active':''}`} onClick={()=>{ setTab('logs'); loadLogs() }}>
-          บันทึกการเช็คชื่อ
+          บันทึกการเช็คอิน
         </button>
         <button className={`tab-item ${tab==='semester'?'active':''}`} onClick={()=>setTab('semester')}>
           ภาคเรียน
@@ -1069,7 +1069,7 @@ export default function Admin() {
             </div>
           ) : logs.length === 0 ? (
             <div style={{textAlign:'center',padding:40,color:'var(--fc-text-4)',fontSize:13}}>
-              ไม่พบบันทึกการเช็คชื่อในวันนี้
+              ไม่พบบันทึกการเช็คอินในวันนี้
             </div>
           ) : (() => {
             const filtered = logs.filter(l => showDupScans || l.status !== 'already_checked')
@@ -1103,7 +1103,7 @@ export default function Admin() {
                       ยกเลิกการเลือก
                     </button>
                     <button className="btn btn-danger btn-sm" onClick={bulkDeleteLogs} disabled={bulkDeleting}>
-                      {bulkDeleting ? 'กำลังลบ…' : `ยกเลิกการเช็คชื่อ ${selectedLogs.size} รายการ`}
+                      {bulkDeleting ? 'กำลังลบ…' : `ยกเลิกการเช็คอิน ${selectedLogs.size} รายการ`}
                     </button>
                   </div>
                 )}
@@ -1280,7 +1280,7 @@ export default function Admin() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
                   { n: '1', text: 'ข้อมูลนักเรียน รูปใบหน้า และตารางสอนทั้งหมดยังคงอยู่' },
-                  { n: '2', text: 'ประวัติการเช็คชื่อเดิมไม่หายไป — ดูย้อนหลังได้เสมอ' },
+                  { n: '2', text: 'ประวัติการเช็คอินเดิมไม่หายไป — ดูย้อนหลังได้เสมอ' },
                   { n: '3', text: 'ภาคเรียนเก่าจะถูกเก็บไว้ในประวัติด้านล่าง' },
                   { n: '4', text: 'ใช้ฟิลเตอร์วันที่ใน Reports เพื่อดูข้อมูลภาคเรียนที่ผ่านมา' },
                 ].map(item => (
@@ -1341,7 +1341,7 @@ export default function Admin() {
       {showNewSem && (
         <Modal title="เริ่มภาคเรียนใหม่" onClose={() => setShowNewSem(false)} maxWidth={480}>
           <div style={{ fontSize: 12, color: 'var(--fc-text-4)', marginBottom: 16, padding: '10px 14px', background: '#FFFBEB', borderRadius: 8, border: '1px solid #FCD34D' }}>
-            ภาคเรียนปัจจุบันจะถูกเก็บไว้ในประวัติ — ข้อมูลการเช็คชื่อทั้งหมดยังคงอยู่
+            ภาคเรียนปัจจุบันจะถูกเก็บไว้ในประวัติ — ข้อมูลการเช็คอินทั้งหมดยังคงอยู่
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <div className="form-group">
@@ -1888,7 +1888,7 @@ export default function Admin() {
 
       {/* Modal: Log detail */}
       {logDetail && (
-        <Modal title="รายละเอียดการเช็คชื่อ" onClose={closeLogDetail} maxWidth={680}>
+        <Modal title="รายละเอียดการเช็คอิน" onClose={closeLogDetail} maxWidth={680}>
           <div style={{display:'grid', gridTemplateColumns: logPhoto ? '1fr 1fr' : '1fr', gap: 20, alignItems:'start'}}>
             {/* Scan photo */}
             {logPhoto && (
@@ -1959,7 +1959,7 @@ export default function Admin() {
               </div>
               <div style={{display:'flex',gap:8,marginTop:16}}>
                 <button className="btn btn-danger btn-full" onClick={()=>{deleteLog(logDetail.log_id);closeLogDetail()}}>
-                  ยกเลิกการเช็คชื่อ
+                  ยกเลิกการเช็คอิน
                 </button>
                 <button className="btn btn-ghost btn-full" onClick={closeLogDetail}>ปิด</button>
               </div>
@@ -2218,8 +2218,8 @@ export default function Admin() {
                   onChange={e => setAuditFilter(f => ({ ...f, action: e.target.value }))}>
                   <option value="">ทุกประเภท</option>
                   <option value="status_change">เปลี่ยนสถานะ</option>
-                  <option value="delete">ยกเลิกการเช็คชื่อ</option>
-                  <option value="create">บันทึกการเช็คชื่อ</option>
+                  <option value="delete">ยกเลิกการเช็คอิน</option>
+                  <option value="create">บันทึกการเช็คอิน</option>
                 </select>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
