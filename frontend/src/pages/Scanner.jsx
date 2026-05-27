@@ -181,6 +181,13 @@ function ResultCard({ result, onDismiss, onCancel }) {
                   {result.confidence != null && (
                     <div style={{ fontSize: 11, color: 'var(--fc-text-4)' }}>
                       ความแม่นยำ {Math.round(result.confidence * 100)}%
+                      {result.process_ms != null && (
+                        <span style={{ marginLeft: 10 }}>
+                          · ประมวลผล {result.process_ms < 1000
+                            ? `${result.process_ms} ms`
+                            : `${(result.process_ms / 1000).toFixed(1)} วินาที`}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>}
@@ -692,7 +699,9 @@ export default function Scanner() {
       })
       const fd  = new FormData()
       fd.append('file', blob, 'scan.jpg')
+      const _t0 = performance.now()
       const res = await axios.post(scanUrl, fd)
+      const process_ms = Math.round(performance.now() - _t0)
       const { results, face_count, matched_count } = res.data
 
       if (isAuto) setFaceDetected(face_count > 0)
@@ -717,7 +726,7 @@ export default function Scanner() {
         const r = results[0]
         const entry = {
           ...r, photo: img, logId: r.log_id || Date.now(),
-          scanDate, scan_time: scanTime,
+          scanDate, scan_time: scanTime, process_ms,
           subject_id: Number(subjectId), teacher_name: selSubj?.teacher_name || null,
         }
         if (entry.log_id && img) recentPhotosRef.current[entry.log_id] = img
