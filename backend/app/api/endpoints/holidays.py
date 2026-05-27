@@ -48,6 +48,8 @@ def create_holiday(
 ):
     if body.type not in ("public", "school"):
         raise HTTPException(status_code=400, detail="type ต้องเป็น public หรือ school")
+    if body.date.weekday() >= 5:
+        raise HTTPException(status_code=400, detail="ไม่สามารถเพิ่มวันหยุดในวันเสาร์หรืออาทิตย์")
     existing = db.query(Holiday).filter(
         Holiday.holiday_date == body.date,
         Holiday.name == body.name,
@@ -95,6 +97,8 @@ def import_holidays(
     for item in body.items:
         try:
             h_date = date.fromisoformat(item["date"])
+            if h_date.weekday() >= 5:
+                continue
             name = item.get("localName") or item.get("name", "")
             existing = db.query(Holiday).filter(
                 Holiday.holiday_date == h_date,

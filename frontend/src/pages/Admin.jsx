@@ -449,6 +449,9 @@ export default function Admin() {
 
   const addHoliday = async () => {
     if (!newHoliday.date || !newHoliday.name.trim()) { flash('กรุณากรอกวันที่และชื่อวันหยุด','error'); return }
+    const [y, m, d] = newHoliday.date.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay()
+    if (dow === 0 || dow === 6) { flash('ไม่สามารถเพิ่มวันหยุดในวันเสาร์หรืออาทิตย์', 'error'); return }
     setHolidayAdding(true)
     try {
       await axios.post(`${API}/holidays/`, newHoliday)
