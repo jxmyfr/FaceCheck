@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import date
-from typing import Optional
+from typing import Optional, Any, List
 import urllib.request
 import urllib.error
 import json
@@ -78,6 +78,35 @@ def delete_holiday(
     db.delete(h)
     db.commit()
     return {"deleted": True}
+
+
+class HolidayImportBody(BaseModel):
+    items: List[Any]
+
+
+@router.post("/import/{year}")
+def import_holidays(
+    year: int,
+    body: HolidayImportBody,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    added = 0
+    for item in body.items:
+        try:
+            h_date = date.fromisoformat(item["date"])
+            name = item.get("localName") or item.get("name", "")
+            existing = db.query(Holiday).filter(
+                Holiday.holiday_date == h_date,
+                Holiday.holiday_type == "public",
+            ).first()
+            if not existing:
+                db.add(Holiday(holiday_date=h_date, name=name, holiday_type="public", year=year))
+                added += 1
+        except Exception:
+            continue
+    db.commit()
+    return {"synced": len(body.items), "added": added, "year": year}
 
 
 @router.post("/sync/{year}")

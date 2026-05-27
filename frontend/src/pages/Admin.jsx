@@ -358,10 +358,13 @@ export default function Admin() {
   const syncHolidays = async () => {
     setHolidaySyncing(true)
     try {
-      const res = await axios.post(`${API}/holidays/sync/${holidayYear}`)
+      const nagerRes = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${holidayYear}/TH`)
+      if (!nagerRes.ok) throw new Error(`ดึงข้อมูลจาก date.nager.at ไม่สำเร็จ (HTTP ${nagerRes.status})`)
+      const items = await nagerRes.json()
+      const res = await axios.post(`${API}/holidays/import/${holidayYear}`, { items })
       flash(`ซิงค์วันหยุดราชการ ${res.data.year} สำเร็จ · เพิ่มใหม่ ${res.data.added} วัน`)
       loadHolidays(holidayYear)
-    } catch (e) { flash(e.response?.data?.detail||'ซิงค์ไม่สำเร็จ','error') }
+    } catch (e) { flash(e.response?.data?.detail || e.message || 'ซิงค์ไม่สำเร็จ', 'error') }
     finally { setHolidaySyncing(false) }
   }
 
