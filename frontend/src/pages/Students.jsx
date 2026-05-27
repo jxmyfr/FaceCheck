@@ -57,7 +57,11 @@ export default function Students() {
       .filter(Boolean)
   )].sort((a, b) => Number(a) - Number(b))
 
-  const noFaceCount = students.filter(s => !s.has_face).length
+  const noFaceCount = students.filter(s =>
+    (!filterGrade || s.grade_level === filterGrade) &&
+    (!filterRoom  || s.room_number  === filterRoom) &&
+    !s.has_face
+  ).length
 
   const filtered = students.filter(s => {
     const q = search.toLowerCase()
