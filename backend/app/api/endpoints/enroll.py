@@ -11,6 +11,7 @@ logger = logging.getLogger("facecheck.enroll")
 from openpyxl.styles import Font, PatternFill, Alignment
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, status, Body
+from pydantic import BaseModel
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 
