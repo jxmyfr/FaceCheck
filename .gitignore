@@ -16,6 +16,11 @@ storage/faces/*
 !storage/faces/.gitkeep
 backend/models_ai/*.onnx
 backend/models_ai/*.pt
+backend/storage/
+
+# Dev tools output
+.playwright-mcp/
+dogfood-output/
 
 # AI Tools metadata
 .agents/

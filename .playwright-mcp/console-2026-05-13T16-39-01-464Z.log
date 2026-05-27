@@ -1,4 +1,0 @@
-[     608ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o @ https://face-check-zeta.vercel.app/login:0
-[   16249ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://exception-frank-memo-quoted.trycloudflare.com/api/v1/auth/login:0
-[   33970ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://exception-frank-memo-quoted.trycloudflare.com/api/v1/auth/login:0
-[   46774ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://exception-frank-memo-quoted.trycloudflare.com/api/v1/auth/login:0

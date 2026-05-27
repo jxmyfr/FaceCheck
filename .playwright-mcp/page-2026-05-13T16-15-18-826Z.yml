@@ -1,6 +1,0 @@
-- generic [ref=e4]:
-  - generic [ref=e5]:
-    - img [ref=e7]
-    - heading "เช็คชื่อเข้าเรียน" [level=1] [ref=e10]
-    - paragraph [ref=e11]: กรอกรหัสนักเรียนเพื่อบันทึกการเข้าเรียน
-  - generic [ref=e13]: QR Code ไม่ถูกต้องหรือหมดอายุ
