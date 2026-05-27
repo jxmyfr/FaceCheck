@@ -63,6 +63,12 @@ export default function Students() {
     !s.has_face
   ).length
 
+  const hasFaceCount = students.filter(s =>
+    (!filterGrade || s.grade_level === filterGrade) &&
+    (!filterRoom  || s.room_number  === filterRoom) &&
+    s.has_face
+  ).length
+
   const filtered = students.filter(s => {
     const q = search.toLowerCase()
     const matchSearch = !q || (
@@ -72,7 +78,7 @@ export default function Students() {
     )
     const matchGrade = !filterGrade || s.grade_level === filterGrade
     const matchRoom  = !filterRoom  || s.room_number  === filterRoom
-    const matchFace  = filterFace === 'all' || !s.has_face
+    const matchFace  = filterFace === 'all' || (filterFace === 'no_face' ? !s.has_face : s.has_face)
     return matchSearch && matchGrade && matchRoom && matchFace
   })
 
@@ -313,6 +319,7 @@ export default function Students() {
           aria-label="กรองตามใบหน้า"
         >
           <option value="all">ใบหน้า: ทั้งหมด</option>
+          <option value="has_face">มีใบหน้าแล้ว ({hasFaceCount})</option>
           <option value="no_face">ยังไม่มีใบหน้า ({noFaceCount})</option>
         </select>
         {(filterGrade || filterRoom || search || filterFace !== 'all') && (
