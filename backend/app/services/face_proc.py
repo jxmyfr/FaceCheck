@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 logger = logging.getLogger("facecheck.face_proc")
 
 _AVAILABLE = ort.get_available_providers()
-_PROVIDERS = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if 'CUDAExecutionProvider' in _AVAILABLE else ['CPUExecutionProvider']
+_PROVIDERS = [p for p in ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider'] if p in _AVAILABLE]
 logger.info(f"FaceProcessor using providers: {_PROVIDERS}")
 
 
@@ -21,7 +21,7 @@ class FaceProcessor:
         if cls._instance is None:
             cls._instance = super(FaceProcessor, cls).__new__(cls)
             cls._instance.app = FaceAnalysis(name='buffalo_l', providers=_PROVIDERS)
-            cls._instance.app.prepare(ctx_id=0, det_size=(640, 640))
+            cls._instance.app.prepare(ctx_id=0, det_size=(320, 320))
         return cls._instance
 
     def process_capture(
