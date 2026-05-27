@@ -27,6 +27,11 @@ face_processor = FaceProcessor()
 _BASE_DIR = Path(__file__).resolve().parents[3]
 
 
+_SESSION_MIN_SCANS = 3
+_SESSION_TIME_BUFFER_MIN = 15
+_DOW_MAP = {0: 'จ', 1: 'อ', 2: 'พ', 3: 'พฤ', 4: 'ศ', 5: 'ส', 6: 'อา'}
+
+
 def _ensure_class_session(db: Session, subject_id: int, teacher_id: int, schedule_id: Optional[int] = None) -> None:
     today = date.today()
     existing = db.query(ClassSession).filter(
@@ -34,9 +39,50 @@ def _ensure_class_session(db: Session, subject_id: int, teacher_id: int, schedul
         ClassSession.teacher_id == teacher_id,
         ClassSession.session_date == today,
     ).first()
-    if not existing:
-        db.add(ClassSession(subject_id=subject_id, teacher_id=teacher_id, session_date=today, schedule_id=schedule_id))
-        db.commit()
+    if existing:
+        return
+
+    now = datetime.now(_BKK).replace(tzinfo=None)
+    now_min = now.hour * 60 + now.minute
+    today_dow = _DOW_MAP[now.weekday()]
+    in_window = False
+
+    if schedule_id:
+        sched = db.query(SubjectSchedule).filter(SubjectSchedule.id == schedule_id).first()
+        if sched and sched.time_start and sched.time_end:
+            try:
+                sh, sm = map(int, sched.time_start.split(':'))
+                eh, em = map(int, sched.time_end.split(':'))
+                in_window = sh * 60 + sm - _SESSION_TIME_BUFFER_MIN <= now_min <= eh * 60 + em + _SESSION_TIME_BUFFER_MIN
+            except Exception:
+                pass
+    else:
+        today_scheds = db.query(SubjectSchedule).filter(
+            SubjectSchedule.subject_id == subject_id,
+            SubjectSchedule.day_of_week == today_dow,
+        ).all()
+        for sc in today_scheds:
+            if sc.time_start and sc.time_end:
+                try:
+                    sh, sm = map(int, sc.time_start.split(':'))
+                    eh, em = map(int, sc.time_end.split(':'))
+                    if sh * 60 + sm - _SESSION_TIME_BUFFER_MIN <= now_min <= eh * 60 + em + _SESSION_TIME_BUFFER_MIN:
+                        in_window = True
+                        break
+                except Exception:
+                    pass
+
+    if not in_window:
+        scan_count = db.query(AttendanceLog).filter(
+            AttendanceLog.subject_id == subject_id,
+            func.date(AttendanceLog.timestamp) == str(today),
+            AttendanceLog.status.in_(["present", "late"]),
+        ).count()
+        if scan_count < _SESSION_MIN_SCANS:
+            return
+
+    db.add(ClassSession(subject_id=subject_id, teacher_id=teacher_id, session_date=today, schedule_id=schedule_id))
+    db.commit()
 SCAN_IMAGES_DIR = _BASE_DIR / "storage" / "scan_images"
 SCAN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
