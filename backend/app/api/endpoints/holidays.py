@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from datetime import date
 from typing import Optional
 import urllib.request
+import urllib.error
 import json
 
 from app.models.database import get_db, Holiday
@@ -87,11 +88,23 @@ def sync_thai_holidays(
 ):
     url = f"https://date.nager.at/api/v3/PublicHolidays/{year}/TH"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "facecheck/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
+        req = urllib.request.Request(url, headers={"User-Agent": "facecheck/1.0", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode()
+    except urllib.error.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"API ตอบกลับ HTTP {e.code}: {e.reason}")
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"เชื่อมต่อ API ไม่ได้: {e.reason}")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"ดึงข้อมูลวันหยุดไม่สำเร็จ: {e}")
+
+    if not raw.strip():
+        raise HTTPException(status_code=502, detail="API ส่งข้อมูลว่างกลับมา ลองใหม่อีกครั้ง")
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail=f"API ส่งข้อมูลที่ไม่ใช่ JSON: {raw[:200]}")
 
     added = 0
     for item in data:
