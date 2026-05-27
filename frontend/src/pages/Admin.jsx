@@ -86,6 +86,15 @@ const periodLabel = (start, end) => {
   return p ? p.label : `${start}–${end}`
 }
 
+const THAI_DOW = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
+const DOW_COLOR = ['#dc2626', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6366f1']
+
+const getDow = (dateStr) => {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dow = new Date(y, m - 1, d).getDay()
+  return { name: THAI_DOW[dow], color: DOW_COLOR[dow] }
+}
+
 const STATUS_MAP = {
   present:         { label: 'มาเรียน',  color: 'var(--fc-success)', bg: 'rgba(16,185,129,0.1)' },
   late:            { label: 'สาย',      color: 'var(--fc-warning)', bg: 'rgba(245,158,11,0.1)' },
@@ -1473,14 +1482,18 @@ export default function Admin() {
               <table className="tbl">
                 <thead><tr>
                   <th style={{ width: 120 }}>วันที่</th>
+                  <th style={{ width: 110 }}>วัน</th>
                   <th>ชื่อวันหยุด</th>
                   <th style={{ width: 100 }}>ประเภท</th>
                   <th style={{ width: 70 }}></th>
                 </tr></thead>
                 <tbody>
-                  {holidays.map(h => (
+                  {holidays.map(h => {
+                    const dow = getDow(h.date)
+                    return (
                     <tr key={h.id}>
                       <td style={{ fontFamily: 'var(--fc-font-mono)', fontSize: 12, color: 'var(--fc-text-3)' }}>{h.date}</td>
+                      <td style={{ fontSize: 12, fontWeight: 600, color: dow.color }}>วัน{dow.name}</td>
                       <td style={{ fontWeight: 500 }}>{h.name}</td>
                       <td>
                         <span className="chip" style={h.type === 'public'
@@ -1494,7 +1507,8 @@ export default function Admin() {
                         <button className="btn btn-danger btn-sm" onClick={() => deleteHoliday(h.id)}>ลบ</button>
                       </td>
                     </tr>
-                  ))}
+                  )})}
+
                 </tbody>
               </table>
             )}
