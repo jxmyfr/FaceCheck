@@ -522,6 +522,34 @@ export default function Scanner() {
   const cooldownRef = useRef(false)
   const scanningRef = useRef(false)
 
+  // MediaPipe face detector
+  const detectorRef    = useRef(null)
+  const rafRef         = useRef(null)
+  const lastDetectRef  = useRef(0)
+  const [detectorReady, setDetectorReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
+        const vision = await FilesetResolver.forVisionTasks(
+          `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm`
+        )
+        const detector = await FaceDetector.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          minDetectionConfidence: 0.5,
+        })
+        if (!cancelled) { detectorRef.current = detector; setDetectorReady(true) }
+      } catch { /* fallback to setInterval */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   // Camera error state
   const [camError, setCamError] = useState(null)
 
@@ -773,10 +801,39 @@ export default function Scanner() {
     }
   }, [subjectId, subjects, override, lockedSched, devMode, substituteMode, overrideReason])
 
-  // ── Auto scan interval ─────────────────────────────────────────
+  // ── Auto scan: MediaPipe rAF trigger (fallback: setInterval) ──
   useEffect(() => {
-    if (mode !== 'auto' || !autoActive || !camReady || !subjectId) return
+    if (mode !== 'auto' || !autoActive || !camReady || !subjectId) {
+      if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+      return
+    }
 
+    if (detectorRef.current) {
+      // MediaPipe path: detect face → fire immediately
+      const loop = () => {
+        rafRef.current = requestAnimationFrame(loop)
+        if (scanningRef.current || cooldownRef.current) return
+        const video = cam.current?.video
+        if (!video || video.readyState < 2) return
+        const now = performance.now()
+        if (now - lastDetectRef.current < 100) return  // cap at 10fps detection
+        lastDetectRef.current = now
+        try {
+          const r = detectorRef.current.detectForVideo(video, now)
+          const hasFace = r.detections.length > 0
+          setFaceDetected(hasFace)
+          if (hasFace) {
+            scanningRef.current = true
+            setScanning(true)
+            doScan(true).finally(() => { scanningRef.current = false; setScanning(false) })
+          }
+        } catch {}
+      }
+      rafRef.current = requestAnimationFrame(loop)
+      return () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null } }
+    }
+
+    // Fallback: setInterval (if MediaPipe failed to load)
     const interval = setInterval(async () => {
       if (scanningRef.current || cooldownRef.current) return
       scanningRef.current = true
@@ -785,9 +842,8 @@ export default function Scanner() {
       scanningRef.current = false
       setScanning(false)
     }, 1000)
-
     return () => clearInterval(interval)
-  }, [mode, autoActive, camReady, subjectId, doScan])
+  }, [mode, autoActive, camReady, subjectId, doScan, detectorReady])
 
   // ── Manual scan ────────────────────────────────────────────────
   const handleManualScan = async () => {
