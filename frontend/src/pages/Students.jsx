@@ -28,6 +28,8 @@ export default function Students() {
   const [selected, setSelected]     = useState(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkTitle, setBulkTitle]     = useState('')
+  const [bulkTitleSaving, setBulkTitleSaving] = useState(false)
   const [page, setPage] = useState(1)
   const selectAllRef = useRef(null)
   const PAGE_SIZE = 50
@@ -161,6 +163,22 @@ export default function Students() {
     }
   }
 
+  const bulkSetTitle = async () => {
+    if (!bulkTitle) return
+    setBulkTitleSaving(true)
+    try {
+      const ids = [...selected]
+      await axios.post(`${API}/students/bulk-title`, { student_ids: ids, title: bulkTitle })
+      setStudents(prev => prev.map(s => selected.has(s.student_id) ? { ...s, title: bulkTitle } : s))
+      setSelected(new Set())
+      setBulkTitle('')
+    } catch (e) {
+      await alert(e.response?.data?.detail || 'กำหนดคำนำหน้าไม่สำเร็จ')
+    } finally {
+      setBulkTitleSaving(false)
+    }
+  }
+
   // Edit
   const openEdit = (s, e) => {
     e.stopPropagation()
@@ -271,13 +289,37 @@ export default function Students() {
             ส่งออก Excel
           </button>
           {user?.role === 'admin' && (
-            <button
-              className="btn btn-sm"
-              onClick={() => setBulkConfirm(true)}
-              style={{ background: 'var(--fc-danger)', color: '#fff', border: 'none' }}
-            >
-              ลบ {selected.size} คน
-            </button>
+            <>
+              <select
+                value={bulkTitle}
+                onChange={e => setBulkTitle(e.target.value)}
+                style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}
+              >
+                <option value="" style={{ color: '#000' }}>-- กำหนดคำนำหน้า --</option>
+                <option value="นาย" style={{ color: '#000' }}>นาย</option>
+                <option value="นางสาว" style={{ color: '#000' }}>นางสาว</option>
+                <option value="เด็กชาย" style={{ color: '#000' }}>เด็กชาย</option>
+                <option value="เด็กหญิง" style={{ color: '#000' }}>เด็กหญิง</option>
+                <option value="นาง" style={{ color: '#000' }}>นาง</option>
+              </select>
+              {bulkTitle && (
+                <button
+                  className="btn btn-sm"
+                  onClick={bulkSetTitle}
+                  disabled={bulkTitleSaving}
+                  style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', border: 'none' }}
+                >
+                  {bulkTitleSaving ? 'กำลังบันทึก…' : `ใช้กับ ${selected.size} คน`}
+                </button>
+              )}
+              <button
+                className="btn btn-sm"
+                onClick={() => setBulkConfirm(true)}
+                style={{ background: 'var(--fc-danger)', color: '#fff', border: 'none' }}
+              >
+                ลบ {selected.size} คน
+              </button>
+            </>
           )}
         </div>
       )}
@@ -620,7 +662,7 @@ export default function Students() {
               <button className="btn btn-ghost" disabled={editSaving} onClick={() => setEditTarget(null)}>ยกเลิก</button>
               <button
                 className="btn btn-primary"
-                disabled={editSaving || !editForm.first_name.trim()}
+                disabled={editSaving || !editForm.first_name.trim() || !editForm.title}
                 onClick={handleEditSave}
               >
                 {editSaving ? 'กำลังบันทึก…' : 'บันทึก'}

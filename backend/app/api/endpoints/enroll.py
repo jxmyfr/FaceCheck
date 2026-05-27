@@ -193,6 +193,15 @@ def update_student(
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="ไม่พบรหัสนักเรียน")
+    if not title or not title.strip():
+        raise HTTPException(status_code=400, detail="กรุณาระบุคำนำหน้า")
+    same_name = db.query(Student).filter(
+        Student.first_name == first_name,
+        Student.last_name == last_name,
+        Student.student_id != student_id,
+    ).first()
+    if same_name:
+        raise HTTPException(status_code=409, detail=f"มีนักเรียนชื่อ {first_name} {last_name} ในระบบแล้ว (รหัส {same_name.student_id})")
     student.title       = title or None
     student.first_name  = first_name
     student.last_name   = last_name
@@ -643,6 +652,25 @@ def download_template(_: User = Depends(require_teacher_or_admin)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=student_template.xlsx"},
     )
+
+
+class BulkTitleBody(BaseModel):
+    student_ids: list[str]
+    title: str
+
+@router.post("/students/bulk-title")
+def bulk_set_title(
+    body: BulkTitleBody,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    if not body.title or not body.title.strip():
+        raise HTTPException(status_code=400, detail="กรุณาระบุคำนำหน้า")
+    updated = db.query(Student).filter(Student.student_id.in_(body.student_ids)).update(
+        {"title": body.title}, synchronize_session=False
+    )
+    db.commit()
+    return {"updated": updated}
 
 
 @router.post("/students/bulk-delete", status_code=204)
