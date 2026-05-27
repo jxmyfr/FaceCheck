@@ -561,11 +561,12 @@ function ExcelPanel({ onImported }) {
 
           {/* รายชื่อ */}
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fc-text-3)', marginBottom: 6 }}>รายชื่อนักเรียน</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
             {[
-              { label: 'เพิ่มสำเร็จ', value: result.created,   color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
-              { label: 'ซ้ำ (ข้าม)', value: result.duplicates, color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)' },
-              { label: 'ผิดพลาด',    value: result.errors,     color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)'  },
+              { label: 'เพิ่มสำเร็จ',    value: result.created,        color: 'var(--fc-success-dark)', bg: 'var(--fc-success-light)' },
+              { label: 'รหัสซ้ำ (ข้าม)', value: result.duplicates,      color: 'var(--fc-warning)',      bg: 'var(--fc-warning-light)' },
+              { label: 'ชื่อซ้ำ (ข้าม)', value: result.name_conflicts ?? 0, color: '#7c3aed',            bg: 'rgba(124,58,237,0.08)'   },
+              { label: 'ผิดพลาด',        value: result.errors,          color: 'var(--fc-danger)',       bg: 'var(--fc-danger-light)'  },
             ].map(s => (
               <div key={s.label} style={{ background: s.bg, borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.value}</div>

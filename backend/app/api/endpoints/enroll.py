@@ -39,8 +39,13 @@ async def register_student(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
+    if not title or not title.strip():
+        raise HTTPException(status_code=400, detail="กรุณาระบุคำนำหน้า")
     if db.query(Student).filter(Student.student_id == student_id).first():
         raise HTTPException(status_code=409, detail=f"รหัสนักเรียน {student_id} มีในระบบแล้ว")
+    same_name = db.query(Student).filter(Student.first_name == first_name, Student.last_name == last_name).first()
+    if same_name:
+        raise HTTPException(status_code=409, detail=f"มีนักเรียนชื่อ {first_name} {last_name} ในระบบแล้ว (รหัส {same_name.student_id})")
 
     contents = await file.read()
     nparr    = np.frombuffer(contents, np.uint8)
@@ -253,8 +258,13 @@ async def register_student_multi(
     _: User = Depends(require_admin),
 ):
     """ลงทะเบียนนักเรียนใหม่โดยใช้หลายรูป — average embedding"""
+    if not title or not title.strip():
+        raise HTTPException(status_code=400, detail="กรุณาระบุคำนำหน้า")
     if db.query(Student).filter(Student.student_id == student_id).first():
         raise HTTPException(status_code=409, detail=f"รหัสนักเรียน {student_id} มีในระบบแล้ว")
+    same_name = db.query(Student).filter(Student.first_name == first_name, Student.last_name == last_name).first()
+    if same_name:
+        raise HTTPException(status_code=409, detail=f"มีนักเรียนชื่อ {first_name} {last_name} ในระบบแล้ว (รหัส {same_name.student_id})")
 
     valid_pairs = []  # [(embedding, frame, jpeg_bytes)]
     results     = []
@@ -782,9 +792,14 @@ async def import_excel(
 
         title, fn = _extract_title(title, fn)
 
+        if not title:
+            errors.append({"row": row_num, "student_id": sid, "reason": f"ไม่มีคำนำหน้า ({fn} {ln})"})
+            continue
+
         same_name = db.query(Student).filter(Student.first_name == fn, Student.last_name == ln).first()
         if same_name:
             name_conflicts.append({"student_id": sid, "name": f"{fn} {ln}", "conflict_with": same_name.student_id})
+            continue
 
         db.add(Student(
             student_id=sid,
@@ -852,9 +867,14 @@ def _import_students_from_ws(ws, db):
 
         title, fn = _extract_title(title, fn)
 
+        if not title:
+            errors.append({"row": row_num, "student_id": sid, "reason": f"ไม่มีคำนำหน้า ({fn} {ln})"})
+            continue
+
         same_name = db.query(Student).filter(Student.first_name == fn, Student.last_name == ln).first()
         if same_name:
             name_conflicts.append({"student_id": sid, "name": f"{fn} {ln}", "conflict_with": same_name.student_id})
+            continue
 
         db.add(Student(
             student_id=sid,
