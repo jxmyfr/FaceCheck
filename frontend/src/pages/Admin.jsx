@@ -7,6 +7,57 @@ import { usePrivacy, censorFullName } from '../contexts/PrivacyContext'
 
 const API = import.meta.env.VITE_API_URL
 
+// Hardcoded Thai public holidays (fixed-date only) as offline fallback.
+// Lunar holidays (Makha/Visakha/Asalha Bucha, Khao Phansa) must be added manually.
+const THAI_HOLIDAYS_BUILTIN = {
+  2025: [
+    { date: '2025-01-01', localName: 'วันขึ้นปีใหม่' },
+    { date: '2025-04-07', localName: 'ชดเชยวันจักรี' },
+    { date: '2025-04-13', localName: 'วันสงกรานต์' },
+    { date: '2025-04-14', localName: 'วันสงกรานต์' },
+    { date: '2025-04-15', localName: 'วันสงกรานต์' },
+    { date: '2025-05-01', localName: 'วันแรงงานแห่งชาติ' },
+    { date: '2025-05-05', localName: 'ชดเชยวันฉัตรมงคล' },
+    { date: '2025-08-12', localName: 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าฯ' },
+    { date: '2025-10-13', localName: 'วันคล้ายวันสวรรคต ร.9' },
+    { date: '2025-10-23', localName: 'วันปิยมหาราช' },
+    { date: '2025-12-05', localName: 'วันคล้ายวันพระราชสมภพ ร.10' },
+    { date: '2025-12-10', localName: 'วันรัฐธรรมนูญ' },
+    { date: '2025-12-31', localName: 'วันสิ้นปี' },
+  ],
+  2026: [
+    { date: '2026-01-01', localName: 'วันขึ้นปีใหม่' },
+    { date: '2026-04-06', localName: 'วันจักรี' },
+    { date: '2026-04-13', localName: 'วันสงกรานต์' },
+    { date: '2026-04-14', localName: 'วันสงกรานต์' },
+    { date: '2026-04-15', localName: 'วันสงกรานต์' },
+    { date: '2026-05-01', localName: 'วันแรงงานแห่งชาติ' },
+    { date: '2026-05-04', localName: 'วันฉัตรมงคล' },
+    { date: '2026-08-12', localName: 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าฯ' },
+    { date: '2026-10-13', localName: 'วันคล้ายวันสวรรคต ร.9' },
+    { date: '2026-10-23', localName: 'วันปิยมหาราช' },
+    { date: '2026-12-05', localName: 'วันคล้ายวันพระราชสมภพ ร.10' },
+    { date: '2026-12-07', localName: 'ชดเชยวันคล้ายวันพระราชสมภพ ร.10' },
+    { date: '2026-12-10', localName: 'วันรัฐธรรมนูญ' },
+    { date: '2026-12-31', localName: 'วันสิ้นปี' },
+  ],
+  2027: [
+    { date: '2027-01-01', localName: 'วันขึ้นปีใหม่' },
+    { date: '2027-04-06', localName: 'วันจักรี' },
+    { date: '2027-04-13', localName: 'วันสงกรานต์' },
+    { date: '2027-04-14', localName: 'วันสงกรานต์' },
+    { date: '2027-04-15', localName: 'วันสงกรานต์' },
+    { date: '2027-05-03', localName: 'ชดเชยวันแรงงานแห่งชาติ' },
+    { date: '2027-05-04', localName: 'วันฉัตรมงคล' },
+    { date: '2027-08-12', localName: 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าฯ' },
+    { date: '2027-10-13', localName: 'วันคล้ายวันสวรรคต ร.9' },
+    { date: '2027-10-25', localName: 'ชดเชยวันปิยมหาราช' },
+    { date: '2027-12-06', localName: 'ชดเชยวันคล้ายวันพระราชสมภพ ร.10' },
+    { date: '2027-12-10', localName: 'วันรัฐธรรมนูญ' },
+    { date: '2027-12-31', localName: 'วันสิ้นปี' },
+  ],
+}
+
 const SUBJECT_CATEGORIES = [
   'ภาษาไทย',
   'คณิตศาสตร์',
@@ -358,11 +409,30 @@ export default function Admin() {
   const syncHolidays = async () => {
     setHolidaySyncing(true)
     try {
-      const nagerRes = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${holidayYear}/TH`)
-      if (!nagerRes.ok) throw new Error(`ดึงข้อมูลจาก date.nager.at ไม่สำเร็จ (HTTP ${nagerRes.status})`)
-      const items = await nagerRes.json()
+      let items = null
+      let usedFallback = false
+
+      try {
+        const nagerRes = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${holidayYear}/TH`)
+        if (nagerRes.ok) {
+          const text = await nagerRes.text()
+          if (text.trim()) items = JSON.parse(text)
+        }
+      } catch {}
+
+      if (!items) {
+        items = THAI_HOLIDAYS_BUILTIN[holidayYear] || null
+        usedFallback = true
+      }
+
+      if (!items) throw new Error(`ไม่มีข้อมูลวันหยุดสำหรับปี ${holidayYear + 543} — กรุณาเพิ่มเอง`)
+
       const res = await axios.post(`${API}/holidays/import/${holidayYear}`, { items })
-      flash(`ซิงค์วันหยุดราชการ ${res.data.year} สำเร็จ · เพิ่มใหม่ ${res.data.added} วัน`)
+      flash(
+        usedFallback
+          ? `นำเข้าวันหยุดราชการ ${res.data.year} สำเร็จ · เพิ่มใหม่ ${res.data.added} วัน (ข้อมูลสำรอง — วันหยุดตามปฏิทินจันทรคติต้องเพิ่มเอง)`
+          : `ซิงค์วันหยุดราชการ ${res.data.year} สำเร็จ · เพิ่มใหม่ ${res.data.added} วัน`
+      )
       loadHolidays(holidayYear)
     } catch (e) { flash(e.response?.data?.detail || e.message || 'ซิงค์ไม่สำเร็จ', 'error') }
     finally { setHolidaySyncing(false) }
