@@ -226,6 +226,19 @@ _COL_MAP = {
     "ห้อง": "room_number",        "room_number": "room_number", "room": "room_number",
 }
 
+_TITLE_PREFIXES = ["นางสาว", "เด็กหญิง", "เด็กชาย", "นาง", "นาย", "ด.ช.", "ด.ญ."]
+
+def _extract_title(title: str, first_name: str):
+    """Auto-extract title prefix from first_name when title field is empty."""
+    if title:
+        return title, first_name
+    for prefix in _TITLE_PREFIXES:
+        if first_name.startswith(prefix):
+            remainder = first_name[len(prefix):].strip()
+            if remainder:
+                return prefix, remainder
+    return "", first_name
+
 
 @router.post("/register-multi", status_code=status.HTTP_201_CREATED)
 async def register_student_multi(
@@ -746,7 +759,7 @@ async def import_excel(
         idx = col_index.get(key)
         return str(row[idx]).strip() if idx is not None and row[idx] is not None else ""
 
-    created, duplicates, errors = [], [], []
+    created, duplicates, name_conflicts, errors = [], [], [], []
 
     for row_num, row in enumerate(rows[1:], start=2):
         if all(v is None or str(v).strip() == "" for v in row):
@@ -767,6 +780,12 @@ async def import_excel(
             duplicates.append({"student_id": sid, "name": f"{fn} {ln}"})
             continue
 
+        title, fn = _extract_title(title, fn)
+
+        same_name = db.query(Student).filter(Student.first_name == fn, Student.last_name == ln).first()
+        if same_name:
+            name_conflicts.append({"student_id": sid, "name": f"{fn} {ln}", "conflict_with": same_name.student_id})
+
         db.add(Student(
             student_id=sid,
             title=title or None,
@@ -781,10 +800,12 @@ async def import_excel(
     return {
         "created":    len(created),
         "duplicates": len(duplicates),
+        "name_conflicts": len(name_conflicts),
         "errors":     len(errors),
-        "created_list":    created,
-        "duplicate_list":  duplicates,
-        "error_list":      errors,
+        "created_list":       created,
+        "duplicate_list":     duplicates,
+        "name_conflict_list": name_conflicts,
+        "error_list":         errors,
     }
 
 
@@ -792,7 +813,7 @@ def _import_students_from_ws(ws, db):
     """แยก logic import Excel ให้ใช้ซ้ำได้"""
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
-        return [], [], [], []
+        return [], [], [], [], []
 
     raw_headers = [str(h).strip().lower() if h else "" for h in rows[0]]
     col_index: dict[str, int] = {}
@@ -809,7 +830,7 @@ def _import_students_from_ws(ws, db):
         idx = col_index.get(key)
         return str(row[idx]).strip() if idx is not None and row[idx] is not None else ""
 
-    created, duplicates, errors, sid_list = [], [], [], []
+    created, duplicates, name_conflicts, errors, sid_list = [], [], [], [], []
 
     for row_num, row in enumerate(rows[1:], start=2):
         if all(v is None or str(v).strip() == "" for v in row):
@@ -829,6 +850,12 @@ def _import_students_from_ws(ws, db):
             duplicates.append({"student_id": sid, "name": f"{fn} {ln}"})
             continue
 
+        title, fn = _extract_title(title, fn)
+
+        same_name = db.query(Student).filter(Student.first_name == fn, Student.last_name == ln).first()
+        if same_name:
+            name_conflicts.append({"student_id": sid, "name": f"{fn} {ln}", "conflict_with": same_name.student_id})
+
         db.add(Student(
             student_id=sid,
             title=title or None,
@@ -841,7 +868,7 @@ def _import_students_from_ws(ws, db):
         sid_list.append(sid)
 
     db.commit()
-    return created, duplicates, errors, sid_list
+    return created, duplicates, name_conflicts, errors, sid_list
 
 
 @router.post("/import-zip", status_code=201)
@@ -871,7 +898,7 @@ async def import_zip(
     except Exception:
         raise HTTPException(status_code=400, detail="ไม่สามารถอ่านไฟล์ Excel ใน ZIP ได้")
 
-    created, duplicates, errors, sid_list = _import_students_from_ws(wb.active, db)
+    created, duplicates, name_conflicts, errors, sid_list = _import_students_from_ws(wb.active, db)
 
     # หารูปภาพใน ZIP — รองรับทั้ง {student_id}.jpg และ {student_id}_front/left/right.jpg
     image_exts = {".jpg", ".jpeg", ".png"}
@@ -973,15 +1000,17 @@ async def import_zip(
             f["reason"] += " (บันทึกมุมที่ผ่านแล้ว)"
 
     return {
-        "created":     len(created),
-        "duplicates":  len(duplicates),
-        "errors":      len(errors),
-        "faces_ok":    len(faces_ok),
-        "faces_fail":  len(faces_fail),
-        "created_list":   created,
-        "duplicate_list": duplicates,
-        "error_list":     errors,
-        "faces_fail_list": faces_fail,
+        "created":        len(created),
+        "duplicates":     len(duplicates),
+        "name_conflicts": len(name_conflicts),
+        "errors":         len(errors),
+        "faces_ok":       len(faces_ok),
+        "faces_fail":     len(faces_fail),
+        "created_list":       created,
+        "duplicate_list":     duplicates,
+        "name_conflict_list": name_conflicts,
+        "error_list":         errors,
+        "faces_fail_list":    faces_fail,
     }
 
 

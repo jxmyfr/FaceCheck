@@ -19,6 +19,7 @@ export default function Students() {
   const [filterGrade, setFilterGrade] = useState('')
   const [filterRoom, setFilterRoom]   = useState('')
   const [filterFace, setFilterFace]   = useState('all')
+  const [filterTitle, setFilterTitle] = useState('all')
   const [deleting, setDeleting]     = useState(null)
   const [confirm, setConfirm]       = useState(null)
   const [editTarget, setEditTarget] = useState(null)   // student object being edited
@@ -47,7 +48,7 @@ export default function Students() {
   useEffect(() => { load() }, [load])
 
   // Clear selection + reset page when filters change
-  useEffect(() => { setSelected(new Set()); setPage(1) }, [filterGrade, filterRoom, filterFace, search])
+  useEffect(() => { setSelected(new Set()); setPage(1) }, [filterGrade, filterRoom, filterFace, filterTitle, search])
 
   const grades = [...new Set(students.map(s => s.grade_level).filter(Boolean))].sort()
   const rooms  = [...new Set(
@@ -69,6 +70,12 @@ export default function Students() {
     s.has_face
   ).length
 
+  const noTitleCount = students.filter(s =>
+    (!filterGrade || s.grade_level === filterGrade) &&
+    (!filterRoom  || s.room_number  === filterRoom) &&
+    !s.title
+  ).length
+
   const filtered = students.filter(s => {
     const q = search.toLowerCase()
     const matchSearch = !q || (
@@ -79,7 +86,8 @@ export default function Students() {
     const matchGrade = !filterGrade || s.grade_level === filterGrade
     const matchRoom  = !filterRoom  || s.room_number  === filterRoom
     const matchFace  = filterFace === 'all' || (filterFace === 'no_face' ? !s.has_face : s.has_face)
-    return matchSearch && matchGrade && matchRoom && matchFace
+    const matchTitle = filterTitle === 'all' || !s.title
+    return matchSearch && matchGrade && matchRoom && matchFace && matchTitle
   })
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
@@ -322,10 +330,19 @@ export default function Students() {
           <option value="has_face">มีใบหน้าแล้ว ({hasFaceCount})</option>
           <option value="no_face">ยังไม่มีใบหน้า ({noFaceCount})</option>
         </select>
-        {(filterGrade || filterRoom || search || filterFace !== 'all') && (
+        <select
+          value={filterTitle}
+          onChange={e => setFilterTitle(e.target.value)}
+          style={{ flex: '0 0 180px' }}
+          aria-label="กรองตามคำนำหน้า"
+        >
+          <option value="all">คำนำหน้า: ทั้งหมด</option>
+          <option value="no_title">ไม่มีคำนำหน้า ({noTitleCount})</option>
+        </select>
+        {(filterGrade || filterRoom || search || filterFace !== 'all' || filterTitle !== 'all') && (
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => { setFilterGrade(''); setFilterRoom(''); setSearch(''); setFilterFace('all') }}
+            onClick={() => { setFilterGrade(''); setFilterRoom(''); setSearch(''); setFilterFace('all'); setFilterTitle('all') }}
           >
             ล้างตัวกรอง
           </button>
