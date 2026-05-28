@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 logger = logging.getLogger("facecheck.face_proc")
 
 _AVAILABLE = ort.get_available_providers()
-_PROVIDERS = [p for p in ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider'] if p in _AVAILABLE]
+_PROVIDERS = [p for p in ['CUDAExecutionProvider', 'CPUExecutionProvider'] if p in _AVAILABLE]
 logger.info(f"FaceProcessor using providers: {_PROVIDERS}")
 
 
@@ -22,6 +22,13 @@ class FaceProcessor:
             cls._instance = super(FaceProcessor, cls).__new__(cls)
             cls._instance.app = FaceAnalysis(name='buffalo_l', providers=_PROVIDERS)
             cls._instance.app.prepare(ctx_id=0, det_size=(320, 320))
+            # Warmup: run one dummy inference so CUDA kernels are compiled before first real scan
+            try:
+                dummy = np.zeros((320, 320, 3), dtype=np.uint8)
+                cls._instance.app.get(dummy)
+                logger.info("FaceProcessor warmup done")
+            except Exception as e:
+                logger.warning(f"FaceProcessor warmup failed (non-fatal): {e}")
         return cls._instance
 
     def process_capture(
