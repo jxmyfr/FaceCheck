@@ -63,10 +63,13 @@ class FaceProcessor:
         if not faces:
             return []
         faces = self._nms_faces(faces)
+        # Hybrid: scale face-size requirement down proportionally for group scans.
+        # Single face → full strictness; N faces → ratio/N, floor at 0.02.
+        effective_ratio = max(0.02, min_face_ratio / max(1, len(faces)))
         valid = []
         for face in faces:
             if not skip_checks:
-                ok, _ = self._check_quality(face, frame, min_det_score, min_face_ratio, min_blur_score)
+                ok, _ = self._check_quality(face, frame, min_det_score, effective_ratio, min_blur_score)
                 if not ok:
                     continue
                 ok, _ = self._check_liveness(face, frame)
