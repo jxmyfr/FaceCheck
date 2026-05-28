@@ -191,7 +191,7 @@ async def scan_attendance(
     setting        = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
     THRESHOLD      = setting.face_threshold  if (setting and setting.face_threshold  is not None) else 0.65
     MIN_DET_SCORE  = setting.min_det_score   if (setting and setting.min_det_score   is not None) else 0.65
-    MIN_FACE_RATIO = setting.min_face_ratio  if (setting and setting.min_face_ratio  is not None) else 0.08
+    MIN_FACE_RATIO = setting.min_face_ratio  if (setting and setting.min_face_ratio  is not None) else 0.05
     MIN_BLUR_SCORE = setting.min_blur_score  if (setting and setting.min_blur_score  is not None) else 40.0
 
     contents = await file.read()
@@ -473,7 +473,7 @@ async def scan_multi(
     setting        = db.query(SemesterSetting).filter(SemesterSetting.is_active == True).first()
     THRESHOLD      = setting.face_threshold  if (setting and setting.face_threshold  is not None) else 0.65
     MIN_DET_SCORE  = setting.min_det_score   if (setting and setting.min_det_score   is not None) else 0.65
-    MIN_FACE_RATIO = setting.min_face_ratio  if (setting and setting.min_face_ratio  is not None) else 0.08
+    MIN_FACE_RATIO = setting.min_face_ratio  if (setting and setting.min_face_ratio  is not None) else 0.05
     MIN_BLUR_SCORE = setting.min_blur_score  if (setting and setting.min_blur_score  is not None) else 40.0
 
     contents = await file.read()

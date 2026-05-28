@@ -375,7 +375,7 @@ const IcSliders = () => (
   </svg>
 )
 
-const DEFAULT_CFG = { face_threshold: 0.65, min_det_score: 0.65, min_face_ratio: 0.08, min_blur_score: 40.0 }
+const DEFAULT_CFG = { face_threshold: 0.65, min_det_score: 0.65, min_face_ratio: 0.05, min_blur_score: 40.0 }
 
 function CameraSettings() {
   const { alert } = useDialog()
@@ -719,7 +719,7 @@ export default function Scanner() {
         const el = new Image()
         el.onload = () => {
           const canvas = document.createElement('canvas')
-          canvas.width = 320; canvas.height = Math.round(320 * el.height / el.width)
+          canvas.width = 480; canvas.height = Math.round(480 * el.height / el.width)
           canvas.getContext('2d').drawImage(el, 0, 0, canvas.width, canvas.height)
           canvas.toBlob(resolve, 'image/jpeg', 0.75)
         }
