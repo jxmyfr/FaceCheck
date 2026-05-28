@@ -21,7 +21,7 @@ class FaceProcessor:
         if cls._instance is None:
             cls._instance = super(FaceProcessor, cls).__new__(cls)
             cls._instance.app = FaceAnalysis(name='buffalo_l', providers=_PROVIDERS)
-            cls._instance.app.prepare(ctx_id=0, det_size=(320, 320))
+            cls._instance.app.prepare(ctx_id=0, det_size=(640, 640))
             # Warmup: run one dummy inference so CUDA kernels are compiled before first real scan
             try:
                 dummy = np.zeros((320, 320, 3), dtype=np.uint8)

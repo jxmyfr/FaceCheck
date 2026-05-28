@@ -375,7 +375,7 @@ const IcSliders = () => (
   </svg>
 )
 
-const DEFAULT_CFG = { face_threshold: 0.65, min_det_score: 0.65, min_face_ratio: 0.08, min_blur_score: 40.0 }
+const DEFAULT_CFG = { face_threshold: 0.65, min_det_score: 0.65, min_face_ratio: 0.08, min_blur_score: 20.0 }
 
 function CameraSettings() {
   const { alert } = useDialog()
