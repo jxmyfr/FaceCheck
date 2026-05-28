@@ -22,11 +22,19 @@ class FaceProcessor:
             cls._instance = super(FaceProcessor, cls).__new__(cls)
             cls._instance.app = FaceAnalysis(name='buffalo_l', providers=_PROVIDERS)
             cls._instance.app.prepare(ctx_id=0, det_size=(640, 640))
-            # Warmup: run one dummy inference so CUDA kernels are compiled before first real scan
+            # Warmup: compile CUDA kernels for ALL models before first real scan
             try:
-                dummy = np.zeros((320, 320, 3), dtype=np.uint8)
-                cls._instance.app.get(dummy)
-                logger.info("FaceProcessor warmup done")
+                dummy_frame = np.zeros((640, 640, 3), dtype=np.uint8)
+                cls._instance.app.get(dummy_frame)  # warms up detector (RetinaFace)
+                # Warm up recognition/embedding model (ArcFace) directly with a dummy 112x112 crop
+                dummy_crop = np.zeros((112, 112, 3), dtype=np.uint8)
+                for model in cls._instance.app.models.values():
+                    if hasattr(model, 'get_feat'):
+                        try:
+                            model.get_feat([dummy_crop])
+                        except Exception:
+                            pass
+                logger.info("FaceProcessor warmup done (detector + embedding)")
             except Exception as e:
                 logger.warning(f"FaceProcessor warmup failed (non-fatal): {e}")
         return cls._instance
